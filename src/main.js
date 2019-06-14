@@ -23,6 +23,7 @@ import {Util} from "src/base/Util.js";
 import {MathPainter} from "src/MathPainter.js";
 import {Painter} from "src/Painter.js";
 import {Rect} from "src/base/Rect.js";
+import {Seq, seq} from "src/base/Seq.js";
 
 // let revision = new Revision([document.location.hash.substr(1)], 0, false);
 // revision.latestActiveCommit().subscribe(hex => {
@@ -214,50 +215,146 @@ function eventPosRelativeTo(ev, element) {
     return [ev.clientX - b.left, ev.clientY - b.top];
 }
 
-canvasDiv.addEventListener('click', ev => {
-    let [x, y] = eventPosRelativeTo(ev, canvasDiv);
-    let {element} = xyToGraphElement(x, y);
-    if (element instanceof ZxNodePos) {
-        let cycle = ['O', '@', 'in', 'out'];
-        let kind = curGraph.nodes.get(element);
-        let i = cycle.indexOf(kind);
-        if (i !== -1) {
-            i++;
-            i %= cycle.length;
-            if (i >= 2 && curGraph.edges_of(element).length !== 1) {
-                i = 0;
-            }
-            curGraph.nodes.set(element, cycle[i]);
+
+/**
+ * @param {!ZxEdgePos} edge
+ * @returns {!function()}
+ */
+function extender(edge) {
+    if (curGraph.edges.has(edge)) {
+        return undefined;
+    }
+    let [n1, n2] = edge.adjacent_node_positions();
+    let b1 = curGraph.nodes.has(n1);
+    let b2 = curGraph.nodes.has(n2);
+    if (b1 === b2) {
+        return undefined;
+    }
+    if (b2) {
+        [n1, n2] = [n2, n1];
+    }
+
+    return () => {
+        let kind = curGraph.nodes.get(n1);
+        if (kind === 'in' || kind === 'out') {
+            curGraph.nodes.set(n1, 'O');
         }
-        ev.preventDefault();
-    } else if (element instanceof ZxEdgePos) {
-        if (curGraph.edges.has(element)) {
-            curGraph.edges.delete(element);
-            for (let n of element.adjacent_node_positions()) {
-                if (curGraph.nodes.has(n) && curGraph.edges_of(n).length === 0) {
-                    curGraph.nodes.delete(n);
+        curGraph.nodes.set(n2, kind);
+        curGraph.edges.set(edge, '-');
+    };
+}
+
+
+/**
+ * @param {!ZxNodePos} node
+ * @returns {!function()}
+ */
+function contracter(node) {
+    let edges = curGraph.edges_of(node);
+    if (edges.length !== 1) {
+        return undefined;
+    }
+    let edge = edges[0];
+    let opp = edge.opposite(node);
+    let oppDeg = curGraph.edges_of(opp).length;
+    let kind = curGraph.nodes.get(node);
+    let oppKind = curGraph.nodes.get(opp);
+
+    if (oppDeg === 1) {
+        return () => {
+            curGraph.edges.delete(edge);
+            curGraph.nodes.delete(node);
+            curGraph.nodes.delete(opp);
+        }
+    }
+
+    if (oppDeg === 2) {
+        return () => {
+            curGraph.edges.delete(edge);
+            curGraph.nodes.delete(node);
+            curGraph.nodes.set(opp, kind);
+        }
+    }
+
+    if (oppDeg >= 3 && (oppKind === kind)) {
+        return () => {
+            curGraph.edges.delete(edge);
+            curGraph.nodes.delete(node);
+        }
+    }
+
+    return undefined;
+}
+
+
+canvasDiv.addEventListener('click', ev => {
+    try {
+        let [x, y] = eventPosRelativeTo(ev, canvasDiv);
+        let {element} = xyToGraphElement(x, y);
+        if (element instanceof ZxNodePos) {
+            if (!curGraph.nodes.has(element)) {
+                let exts = element.adjacent_edge_positions().map(extender);
+                let ext = seq(exts).filter(e => e !== undefined).single(null);
+                if (ext !== null) {
+                    ext();
+                    return;
                 }
             }
-        } else {
-            let hasBlockingNeighbor = false;
-            for (let n of element.adjacent_node_positions()) {
-                if (curGraph.nodes.get(n) === 'in' || curGraph.nodes.get(n) === 'out') {
-                    hasBlockingNeighbor = true;
+
+            let cycle = ['O', '@', 'in', 'out'];
+            let kind = curGraph.nodes.get(element);
+            let i = cycle.indexOf(kind);
+            if (i !== -1) {
+                i++;
+                i %= cycle.length;
+                if (i >= 2 && curGraph.edges_of(element).length !== 1) {
+                    i = 0;
+                }
+                curGraph.nodes.set(element, cycle[i]);
+            }
+        } else if (element instanceof ZxEdgePos) {
+            let ext = extender(element);
+            if (ext !== undefined) {
+                ext();
+                return;
+            }
+
+            if (curGraph.edges.has(element)) {
+                let exts = element.adjacent_node_positions().map(contracter);
+                ext = seq(exts).filter(e => e !== undefined).single(null);
+                if (ext !== null) {
+                    ext();
+                    return;
                 }
             }
-            if (!hasBlockingNeighbor) {
-                curGraph.edges.set(element, '-');
+
+            if (curGraph.edges.has(element)) {
+                curGraph.edges.delete(element);
                 for (let n of element.adjacent_node_positions()) {
-                    if (!curGraph.nodes.has(n)) {
-                        curGraph.nodes.set(n, 'O');
+                    if (curGraph.nodes.has(n) && curGraph.edges_of(n).length === 0) {
+                        curGraph.nodes.delete(n);
+                    }
+                }
+            } else {
+                let hasBlockingNeighbor = false;
+                for (let n of element.adjacent_node_positions()) {
+                    if (curGraph.nodes.get(n) === 'in' || curGraph.nodes.get(n) === 'out') {
+                        hasBlockingNeighbor = true;
+                    }
+                }
+                if (!hasBlockingNeighbor) {
+                    curGraph.edges.set(element, '-');
+                    for (let n of element.adjacent_node_positions()) {
+                        if (!curGraph.nodes.has(n)) {
+                            curGraph.nodes.set(n, 'O');
+                        }
                     }
                 }
             }
         }
-        ev.preventDefault();
+    } finally {
+        draw();
     }
-
-    draw();
 });
 
 canvasDiv.addEventListener('mousemove', ev => {

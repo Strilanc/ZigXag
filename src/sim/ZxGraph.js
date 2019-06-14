@@ -69,7 +69,7 @@ class ZxNodePos {
      * @returns {!number}
      */
     orderVal() {
-        return this.x * 10000.1 + this.y;
+        return this.x + this.y * 10000.1;
     }
 
     /**
@@ -122,20 +122,20 @@ class ZxEdgePos {
      */
     opposite(node) {
         let nodes = this.adjacent_node_positions();
-        if (node === nodes[0]) {
+        if (node.isEqualTo(nodes[0])) {
             return nodes[1];
         }
-        if (node === nodes[1]) {
+        if (node.isEqualTo(nodes[1])) {
             return nodes[0];
         }
-        throw new Error(`${node} is not an endpoint of ${self}`);
+        throw new Error(`${node} is not an endpoint of ${this}`);
     }
 
     /**
      * @returns {!number}
      */
     orderVal() {
-        return this.n_x * 10000.1 + this.n_y + (this.horizontal ? 0.5 : 0);
+        return this.n_x + this.n_y * 10000.1 + (this.horizontal ? 0.5 : 0);
     }
 
     /**
