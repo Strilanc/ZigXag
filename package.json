@@ -1,12 +1,12 @@
 {
-  "name": "surface-sketch",
-  "title": "SurfaceSketch",
-  "description": "A surface code sketcher.",
+  "name": "zigxag",
+  "title": "ZigXag",
+  "description": "A point-and-click ZX graph editor, simulator, and conversion tool.",
   "license": "Apache-2.0",
   "version": "0.0.1",
-  "homepage": "https://github.com/Strilanc/SurfaceSketch",
+  "homepage": "https://github.com/Strilanc/ZigXag",
   "bugs": {
-    "url": "https://github.com/Strilanc/SurfaceSketch/issues"
+    "url": "https://github.com/Strilanc/ZigXag/issues"
   },
   "devDependencies": {
     "grunt": "1.0.1",
@@ -26,6 +26,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Strilanc/SurfaceSketch.git"
+    "url": "https://github.com/Strilanc/ZigXag.git"
   }
 }
