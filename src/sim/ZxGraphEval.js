@@ -1,9 +1,3 @@
-/**
- * @param {!SimulatorSpec} sim
- * @param {!Array.<!int>} qubits
- * @param {!number=} bias
- * @returns {!Array.<!Measurement>}
- */
 import {GeneralMap} from "src/base/GeneralMap.js";
 import {seq, Seq} from "src/base/Seq.js";
 import {SimulatorSpec} from "src/sim/SimulatorSpec.js"
@@ -16,6 +10,7 @@ import {ZxEdgePortPos, ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js"
 import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
 import {LoggedSimulator} from "src/sim/LoggedSimulator.js";
+import {popcnt} from "src/base/Util.js";
 
 
 /**
@@ -215,72 +210,6 @@ function makeQubitMap(g) {
     return {qubit_map, num_inputs, num_outputs};
 }
 
-
-/**
- * @param {!LoggedSimulator} log_sim
- * @param {!Array.<!{measured_control_qubit: !int, controlled_flip: !QubitAxis}>} controlled_flips
- */
-function doControlledFlips(log_sim, controlled_flips) {
-    let target_groups = seq(controlled_flips).groupBy(e => e.controlled_flip);
-    let keys = [...target_groups.keys()];
-    keys.sort();
-    console.log("ALL KEYS", keys.length, keys.join(',    '));
-    for (let key of keys) {
-        console.log("KEY", key);
-        let target_qubit = key.qubit;
-        let target_x = key.axis;
-        let controls = target_groups.get(key).map(e => e.measured_control_qubit);
-        if (target_x) {
-            log_sim.sub.hadamard(target_qubit);
-        }
-        for (let control_qubit of controls) {
-            log_sim.qasm_log.push(`if (m[${control_qubit}]) ${target_x ? 'z' : 'x'} q[${target_qubit}];`);
-            let col = Seq.repeat(1, Math.max(control_qubit, target_qubit) + 1).toArray();
-            col[control_qubit] = '•';
-            col[target_qubit] = target_x ? 'Z' : 'X';
-            log_sim.quirk_log.push(col);
-            log_sim.sub.cnot(control_qubit, target_qubit);
-        }
-        if (target_x) {
-            log_sim.sub.hadamard(target_qubit);
-        }
-    }
-    console.log("DONE LOOP");
-}
-
-
-/**
- * @param {!SimulatorSpec} sim
- * @param {!int} control_qubit
- * @param {!QubitAxis} flipped_qubit_axis
- * @param {!GeneralMap.<!QubitAxis, !Array.<!QubitAxis>>} rewrite_map
- */
-function do_rewrite(sim, control_qubit, flipped_qubit_axis, rewrite_map) {
-    let actions = rewrite_map.get(flipped_qubit_axis, []);
-    for (let [target_qubit, target_x] of actions) {
-        if (target_x) {
-            sim.hadamard(target_qubit);
-        }
-        sim.cnot(control_qubit, target_qubit);
-        if (target_x) {
-            sim.hadamard(target_qubit);
-        }
-    }
-}
-
-
-/**
- * @param {!int} k
- * @returns {!int}
- */
-function popcnt(k) {
-    let t = 0;
-    while (k > 0) {
-        k &= k - 1;
-        t += 1;
-    }
-    return t;
-}
 
 /**
  * @param {!Float64Array} buf

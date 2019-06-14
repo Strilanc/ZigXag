@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import {Suite, assertThat, assertThrows, assertTrue, assertFalse} from "test/TestUtil.js"
-import {indent, Util, float32ToBytes, bytesToFloat32} from "src/base/Util.js"
+import {indent, Util, float32ToBytes, bytesToFloat32, popcnt} from "src/base/Util.js"
 
 let suite = new Suite("Util");
 
@@ -421,4 +421,19 @@ suite.test('indent', () => {
     assertThat(indent('a\nb')).isEqualTo('    a\n    b');
     assertThat(indent('a', '\t')).isEqualTo('\ta');
     assertThat(indent('a\n\nb\nwonder\n')).isEqualTo('    a\n\n    b\n    wonder\n');
+});
+
+suite.test('popcnt', () => {
+    assertThat(popcnt(0)).isEqualTo(0);
+    assertThat(popcnt(1)).isEqualTo(1);
+    assertThat(popcnt(2)).isEqualTo(1);
+    assertThat(popcnt(3)).isEqualTo(2);
+    assertThat(popcnt(4)).isEqualTo(1);
+    assertThat(popcnt(5)).isEqualTo(2);
+    assertThat(popcnt(6)).isEqualTo(2);
+    assertThat(popcnt(7)).isEqualTo(3);
+    assertThat(popcnt(8)).isEqualTo(1);
+    assertThat(popcnt(9)).isEqualTo(2);
+    assertThat(popcnt((1 << 20) + 5)).isEqualTo(3);
+    assertThat(popcnt(0b00110101011101)).isEqualTo(8);
 });

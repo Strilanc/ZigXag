@@ -479,4 +479,18 @@ function indent(text, indentation='    ') {
     return text.split('\n').map(e => e.length > 0 ? indentation + e : e).join('\n');
 }
 
-export {Util, indent}
+/**
+ * @param {!int} k
+ * @returns {!int}
+ */
+function popcnt(k) {
+    let t = 0;
+    while (k > 0) {
+        k &= k - 1;
+        t += 1;
+    }
+    return t;
+}
+
+
+export {Util, indent, popcnt}
