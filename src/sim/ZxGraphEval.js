@@ -15,43 +15,6 @@ import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 
 
 /**
- * @param {!LoggedSimulation} state
- * @param {!Array.<!int>} qubits
- * @param {!Array.<!int>} xMeasurements
- * @param {!Array.<!int>} zMeasurements
- * @param {!number|undefined=undefined} bias
- */
-function toric_measurement_x(state, qubits, xMeasurements, zMeasurements, bias=undefined) {
-    if (qubits.length === 0) {
-        throw new Error('qubits.length === 0');
-    }
-
-    let [head, ...tail] = qubits;
-    state.cnot(head, tail);
-    xMeasurements.push(head);
-    zMeasurements.push(...tail);
-}
-
-
-/**
- * @param {!LoggedSimulation} state
- * @param {!Array.<!int>} qubits
- * @param {!number|undefined=undefined} bias
- * @param {!Array.<!int>} xMeasurements
- * @param {!Array.<!int>} zMeasurements
- */
-function toric_measurement_z(state, qubits, xMeasurements, zMeasurements, bias=undefined) {
-    if (qubits.length === 0) {
-        throw new Error('qubits.length === 0');
-    }
-
-    let [head, ...tail] = qubits;
-    state.cnot(head, tail, false, true);
-    zMeasurements.push(head);
-    xMeasurements.push(...tail);
-}
-
-/**
  * @param {!ZxGraph} g
  * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
  * @returns {!Array.<!PauliProduct>}
@@ -66,7 +29,7 @@ function stabilizerTableOfGraph(g, qubit_map) {
     };
 
     for (let [n, kind] of g.nodes.entries()) {
-        let ports = g.ports_of(n);
+        let ports = g.activePortsOf(n);
         if (['O', '@'].indexOf(kind) !== -1) {
             if (ports.length === 0) {
                 throw new Error('edges.length === 0');
@@ -155,14 +118,14 @@ function generatePortToQubitMap(graph) {
 
     // Measurement nodes go first.
     for (let node of measurementNodes) {
-        for (let p of graph.ports_of(node)) {
+        for (let p of graph.activePortsOf(node)) {
             portToQubitMap.set(p, portToQubitMap.size);
         }
     }
 
     // Then input nodes.
     for (let node of inputNodes) {
-        let ports = graph.ports_of(node);
+        let ports = graph.activePortsOf(node);
         if (ports.length !== 1) {
             throw new Error('ports.length !== 1')
         }
@@ -171,7 +134,7 @@ function generatePortToQubitMap(graph) {
 
     // And lastly output nodes.
     for (let node of outputNodes) {
-        let ports = graph.ports_of(node);
+        let ports = graph.activePortsOf(node);
         if (ports.length !== 1) {
             throw new Error('ports.length !== 1')
         }
@@ -267,43 +230,36 @@ function _zxEval_initEprPairs(graph, state, portToQubitMap) {
 function _zxEval_performToricMeasurements(graph, state, portToQubitMap) {
     state.qasm_logger.lines.push('');
     state.qasm_logger.lines.push('// Perform per-node toric measurements.');
-    let nodes = [...graph.nodes.keys()];
-    nodes.sort();
 
     // Perform 2-qubit operations and determine what to measure.
     let xMeasured = [];
     let zMeasured = [];
-    for (let n of nodes) {
-        let kind = graph.nodes.get(n);
-        let edges = graph.edges_of(n);
-        if (['O', '@'].indexOf(kind) !== -1) {
-            let measure_func = kind === '@' ? toric_measurement_x : toric_measurement_z;
-            let node_qubits = edges.map(e => portToQubitMap.get(new ZxPort(e, n)));
-            measure_func(state, node_qubits, xMeasured, zMeasured);
-        } else if (['in', 'out'].indexOf(kind) === -1) {
-            throw new Error(`Unrecognized node kind ${kind}`);
-        }
+    for (let {node, axis} of graph.toricMeasurementNodes()) {
+        let [head, ...tail] = graph.activePortsOf(node).map(p => portToQubitMap.get(p));
+        state.cnot(head, tail, !axis, axis);
+        (axis ? zMeasured : xMeasured).push(head);
+        (axis ? xMeasured : zMeasured).push(...tail);
     }
 
     // Perform single-qubit operations and measure.
     let allMeasured = [...xMeasured, ...zMeasured];
     allMeasured.sort();
     state.hadamard(xMeasured);
-    let denseResults = state.measure(allMeasured);
+    let measurementResults = state.measure(allMeasured);
     let basis = PauliProduct.fromSparseByType(portToQubitMap.size, {X: xMeasured, Z: zMeasured});
 
-    // Sparsify.
-    let sparseResults = [];
-    let denseResultPointer = 0;
+    // Make the measurement results line up with the basis.
+    let expandedResults = [];
+    let k = 0;
     for (let q of basis.activeQubitAxes()) {
-        while (sparseResults.length < q.qubit) {
-            sparseResults.push(undefined);
+        while (expandedResults.length < q.qubit) {
+            expandedResults.push(undefined);
         }
-        sparseResults.push(denseResults[denseResultPointer]);
-        denseResultPointer++;
+        expandedResults.push(measurementResults[k]);
+        k++;
     }
 
-    return {basis, results: sparseResults};
+    return {basis, results: expandedResults};
 }
 
 /**

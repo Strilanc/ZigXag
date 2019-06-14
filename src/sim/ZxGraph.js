@@ -184,6 +184,24 @@ class ZxGraph {
     }
 
     /**
+     * @returns {!Array.<!{node: !ZxNodePos, axis: !boolean}>}
+     */
+    toricMeasurementNodes() {
+        let nodes = [...this.nodes.keys()];
+        nodes.sort();
+        let result = [];
+        for (let node of nodes) {
+            let kind = this.nodes.get(node);
+            if (kind === 'O') {
+                result.push({node, axis: true});
+            } else if (kind === '@') {
+                result.push({node, axis: false});
+            }
+        }
+        return result;
+    }
+
+    /**
      * @param {!ZxNodePos} n
      * @returns {!Array.<!ZxEdgePos>}
      */
@@ -198,7 +216,7 @@ class ZxGraph {
      * @param {!ZxNodePos|!ZxEdgePos} nodeOrEdge
      * @returns {!Array.<!ZxPort>}
      */
-    ports_of(nodeOrEdge) {
+    activePortsOf(nodeOrEdge) {
         return nodeOrEdge.ports().filter(p => this.edges.has(p.edge) && this.nodes.has(p.node));
     }
 
