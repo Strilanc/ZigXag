@@ -198,6 +198,24 @@ class ZxGraph {
     }
 
     /**
+     * @param {!ZxNodePos|!ZxEdgePos} nodeOrEdge
+     * @returns {!boolean}
+     */
+    has(nodeOrEdge) {
+        let map = (nodeOrEdge instanceof ZxNodePos) ? this.nodes : this.edges;
+        return map.has(nodeOrEdge);
+    }
+
+    /**
+     * @param {!ZxNodePos|!ZxEdgePos} nodeOrEdge
+     * @returns {undefined|!string}
+     */
+    kind(nodeOrEdge) {
+        let map = (nodeOrEdge instanceof ZxNodePos) ? this.nodes : this.edges;
+        return map.get(nodeOrEdge);
+    }
+
+    /**
      * @returns {!string}
      */
     serialize() {
@@ -216,6 +234,7 @@ class ZxGraph {
     copy() {
         return ZxGraph.deserialize(this.serialize());
     }
+
     /**
      * @param {!string} text
      * @returns {!ZxGraph}
@@ -388,6 +407,7 @@ class ZxGraph {
     }
 
     /**
+     * Produces a text diagram of the graph.
      * @returns {!string}
      */
     toString() {

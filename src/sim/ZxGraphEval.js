@@ -46,12 +46,21 @@ function stabilizerTableOfGraph(g, qubit_map) {
         }
     }
     for (let [e, kind] of g.edges.entries()) {
+        let [p1, p2] = e.ports();
+        let q1 = qubit_map.get(p1);
+        let q2 = qubit_map.get(p2);
         if (kind === '-') {
-            let [p1, p2] = e.ports();
-            let q1 = qubit_map.get(p1);
-            let q2 = qubit_map.get(p2);
             addProd('X', [q1, q2]);
             addProd('Z', [q1, q2]);
+        } else if (kind === 'h') {
+            stabilizers.push(PauliProduct.fromSparseQubitAxes(
+                qubit_map.size,
+                [new QubitAxis(q1, true), new QubitAxis(q2, false)]));
+            stabilizers.push(PauliProduct.fromSparseQubitAxes(
+                qubit_map.size,
+                [new QubitAxis(q1, false), new QubitAxis(q2, true)]));
+        } else {
+            throw new Error(`Unrecognized edge kind ${kind}.`);
         }
     }
 
@@ -193,21 +202,24 @@ function _zxEval_initEprPairs(graph, state, portToQubitMap) {
     state.qasm_logger.lines.push('// Init per-edge EPR pairs.');
 
     // Identify edge qubit pairs.
-    let pairs = [...graph.edges.keys()].map(e => {
+    let pairs = [...graph.edges.entries()].map(ek => {
+        let [e, kind] = ek;
         let qs = e.ports().map(p => portToQubitMap.get(p));
         qs.sort((a, b) => a - b);
-        return qs;
+        return [qs, kind];
     });
-    pairs.sort((a, b) => (a[0] - b[0])*10000 + (a[1] - b[1]));
+    pairs.sort((a, b) => (a[0][0] - b[0][0])*10000 + (a[0][1] - b[0][1]));
 
     // Make + states.
-    let heads = pairs.map(e => e[0]);
+    let heads = pairs.map(e => e[0][0]);
+    let tails = pairs.filter(e => e[1] === 'h').map(e => e[0][1]);
     state.initPlus(heads);
 
     // Expand + states into EPR pairs.
-    for (let [q0, q1] of pairs) {
+    for (let [[q0, q1], _] of pairs) {
         state.cnot(q0, q1);
     }
+    state.hadamard(tails);
 }
 
 /**

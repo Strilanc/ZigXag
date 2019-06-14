@@ -128,8 +128,8 @@ function drawNode(ctx, node, radius=8, fill=undefined) {
     if (text !== '') {
         let [x, y] = nodeToXy(node);
         ctx.fillStyle = 'black';
-        ctx.font = '16px monospace';
-        ctx.fillText(text, x-4, y+4);
+        ctx.font = '14px monospace';
+        ctx.fillText(text, x-4, y+5);
     }
 }
 
@@ -140,13 +140,29 @@ function drawNode(ctx, node, radius=8, fill=undefined) {
  * @param {!string=} color
  */
 function drawEdge(ctx, edge, thickness=1, color='black') {
+    let kind = curGraph.edges.get(edge);
     let [n1, n2] = edge.adjacent_node_positions();
     ctx.beginPath();
-    ctx.moveTo(...nodeToXy(n1));
-    ctx.lineTo(...nodeToXy(n2));
+    let [x1, y1] = nodeToXy(n1);
+    let [x2, y2] = nodeToXy(n2);
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
     ctx.strokeStyle = color;
     ctx.lineWidth = thickness;
     ctx.stroke();
+
+    let r = [(x1+x2)/2-4, (y1+y2)/2-4, 8, 8];
+    if (kind === 'h') {
+        ctx.fillStyle = 'yellow';
+        ctx.strokeStyle = 'black';
+        ctx.fillRect(...r);
+        ctx.strokeRect(...r)
+    } else if (kind !== '-') {
+        ctx.fillStyle = 'red';
+        ctx.strokeStyle = 'black';
+        ctx.fillRect(...r);
+        ctx.strokeRect(...r)
+    }
 }
 
 function draw() {
@@ -223,21 +239,19 @@ function extender(edge) {
     }
     let kind = curGraph.nodes.get(n1);
 
-    return () => {
-        let copy = curGraph.copy();
+    return g => {
         if (kind === 'in' || kind === 'out') {
-            copy.nodes.set(n1, 'O');
+            g.nodes.set(n1, 'O');
         }
-        copy.nodes.set(n2, kind);
-        copy.edges.set(edge, '-');
-        return copy;
+        g.nodes.set(n2, kind);
+        g.edges.set(edge, '-');
     };
 }
 
 
 /**
  * @param {!ZxNodePos} node
- * @returns {undefined|!function(): !ZxGraph}
+ * @returns {undefined|!function(!ZxGraph)}
  */
 function contracter(node) {
     let edges = curGraph.edges_of(node);
@@ -251,31 +265,25 @@ function contracter(node) {
     let oppKind = curGraph.nodes.get(opp);
 
     if (oppDeg === 1) {
-        return () => {
-            let copy = curGraph.copy();
-            copy.edges.delete(edge);
-            copy.nodes.delete(node);
-            copy.nodes.delete(opp);
-            return copy;
+        return g => {
+            g.edges.delete(edge);
+            g.nodes.delete(node);
+            g.nodes.delete(opp);
         }
     }
 
     if (oppDeg === 2) {
-        return () => {
-            let copy = curGraph.copy();
-            copy.edges.delete(edge);
-            copy.nodes.delete(node);
-            copy.nodes.set(opp, kind);
-            return copy;
+        return g => {
+            g.edges.delete(edge);
+            g.nodes.delete(node);
+            g.nodes.set(opp, kind);
         }
     }
 
     if (oppDeg >= 3 && (oppKind === kind)) {
-        return () => {
-            let copy = curGraph.copy();
-            copy.edges.delete(edge);
-            copy.nodes.delete(node);
-            return copy;
+        return g => {
+            g.edges.delete(edge);
+            g.nodes.delete(node);
         }
     }
 
@@ -283,79 +291,147 @@ function contracter(node) {
 }
 
 
-canvasDiv.addEventListener('click', ev => {
-    try {
-        let [x, y] = eventPosRelativeTo(ev, canvasDiv);
-        let {element} = xyToGraphElement(x, y);
-        if (element instanceof ZxNodePos) {
-            if (!curGraph.nodes.has(element)) {
-                let exts = element.adjacent_edge_positions().map(extender);
-                let ext = seq(exts).filter(e => e !== undefined).single(null);
-                if (ext !== null) {
-                    revision.commit(ext().serialize());
-                    return;
-                }
+/**
+ * @param {!ZxEdgePos} edge
+ * @returns {!function(!ZxGraph)}
+ */
+function _delete_edge_actor(edge) {
+    return g => {
+        g.edges.delete(edge);
+        for (let n of edge.adjacent_node_positions()) {
+            if (g.nodes.has(n) && g.edges_of(n).length === 0) {
+                g.nodes.delete(n);
             }
+        }
+    }
+}
 
-            let cycle = ['O', '@', 'in', 'out'];
-            let kind = curGraph.nodes.get(element);
+/**
+ * @param {!ZxNodePos|!ZxEdgePos} element
+ * @returns {undefined|!function(!ZxGraph)}
+ */
+function deleter(element) {
+    if (!curGraph.has(element)) {
+        return undefined;
+    }
+
+    if (element instanceof ZxNodePos) {
+        let ext = contracter(element);
+        if (ext !== undefined) {
+            return ext;
+        }
+
+        return g => {
+            for (let e of g.edges_of(element)) {
+                _delete_edge_actor(e)(g);
+            }
+        };
+    } else if (element instanceof ZxEdgePos) {
+        let exts = element.adjacent_node_positions().map(contracter);
+        let ext = seq(exts).filter(e => e !== undefined).single(null);
+        if (ext !== null) {
+            return ext;
+        }
+
+        return _delete_edge_actor(element);
+    }
+}
+
+
+/**
+ * @param {!ZxNodePos|!ZxEdgePos} edge
+ * @returns {undefined|!function(!ZxGraph)}
+ */
+function pickEditAction(ev) {
+    if (ev.which !== 1 && ev.which !== 2) {
+        return;
+    }
+
+    let [x, y] = eventPosRelativeTo(ev, canvasDiv);
+    let {element} = xyToGraphElement(x, y);
+    if (element === undefined) {
+        return undefined;
+    }
+
+    let wantDelete = ev.which === 2 || ev.ctrlKey;
+    if (wantDelete) {
+        ev.preventDefault()
+        return deleter(element);
+    }
+
+    if (element instanceof ZxNodePos) {
+        if (!curGraph.nodes.has(element)) {
+            let exts = element.adjacent_edge_positions().map(extender);
+            let ext = seq(exts).filter(e => e !== undefined).single(null);
+            if (ext !== null) {
+                return ext;
+            }
+            return undefined;
+        }
+
+        let cycle = ['O', '@', 'in', 'out'];
+        let kind = curGraph.nodes.get(element);
+        let i = cycle.indexOf(kind);
+        if (i !== -1) {
+            i++;
+            i %= cycle.length;
+            if (i >= 2 && curGraph.edges_of(element).length !== 1) {
+                i = 0;
+            }
+            return g => {
+                g.nodes.set(element, cycle[i]);
+            };
+        }
+        return undefined;
+    }
+
+    if (element instanceof ZxEdgePos) {
+        if (curGraph.edges.has(element)) {
+            let cycle = ['-', 'h'];
+            let kind = curGraph.kind(element);
             let i = cycle.indexOf(kind);
             if (i !== -1) {
                 i++;
                 i %= cycle.length;
-                if (i >= 2 && curGraph.edges_of(element).length !== 1) {
-                    i = 0;
-                }
-                let copy = curGraph.copy();
-                copy.nodes.set(element, cycle[i]);
-                revision.commit(copy.serialize());
+                return g => {
+                    g.edges.set(element, cycle[i]);
+                };
             }
-        } else if (element instanceof ZxEdgePos) {
-            let ext = extender(element);
-            if (ext !== undefined) {
-                revision.commit(ext().serialize());
-                return;
-            }
+            return undefined;
+        }
 
-            if (curGraph.edges.has(element)) {
-                let exts = element.adjacent_node_positions().map(contracter);
-                ext = seq(exts).filter(e => e !== undefined).single(null);
-                if (ext !== null) {
-                    revision.commit(ext().serialize());
-                    return;
-                }
-            }
+        let ext = extender(element);
+        if (ext !== undefined) {
+            return ext;
+        }
 
-            if (curGraph.edges.has(element)) {
-                let copy = curGraph.copy();
-                copy.edges.delete(element);
-                for (let n of element.adjacent_node_positions()) {
-                    if (copy.nodes.has(n) && copy.edges_of(n).length === 0) {
-                        copy.nodes.delete(n);
-                    }
-                }
-                revision.commit(copy.serialize());
-            } else {
-                let hasBlockingNeighbor = false;
-                for (let n of element.adjacent_node_positions()) {
-                    if (curGraph.nodes.get(n) === 'in' || curGraph.nodes.get(n) === 'out') {
-                        hasBlockingNeighbor = true;
-                    }
-                }
-                if (!hasBlockingNeighbor) {
-                    let copy = curGraph.copy();
-                    copy.edges.set(element, '-');
-                    for (let n of element.adjacent_node_positions()) {
-                        if (!copy.nodes.has(n)) {
-                            copy.nodes.set(n, 'O');
-                        }
-                    }
-                    revision.commit(copy.serialize());
-                }
+        let hasBlockingNeighbor = false;
+        for (let n of element.adjacent_node_positions()) {
+            if (curGraph.nodes.get(n) === 'in' || curGraph.nodes.get(n) === 'out') {
+                hasBlockingNeighbor = true;
             }
         }
-    } finally {
-        draw();
+        if (!hasBlockingNeighbor) {
+            return g => {
+                g.edges.set(element, '-');
+                for (let n of element.adjacent_node_positions()) {
+                    if (!g.nodes.has(n)) {
+                        g.nodes.set(n, 'O');
+                    }
+                }
+            };
+        }
+
+        return undefined;
+    }
+}
+
+canvasDiv.addEventListener('mousedown', ev => {
+    let edit = pickEditAction(ev);
+    if (edit !== undefined) {
+        let g = curGraph.copy();
+        edit(g);
+        revision.commit(g.serialize());
     }
 });
 
