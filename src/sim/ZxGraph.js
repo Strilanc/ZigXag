@@ -198,6 +198,51 @@ class ZxGraph {
     }
 
     /**
+     * @returns {!string}
+     */
+    serialize() {
+        let nodes = [...this.nodes.keys()];
+        let edges = [...this.edges.keys()];
+        nodes.sort((a, b) => a.orderVal() - b.orderVal());
+        edges.sort((a, b) => a.orderVal() - b.orderVal());
+        let nodeText = nodes.map(n => `${n.x},${n.y},${this.nodes.get(n)}`).join(';');
+        let edgeText = edges.map(e => `${e.n_x},${e.n_y},${e.horizontal ? 'h' : 'v'},${this.edges.get(e)}`).join(';');
+        return `${nodeText}:${edgeText}`;
+    }
+
+    /**
+     * @returns {!ZxGraph}
+     */
+    copy() {
+        return ZxGraph.deserialize(this.serialize());
+    }
+    /**
+     * @param {!string} text
+     * @returns {!ZxGraph}
+     */
+    static deserialize(text) {
+        let result = new ZxGraph();
+
+        function parseNode(t) {
+            let [x, y, k] = t.split(',');
+            let n = new ZxNodePos(parseInt(x), parseInt(y));
+            result.nodes.set(n, k);
+        }
+
+        function parseEdge(t) {
+            let [x, y, h, k] = t.split(',');
+            let e = new ZxEdgePos(parseInt(x), parseInt(y), h === 'h');
+            result.edges.set(e, k);
+        }
+
+        let [nodeText, edgeText] = text.split(':');
+        nodeText.split(';').map(parseNode);
+        edgeText.split(';').map(parseEdge);
+
+        return result;
+    }
+
+    /**
      * @returns {!Array.<!ZxNodePos>}
      */
     inputNodes() {
@@ -332,6 +377,14 @@ class ZxGraph {
             }
             this.edges.set(e, '-');
         }
+    }
+
+    /**
+     * @param {object|!ZxGraph} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return other instanceof ZxGraph && other.edges.isEqualTo(this.edges) && other.nodes.isEqualTo(this.nodes);
     }
 
     /**

@@ -71,3 +71,8 @@ suite.test("toString", () => {
 !---O---?
     `.trim());
 });
+
+suite.test("serialize", () => {
+    let g = cnotGraph();
+    assertThat(ZxGraph.deserialize(g.serialize())).isEqualTo(g);
+});

@@ -25,40 +25,23 @@ import {Painter} from "src/Painter.js";
 import {Rect} from "src/base/Rect.js";
 import {Seq, seq} from "src/base/Seq.js";
 
-// let revision = new Revision([document.location.hash.substr(1)], 0, false);
-// revision.latestActiveCommit().subscribe(hex => {
-//     let preCamera = drawState.camera;
-//     drawState = DrawState.read(Reader.fromHex(hex));
-//     if (loadCamera) {
-//         loadCamera = false;
-//     } else {
-//         drawState.camera = preCamera;
-//     }
-//     document.location.hash = hex;
-// });
-// revision.changes().subscribe(hex => {
-//     if (hex === undefined) {
-//         let writer = new Writer();
-//         drawState.write(writer);
-//         document.location.hash = writer.toHex();
-//     }
-// });
-
-
 /**
- * @returns {!ZxGraph}
+ * @returns {!string}
  */
-function cnotGraph() {
+function initialCommit() {
+    if (document.location.hash.length > 1) {
+        return document.location.hash.substr(1);
+    }
+
     let g = new ZxGraph();
     let x = 4;
     let y = 4;
     g.add_line(new ZxNodePos(x, y), new ZxNodePos(x+2, y), ['in', '@', 'out']);
     g.add_line(new ZxNodePos(x, y+1), new ZxNodePos(x+2, y+1), ['in', 'O', 'out']);
     g.add_line(new ZxNodePos(x+1, y), new ZxNodePos(x+1, y+1));
-    return g;
+    return g.serialize();
 }
 
-let curGraph = cnotGraph();
 const canvas = /** @type {!HTMLCanvasElement} */ document.getElementById('main-canvas');
 const canvasDiv = /** @type {!HTMLDivElement} */ document.getElementById('main-canvas-div');
 const stabilizersDiv = /** @type {!HTMLDivElement} */ document.getElementById('stabilizers-div');
@@ -66,9 +49,16 @@ const quirkAnchor = /** @type {!HTMLDivElement} */ document.getElementById('quir
 const qasmDiv = /** @type {!HTMLDivElement} */ document.getElementById('qasm-div');
 let mouseX = undefined;
 let mouseY = undefined;
-function main() {
-    draw()
-}
+
+
+let curGraph = undefined;
+let revision = new Revision([initialCommit()], 0, false);
+revision.latestActiveCommit().subscribe(text => {
+    curGraph = ZxGraph.deserialize(text);
+    document.location.hash = text;
+    draw();
+});
+
 
 /**
  * @param {!ZxNodePos} n
@@ -201,8 +191,6 @@ function draw() {
     MathPainter.paintMatrix(new Painter(canvas), results.wavefunction, s);
 }
 
-setTimeout(main, 0);
-
 let keyListeners = /** @type {!Map.<!int, !Array.<!function(!KeyboardEvent)>>} */ new Map();
 
 /**
@@ -218,7 +206,7 @@ function eventPosRelativeTo(ev, element) {
 
 /**
  * @param {!ZxEdgePos} edge
- * @returns {!function()}
+ * @returns {undefined|!function(): !ZxGraph}
  */
 function extender(edge) {
     if (curGraph.edges.has(edge)) {
@@ -233,21 +221,23 @@ function extender(edge) {
     if (b2) {
         [n1, n2] = [n2, n1];
     }
+    let kind = curGraph.nodes.get(n1);
 
     return () => {
-        let kind = curGraph.nodes.get(n1);
+        let copy = curGraph.copy();
         if (kind === 'in' || kind === 'out') {
-            curGraph.nodes.set(n1, 'O');
+            copy.nodes.set(n1, 'O');
         }
-        curGraph.nodes.set(n2, kind);
-        curGraph.edges.set(edge, '-');
+        copy.nodes.set(n2, kind);
+        copy.edges.set(edge, '-');
+        return copy;
     };
 }
 
 
 /**
  * @param {!ZxNodePos} node
- * @returns {!function()}
+ * @returns {undefined|!function(): !ZxGraph}
  */
 function contracter(node) {
     let edges = curGraph.edges_of(node);
@@ -262,24 +252,30 @@ function contracter(node) {
 
     if (oppDeg === 1) {
         return () => {
-            curGraph.edges.delete(edge);
-            curGraph.nodes.delete(node);
-            curGraph.nodes.delete(opp);
+            let copy = curGraph.copy();
+            copy.edges.delete(edge);
+            copy.nodes.delete(node);
+            copy.nodes.delete(opp);
+            return copy;
         }
     }
 
     if (oppDeg === 2) {
         return () => {
-            curGraph.edges.delete(edge);
-            curGraph.nodes.delete(node);
-            curGraph.nodes.set(opp, kind);
+            let copy = curGraph.copy();
+            copy.edges.delete(edge);
+            copy.nodes.delete(node);
+            copy.nodes.set(opp, kind);
+            return copy;
         }
     }
 
     if (oppDeg >= 3 && (oppKind === kind)) {
         return () => {
-            curGraph.edges.delete(edge);
-            curGraph.nodes.delete(node);
+            let copy = curGraph.copy();
+            copy.edges.delete(edge);
+            copy.nodes.delete(node);
+            return copy;
         }
     }
 
@@ -296,7 +292,7 @@ canvasDiv.addEventListener('click', ev => {
                 let exts = element.adjacent_edge_positions().map(extender);
                 let ext = seq(exts).filter(e => e !== undefined).single(null);
                 if (ext !== null) {
-                    ext();
+                    revision.commit(ext().serialize());
                     return;
                 }
             }
@@ -310,12 +306,14 @@ canvasDiv.addEventListener('click', ev => {
                 if (i >= 2 && curGraph.edges_of(element).length !== 1) {
                     i = 0;
                 }
-                curGraph.nodes.set(element, cycle[i]);
+                let copy = curGraph.copy();
+                copy.nodes.set(element, cycle[i]);
+                revision.commit(copy.serialize());
             }
         } else if (element instanceof ZxEdgePos) {
             let ext = extender(element);
             if (ext !== undefined) {
-                ext();
+                revision.commit(ext().serialize());
                 return;
             }
 
@@ -323,18 +321,20 @@ canvasDiv.addEventListener('click', ev => {
                 let exts = element.adjacent_node_positions().map(contracter);
                 ext = seq(exts).filter(e => e !== undefined).single(null);
                 if (ext !== null) {
-                    ext();
+                    revision.commit(ext().serialize());
                     return;
                 }
             }
 
             if (curGraph.edges.has(element)) {
-                curGraph.edges.delete(element);
+                let copy = curGraph.copy();
+                copy.edges.delete(element);
                 for (let n of element.adjacent_node_positions()) {
-                    if (curGraph.nodes.has(n) && curGraph.edges_of(n).length === 0) {
-                        curGraph.nodes.delete(n);
+                    if (copy.nodes.has(n) && copy.edges_of(n).length === 0) {
+                        copy.nodes.delete(n);
                     }
                 }
+                revision.commit(copy.serialize());
             } else {
                 let hasBlockingNeighbor = false;
                 for (let n of element.adjacent_node_positions()) {
@@ -343,12 +343,14 @@ canvasDiv.addEventListener('click', ev => {
                     }
                 }
                 if (!hasBlockingNeighbor) {
-                    curGraph.edges.set(element, '-');
+                    let copy = curGraph.copy();
+                    copy.edges.set(element, '-');
                     for (let n of element.adjacent_node_positions()) {
-                        if (!curGraph.nodes.has(n)) {
-                            curGraph.nodes.set(n, 'O');
+                        if (!copy.nodes.has(n)) {
+                            copy.nodes.set(n, 'O');
                         }
                     }
+                    revision.commit(copy.serialize());
                 }
             }
         }
@@ -376,6 +378,21 @@ function addKeyListener(keyOrCode, func) {
     }
     keyListeners.get(keyOrCode).push(func);
 }
+
+addKeyListener('Z', ev => {
+    if (ev.ctrlKey && !ev.shiftKey) {
+        revision.cancelCommitBeingWorkedOn();
+        revision.undo();
+    } else if (ev.ctrlKey && ev.shiftKey) {
+        revision.redo();
+    }
+});
+
+addKeyListener('Y', ev => {
+    if (ev.ctrlKey && !ev.shiftKey) {
+        revision.redo();
+    }
+});
 
 document.addEventListener('keydown', ev => {
     let handlers = keyListeners.get(ev.keyCode);
