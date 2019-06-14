@@ -16,11 +16,11 @@ class LoggedSimulation {
      * @param {!int|!Array.<!int>} targets One target or an array of targets.
      */
     initPlus(targets) {
-        this.quirk_logger.init(targets, '+');
-        this.qasm_logger.hadamard(targets);
         if (!Array.isArray(targets)) {
             targets = [targets];
         }
+        this.quirk_logger.init(targets, '+');
+        this.qasm_logger.hadamard(targets);
         for (let target of targets) {
             this.sim.hadamard(target);
         }
@@ -65,11 +65,14 @@ class LoggedSimulation {
      * @param {!int|!Array.<!int>} targets
      */
     hadamard(targets) {
-        this.quirk_logger.hadamard(targets);
-        this.qasm_logger.hadamard(targets);
         if (!Array.isArray(targets)) {
             targets = [targets];
         }
+        if (targets.length === 0) {
+            return;
+        }
+        this.quirk_logger.hadamard(targets);
+        this.qasm_logger.hadamard(targets);
         for (let target of targets) {
             this.sim.hadamard(target);
         }
@@ -178,12 +181,9 @@ class QasmLog {
     }
 
     /**
-     * @param {!int|!Array.<!int>} targets
+     * @param {!Array.<!int>} targets
      */
     hadamard(targets) {
-        if (!Array.isArray(targets)) {
-            targets = [targets];
-        }
         for (let target of targets) {
             this.lines.push(`h q[${target}];`);
         }
@@ -221,13 +221,10 @@ class QuirkLog {
     }
 
     /**
-     * @param {!int|!Array.<!int>} targets One target or an array of targets.
+     * @param {!Array.<!int>} targets One target or an array of targets.
      * @param {!string} state
      */
     init(targets, state) {
-        if (!Array.isArray(targets)) {
-            targets = [targets];
-        }
         for (let target of targets) {
             while (this.inits.length <= target) {
                 this.inits.push(0);
@@ -282,7 +279,7 @@ class QuirkLog {
     }
 
     /**
-     * @param {!int|!Array.<!int>} targets
+     * @param {!Array.<!int>} targets
      */
     hadamard(targets) {
         this.sparse([targets, 'H']);
