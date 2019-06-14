@@ -9,81 +9,47 @@ import {Matrix} from "src/base/Matrix.js"
 import {ZxPort, ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js"
 import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
-import {LoggedSimulator} from "src/sim/LoggedSimulator.js";
+import {LoggedSimulation} from "src/sim/LoggedSimulator.js";
 import {popcnt} from "src/base/Util.js";
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 
 
 /**
- * @param {!LoggedSimulator} log_sim
+ * @param {!LoggedSimulation} state
  * @param {!Array.<!int>} qubits
- * @param {!Array.<!int>} x_measurements
- * @param {!Array.<!int>} z_measurements
+ * @param {!Array.<!int>} xMeasurements
+ * @param {!Array.<!int>} zMeasurements
  * @param {!number|undefined=undefined} bias
- * @returns {!Seq.<T>|!Observable.<!boolean>|Array}
  */
-function toric_measurement_x(log_sim, qubits, x_measurements, z_measurements, bias=undefined) {
+function toric_measurement_x(state, qubits, xMeasurements, zMeasurements, bias=undefined) {
     if (qubits.length === 0) {
         throw new Error('qubits.length === 0');
     }
 
-    log_sim.qasm_log.push(`// toric x on ${qubits}`);
-    let col = Seq.repeat(1, Math.max(...qubits) + 1).toArray();
-    let root = qubits[0];
-    for (let i = 1; i < qubits.length; i++) {
-        col[qubits[i]] = 'X';
-        log_sim.cnot(root, qubits[i]);
-        log_sim.quirk_log.pop();
-    }
-    col[root] = '•';
-    x_measurements.push(root);
-    z_measurements.push(...qubits.slice(1));
-    log_sim.quirk_log.push(col);
-    log_sim.hadamard(root);
-    log_sim.quirk_log.pop();
-    return qubits.map(q => {
-        let r = log_sim.measure(q, bias);
-        log_sim.quirk_log.pop();
-        return r;
-    });
+    let [head, ...tail] = qubits;
+    state.cnot(head, tail);
+    xMeasurements.push(head);
+    zMeasurements.push(...tail);
 }
 
 
 /**
- * @param {!LoggedSimulator} log_sim
+ * @param {!LoggedSimulation} state
  * @param {!Array.<!int>} qubits
  * @param {!number|undefined=undefined} bias
- * @param {!Array.<!int>} x_measurements
- * @param {!Array.<!int>} z_measurements
- * @returns {!Array.<!Measurement>}
+ * @param {!Array.<!int>} xMeasurements
+ * @param {!Array.<!int>} zMeasurements
  */
-function toric_measurement_z(log_sim, qubits, x_measurements, z_measurements, bias=undefined) {
+function toric_measurement_z(state, qubits, xMeasurements, zMeasurements, bias=undefined) {
     if (qubits.length === 0) {
         throw new Error('qubits.length === 0');
     }
 
-    log_sim.qasm_log.push(`// toric z on ${qubits}`);
-    let col = Seq.repeat(1, Math.max(...qubits) + 1).toArray();
-
-    let root = qubits[0];
-    for (let i = 1; i < qubits.length; i++) {
-        col[qubits[i]] = 'Z';
-        log_sim.cnot(qubits[i], root);
-        log_sim.quirk_log.pop();
-        log_sim.hadamard(qubits[i]);
-        log_sim.quirk_log.pop();
-    }
-    col[root] = '⊖';
-    z_measurements.push(root);
-    x_measurements.push(...qubits.slice(1));
-    log_sim.quirk_log.push(col);
-    return qubits.map(q => {
-        let r = log_sim.measure(q, bias);
-        log_sim.quirk_log.pop();
-        return r;
-    });
+    let [head, ...tail] = qubits;
+    state.cnot(head, tail, false, true);
+    zMeasurements.push(head);
+    xMeasurements.push(...tail);
 }
-
 
 /**
  * @param {!ZxGraph} g
@@ -134,7 +100,7 @@ function stabilizerTableOfGraph(g, qubit_map) {
  * @param {!Array.<!PauliProduct>} stabilizers
  * @param {!PauliProduct} measuredAxes
  * @param {!int} rightKeepLen
- * @returns {!GeneralMap<!QubitAxis, !Array.<!int>>}
+ * @returns {!GeneralMap<!QubitAxis, !Array.<!int>>} Remaining qubit axis to measured parity control qubit.
  */
 function graphStabilizersToMeasurementFixupActions(stabilizers, measuredAxes, rightKeepLen) {
     stabilizers = PauliProduct.gaussianEliminate(stabilizers);
@@ -216,37 +182,23 @@ function generatePortToQubitMap(graph) {
 }
 
 /**
- * @param {!LoggedSimulator} log_sim
+ * @param {!LoggedSimulation} state
  * @param {!Array.<!PauliProduct>} graphStabilizers
- * @param {!PauliProduct} mask
+ * @param {!PauliProduct} basis
+ * @param {!Array.<!boolean>} results
  * @param {!int} num_unmeasured
  */
-function _zxEval_updatePauliFrame(log_sim, graphStabilizers, mask, num_unmeasured) {
-    log_sim.qasm_log.push('');
-    log_sim.qasm_log.push('// Adjust Pauli frame based on measurements.');
+function _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, num_unmeasured) {
+    state.qasm_logger.lines.push('');
+    state.qasm_logger.lines.push('// Adjust Pauli frame based on measurements.');
 
-    let m = mask.paulis.length;
-    let actions = graphStabilizersToMeasurementFixupActions(graphStabilizers, mask, num_unmeasured);
-    for (let rem of actions.keys()) {
-        let flippers = actions.get(rem);
-        if (flippers.length === 0) {
+    let actions = graphStabilizersToMeasurementFixupActions(graphStabilizers, basis, num_unmeasured);
+    for (let target of actions.keys()) {
+        let parityControls = actions.get(target);
+        if (parityControls.length === 0) {
             continue;
         }
-        if (!rem.axis) {
-            log_sim.sub.hadamard(rem.qubit);
-        }
-        let quirk_col = Seq.repeat(1, m).toArray();
-        for (let f of flippers) {
-            log_sim.qasm_log.push(`if (m[${f}]) ${rem.axis ? 'x' : 'z'} q[${rem.qubit}];`);
-            log_sim.sub.cnot(f, rem.qubit);
-            quirk_col[f] = 'Z';
-        }
-        if (!rem.axis) {
-            log_sim.sub.hadamard(rem.qubit);
-        }
-
-        quirk_col[rem.qubit] = rem.axis ? '⊖' : '•';
-        log_sim.quirk_log.push(quirk_col);
+        state.feedback(parityControls, results, target);
     }
 }
 
@@ -258,29 +210,31 @@ function evalZxGraph(graph) {
     // Prepare simulator.
     let {portToQubitMap, num_inputs: num_in, num_outputs: num_out} = generatePortToQubitMap(graph);
     let raw_sim = new ChpSimulator(portToQubitMap.size);
-    let log_sim = new LoggedSimulator(raw_sim);
-    log_sim.quirk_init = Seq.repeat(0, portToQubitMap.size).toArray();
+    let state = new LoggedSimulation(raw_sim);
     for (let k = 0; k < portToQubitMap.size; k++) {
-        log_sim.qalloc();
+        state.sim.qalloc();
     }
 
     // Perform operations congruent to the ZX graph.
-    _zxEval_initEprPairs(graph, log_sim, portToQubitMap);
-    let fixupMask = _zxEval_performToricMeasurements(graph, log_sim, portToQubitMap);
+    _zxEval_initEprPairs(graph, state, portToQubitMap);
+    let {basis, results} = _zxEval_performToricMeasurements(graph, state, portToQubitMap);
     let graphStabilizers = stabilizerTableOfGraph(graph, portToQubitMap);
-    _zxEval_updatePauliFrame(log_sim, graphStabilizers, fixupMask, num_in + num_out);
+    _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, num_in + num_out);
 
     // Derive wavefunction and etc for caller.
-    return _zxEval_packageOutput(log_sim, portToQubitMap, num_in, num_out);
+    return _zxEval_packageOutput(state, portToQubitMap, num_in, num_out);
 }
 
 /**
  * @param {!ZxGraph} graph
- * @param {!LoggedSimulator} log_sim
+ * @param {!LoggedSimulation} state
  * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
  * @private
  */
-function _zxEval_initEprPairs(graph, log_sim, portToQubitMap) {
+function _zxEval_initEprPairs(graph, state, portToQubitMap) {
+    state.qasm_logger.lines.push('');
+    state.qasm_logger.lines.push('// Init per-edge EPR pairs.');
+
     // Identify edge qubit pairs.
     let pairs = [...graph.edges.keys()].map(e => {
         let qs = e.ports().map(p => portToQubitMap.get(p));
@@ -289,85 +243,95 @@ function _zxEval_initEprPairs(graph, log_sim, portToQubitMap) {
     });
     pairs.sort();
 
-    // For each edge, create an EPR pair |00> + |11> between its qubits.
-    log_sim.qasm_log.push('');
-    log_sim.qasm_log.push('// Init per-edge EPR pairs.');
+    // Make + states.
+    let heads = pairs.map(e => e[0]);
+    state.initPlus(heads);
+
+    // Expand + states into EPR pairs.
     for (let [q0, q1] of pairs) {
-        log_sim.hadamard(q0);
-        log_sim.quirk_log.pop();
-        log_sim.quirk_init[q0] = '+';
-        log_sim.cnot(q0, q1);
+        state.cnot(q0, q1);
     }
 }
 
 /**
  * @param {!ZxGraph} graph
- * @param {!LoggedSimulator} log_sim
+ * @param {!LoggedSimulation} state
  * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
- * @returns {!PauliProduct} A stabilizer whose Paulis are the relevant measurement qubit axes.
+ * @returns {!{basis: !PauliProduct, results: !Array.<!boolean|undefined>}}
+ *      The basis is a product of Paulis that were (effectively) measured.
+ *      The results array is a parallel array to the basis, with the corresponding measurement results.
+ *      The results array will have a false or true at indices corresponding to a Pauli in the basis, and undefined
+ *      in other locations.
  * @private
  */
-function _zxEval_performToricMeasurements(graph, log_sim, portToQubitMap) {
-    log_sim.qasm_log.push('');
-    log_sim.qasm_log.push('// Perform measurements for each node.');
+function _zxEval_performToricMeasurements(graph, state, portToQubitMap) {
+    state.qasm_logger.lines.push('');
+    state.qasm_logger.lines.push('// Perform per-node toric measurements.');
     let nodes = [...graph.nodes.keys()];
     nodes.sort();
-    let x_measured_qubits = [];
-    let z_measured_qubits = [];
+
+    // Perform 2-qubit operations and determine what to measure.
+    let xMeasured = [];
+    let zMeasured = [];
     for (let n of nodes) {
         let kind = graph.nodes.get(n);
         let edges = graph.edges_of(n);
         if (['O', '@'].indexOf(kind) !== -1) {
             let measure_func = kind === '@' ? toric_measurement_x : toric_measurement_z;
             let node_qubits = edges.map(e => portToQubitMap.get(new ZxPort(e, n)));
-            measure_func(log_sim, node_qubits, x_measured_qubits, z_measured_qubits, 0);
+            measure_func(state, node_qubits, xMeasured, zMeasured);
         } else if (['in', 'out'].indexOf(kind) === -1) {
             throw new Error(`Unrecognized node kind ${kind}`);
         }
     }
 
-    let quirkHadamardCol = Seq.repeat(1, portToQubitMap.size).toArray();
-    for (let k of x_measured_qubits) {
-        quirkHadamardCol[k] = 'H';
-    }
-    log_sim.quirk_log.push(quirkHadamardCol);
+    // Perform single-qubit operations and measure.
+    let allMeasured = [...xMeasured, ...zMeasured];
+    allMeasured.sort();
+    state.hadamard(xMeasured);
+    let denseResults = state.measure(allMeasured);
+    let basis = PauliProduct.fromSparseByType(portToQubitMap.size, {X: xMeasured, Z: zMeasured});
 
-    let quirkMeasureCol = Seq.repeat(1, portToQubitMap.size).toArray();
-    for (let k of [...x_measured_qubits, ...z_measured_qubits]) {
-        quirkMeasureCol[k] = 'Measure';
+    // Sparsify.
+    let sparseResults = [];
+    let denseResultPointer = 0;
+    for (let q of basis.activeQubitAxes()) {
+        while (sparseResults.length < q.qubit) {
+            sparseResults.push(undefined);
+        }
+        sparseResults.push(denseResults[denseResultPointer]);
+        denseResultPointer++;
     }
-    log_sim.quirk_log.push(quirkMeasureCol);
 
-    return PauliProduct.fromSparseByType(portToQubitMap.size, {X: x_measured_qubits, Z: z_measured_qubits});
+    return {basis, results: sparseResults};
 }
 
 /**
- * @param {!LoggedSimulator} log_sim
+ * @param {!LoggedSimulation} state
  * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
- * @param {!int} num_in
- * @param {!int} num_out
+ * @param {!int} numIn
+ * @param {!int} numOut
  * @returns {{stabilizers: !Array.<!PauliProduct>, wavefunction: !Matrix, qasm: string, quirk_url: string}}
  * @private
  */
-function _zxEval_packageOutput(log_sim, portToQubitMap, num_in, num_out) {
+function _zxEval_packageOutput(state, portToQubitMap, numIn, numOut) {
+    let numKept = numIn + numOut;
+
     let qasm = [
         'OPENQASM 2.0;',
         'include "qelib1.inc";',
         `qreg q[${portToQubitMap.size}]`,
-        `creg m[${portToQubitMap.size - num_in - num_out}]`,
-        ...log_sim.qasm_log,
+        `creg m[${portToQubitMap.size - numKept}]`,
+        ...state.qasm_logger.lines,
     ].join('\n');
-    let ampDisp = Seq.repeat(1, portToQubitMap.size - num_in - num_out).toArray();
-    ampDisp.push(`Amps${num_in+num_out}`);
-    log_sim.quirk_log.push(ampDisp);
-    let quirk_url = `https://algassert.com/quirk#circuit=${JSON.stringify({
-        'cols': log_sim.quirk_log, 
-        'init': log_sim.quirk_init
-    })}`;
 
-    let simStateStabilizers = _extractRelevantStabilizers(log_sim.sub, num_in, num_out);
+    state.quirk_logger.sparse([portToQubitMap.size - numKept, `Amps${numKept}`]);
+    let quirk_url = state.quirk_logger.url();
+
+    let simStateStabilizers = _extractRemainingStabilizers(state.sim, numKept);
+
     let wavefunction = stabilizerStateToWavefunction(simStateStabilizers);
-    wavefunction = new Matrix(1 << num_in, 1 << num_out, wavefunction.rawBuffer());
+    wavefunction = new Matrix(1 << numIn, 1 << numOut, wavefunction.rawBuffer());
 
     return {
         stabilizers: simStateStabilizers,
@@ -378,22 +342,20 @@ function _zxEval_packageOutput(log_sim, portToQubitMap, num_in, num_out) {
 }
 
 /**
- * @param {!ChpSimulator} sim
- * @param {!int} num_ins
- * @param {!int} num_outs
+ * @param {!ChpSimulator} stabilizerSim
+ * @param {!int} numKept
  * @returns {!Array.<!PauliProduct>}
  * @private
  */
-function _extractRelevantStabilizers(sim, num_ins, num_outs) {
+function _extractRemainingStabilizers(stabilizerSim, numKept) {
     // Extract and normalize stabilizers from simulator.
-    let lines = sim.toString().split('\n');
+    let lines = stabilizerSim.toString().split('\n');
     lines = lines.slice(1 + (lines.length >> 1));
     let paulis = PauliProduct.gaussianEliminate(lines.map(PauliProduct.fromString));
 
-    // Only keep lower right of table.
-    let keep = num_ins + num_outs;
+    // Only keep lower right of table (the unmeasured qubits).
     lines = paulis.map(e => e.toString());
-    lines = lines.slice(lines.length - keep).map(e => e[0] + e.slice(e.length - keep));
+    lines = lines.slice(lines.length - numKept).map(e => e[0] + e.slice(e.length - numKept));
     paulis = lines.map(PauliProduct.fromString);
 
     // Normalize
