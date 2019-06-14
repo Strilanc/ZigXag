@@ -63,11 +63,15 @@ class PauliProduct {
      * @param {!Array.<!QubitAxis>} qubitAxes
      */
     static fromSparseQubitAxes(n, qubitAxes) {
-        let paulis = new Uint8Array(n);
+        let result = new PauliProduct(0, new Uint8Array(n));
         for (let qa of qubitAxes) {
-            paulis[qa.qubit] ^= qa.axis ? 2 : 1;
+            let i = qa.qubit;
+            let p = qa.axis ? 2 : 1;
+            result.phase_exponent += _pauli_product_phase(result.paulis[i], p);
+            result.paulis[i] ^= p;
         }
-        return new PauliProduct(0, paulis);
+        result.phase_exponent &= 3;
+        return result;
     }
 
     /**

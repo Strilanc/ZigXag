@@ -48,7 +48,7 @@ suite.test('fromSparseQubitAxes', () => {
         new QubitAxis(4, true),
         new QubitAxis(7, false),
         new QubitAxis(7, true),
-    ])).isEqualTo(PauliProduct.fromString('..X.Z..Y..'));
+    ])).isEqualTo(PauliProduct.fromString('-i..X.Z..Y..'));
 });
 
 suite.test('activeQubitAxes', () => {
