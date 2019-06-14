@@ -66,6 +66,13 @@ class ZxNodePos {
     }
 
     /**
+     * @returns {!number}
+     */
+    orderVal() {
+        return this.x * 10000.1 + this.y;
+    }
+
+    /**
      * @param {object|!ZxNodePos} other
      * @returns {!boolean}
      */
@@ -122,6 +129,13 @@ class ZxEdgePos {
             return nodes[0];
         }
         throw new Error(`${node} is not an endpoint of ${self}`);
+    }
+
+    /**
+     * @returns {!number}
+     */
+    orderVal() {
+        return this.n_x * 10000.1 + this.n_y + (this.horizontal ? 0.5 : 0);
     }
 
     /**
@@ -184,11 +198,43 @@ class ZxGraph {
     }
 
     /**
+     * @returns {!Array.<!ZxNodePos>}
+     */
+    inputNodes() {
+        let nodes = [...this.nodes.keys()];
+        nodes.sort((a, b) => a.orderVal() - b.orderVal());
+        let result = [];
+        for (let node of nodes) {
+            let kind = this.nodes.get(node);
+            if (kind === 'in') {
+                result.push(node);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @returns {!Array.<!ZxNodePos>}
+     */
+    outputNodes() {
+        let nodes = [...this.nodes.keys()];
+        nodes.sort((a, b) => a.orderVal() - b.orderVal());
+        let result = [];
+        for (let node of nodes) {
+            let kind = this.nodes.get(node);
+            if (kind === 'out') {
+                result.push(node);
+            }
+        }
+        return result;
+    }
+
+    /**
      * @returns {!Array.<!{node: !ZxNodePos, axis: !boolean}>}
      */
     toricMeasurementNodes() {
         let nodes = [...this.nodes.keys()];
-        nodes.sort();
+        nodes.sort((a, b) => a.orderVal() - b.orderVal());
         let result = [];
         for (let node of nodes) {
             let kind = this.nodes.get(node);

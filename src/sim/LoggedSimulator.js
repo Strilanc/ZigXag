@@ -33,6 +33,9 @@ class LoggedSimulation {
      * @param {!QubitAxis} pauli
      */
     feedback(parityControls, parityMeasurementResults, pauli) {
+        if (parityControls.length === 0) {
+            return;
+        }
         this._sim_feedback(parityControls, parityMeasurementResults, pauli);
         this.qasm_logger.feedback(parityControls, pauli);
         this.quirk_logger.cnot(pauli.qubit, parityControls, !pauli.axis, true);

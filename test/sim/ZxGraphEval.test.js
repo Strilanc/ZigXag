@@ -103,6 +103,75 @@ if (m[3]) x q[9];
     `.trim());
 });
 
+suite.test("evalZxGraph_cnot_with_spandrels", () => {
+    let g = new ZxGraph();
+    g.add_line(new ZxNodePos(0, 0), new ZxNodePos(2, 0), ['in', '@', 'out']);
+    g.add_line(new ZxNodePos(0, 1), new ZxNodePos(2, 1), ['in', 'O', 'out']);
+    g.add_line(new ZxNodePos(1, 0), new ZxNodePos(1, 1));
+    g.add_line(new ZxNodePos(0, 2), new ZxNodePos(0, 3), ['O', 'O']);
+    g.add_line(new ZxNodePos(1, 2), new ZxNodePos(1, 3), ['O', 'O']);
+    g.add_line(new ZxNodePos(2, 2), new ZxNodePos(2, 3), ['O', 'O']);
+    assertThat(g.toString()).isEqualTo(`
+!---@---?
+    |
+    |
+    |
+!---O---?
+
+
+
+O   O   O
+|   |   |
+|   |   |
+|   |   |
+O   O   O
+    `.trim());
+
+    let r = evalZxGraph(g);
+    assertThat(r.stabilizers).isEqualTo([
+        "+X.XX",
+        "+Z.Z.",
+        "+.X.X",
+        "+.ZZZ",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.square(
+        0.5, 0, 0, 0,
+        0, 0, 0, 0.5,
+        0, 0, 0.5, 0,
+        0, 0.5, 0, 0,
+    ));
+});
+
+suite.test("evalZxGraph_swap", () => {
+    let g = new ZxGraph();
+    g.add_line(new ZxNodePos(0, 0), new ZxNodePos(4, 0), ['in', '@', 'O', '@', 'out']);
+    g.add_line(new ZxNodePos(0, 1), new ZxNodePos(4, 1), ['in', 'O', '@', 'O', 'out']);
+    g.add_line(new ZxNodePos(1, 0), new ZxNodePos(1, 1));
+    g.add_line(new ZxNodePos(2, 0), new ZxNodePos(2, 1));
+    g.add_line(new ZxNodePos(3, 0), new ZxNodePos(3, 1));
+    assertThat(g.toString()).isEqualTo(`
+!---@---O---@---?
+    |   |   |
+    |   |   |
+    |   |   |
+!---O---@---O---?
+    `.trim());
+
+    let r = evalZxGraph(g);
+    assertThat(r.stabilizers).isEqualTo([
+        "+X..X",
+        "+Z..Z",
+        "+.XX.",
+        "+.ZZ.",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.square(
+        0.5, 0, 0, 0,
+        0, 0, 0.5, 0,
+        0, 0.5, 0, 0,
+        0, 0, 0, 0.5,
+    ));
+});
+
 suite.test("evalZxGraph_cnot_rev", () => {
     let g = new ZxGraph();
     g.add_line(new ZxNodePos(0, 0), new ZxNodePos(2, 0), ['in', 'O', 'out']);

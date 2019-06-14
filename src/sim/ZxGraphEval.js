@@ -103,12 +103,10 @@ function generatePortToQubitMap(graph) {
     let portToQubitMap = /** @type {!GeneralMap<!ZxPort, !int>} */ new GeneralMap();
 
     // Sort and classify nodes.
-    let nodes = [...graph.nodes.keys()];
-    nodes.sort();
-    let inputNodes = nodes.filter(node => graph.nodes.get(node) === 'in');
-    let outputNodes = nodes.filter(node => graph.nodes.get(node) === 'out');
-    let measurementNodes = nodes.filter(node => ['O', '@'].indexOf(graph.nodes.get(node)) !== -1);
-    if (inputNodes.length + outputNodes.length + measurementNodes.length !== nodes.length) {
+    let inputNodes = graph.inputNodes();
+    let outputNodes = graph.outputNodes();
+    let measurementNodes = graph.toricMeasurementNodes();
+    if (inputNodes.length + outputNodes.length + measurementNodes.length !== graph.nodes.size) {
         throw new Error('Unrecognized node(s).');
     }
 
@@ -117,7 +115,7 @@ function generatePortToQubitMap(graph) {
     // Therefore it is important that qubits for nodes we want to eliminate to have qubits that come first.
 
     // Measurement nodes go first.
-    for (let node of measurementNodes) {
+    for (let {node} of measurementNodes) {
         for (let p of graph.activePortsOf(node)) {
             portToQubitMap.set(p, portToQubitMap.size);
         }
@@ -156,11 +154,7 @@ function _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, num_u
     state.qasm_logger.lines.push('// Adjust Pauli frame based on measurements.');
 
     let actions = graphStabilizersToMeasurementFixupActions(graphStabilizers, basis, num_unmeasured);
-    for (let target of actions.keys()) {
-        let parityControls = actions.get(target);
-        if (parityControls.length === 0) {
-            continue;
-        }
+    for (let [target, parityControls] of actions.entries()) {
         state.feedback(parityControls, results, target);
     }
 }
@@ -201,10 +195,10 @@ function _zxEval_initEprPairs(graph, state, portToQubitMap) {
     // Identify edge qubit pairs.
     let pairs = [...graph.edges.keys()].map(e => {
         let qs = e.ports().map(p => portToQubitMap.get(p));
-        qs.sort();
+        qs.sort((a, b) => a - b);
         return qs;
     });
-    pairs.sort();
+    pairs.sort((a, b) => (a[0] - b[0])*10000 + (a[1] - b[1]));
 
     // Make + states.
     let heads = pairs.map(e => e[0]);
@@ -243,7 +237,7 @@ function _zxEval_performToricMeasurements(graph, state, portToQubitMap) {
 
     // Perform single-qubit operations and measure.
     let allMeasured = [...xMeasured, ...zMeasured];
-    allMeasured.sort();
+    allMeasured.sort((a, b) => a - b);
     state.hadamard(xMeasured);
     let measurementResults = state.measure(allMeasured);
     let basis = PauliProduct.fromSparseByType(portToQubitMap.size, {X: xMeasured, Z: zMeasured});
