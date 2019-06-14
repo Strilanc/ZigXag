@@ -778,6 +778,13 @@ suite.test("groupBy", () => {
         [0, [0, 3, 6, 9]],
         [1, [1, 4, 7, 10]],
         [2, [2, 5, 8]]]));
+
+    assertThat(seq([101, 102, 202, 203]).groupBy(
+        e => Math.floor(e / 100),
+        e => (e % 100)*(e % 100))
+    ).isEqualTo(new Map([
+        [1, [1, 4]],
+        [2, [4, 9]]]));
 });
 
 suite.test("breadthFirstSearch", () => {

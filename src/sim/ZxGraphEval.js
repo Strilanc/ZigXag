@@ -22,12 +22,12 @@ import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
  * @param {!number|undefined=undefined} bias
  * @returns {!Seq.<T>|!Observable.<!boolean>|Array}
  */
-function measure_toparity_x(log_sim, qubits, x_measurements, z_measurements, bias=undefined) {
+function toric_measurement_x(log_sim, qubits, x_measurements, z_measurements, bias=undefined) {
     if (qubits.length === 0) {
         throw new Error('qubits.length === 0');
     }
 
-    log_sim.qasm_log.push(`// toparity x on ${qubits}`);
+    log_sim.qasm_log.push(`// toric x on ${qubits}`);
     let col = Seq.repeat(1, Math.max(...qubits) + 1).toArray();
     let root = qubits[0];
     for (let i = 1; i < qubits.length; i++) {
@@ -57,12 +57,12 @@ function measure_toparity_x(log_sim, qubits, x_measurements, z_measurements, bia
  * @param {!Array.<!int>} z_measurements
  * @returns {!Array.<!Measurement>}
  */
-function measure_toparity_z(log_sim, qubits, x_measurements, z_measurements, bias=undefined) {
+function toric_measurement_z(log_sim, qubits, x_measurements, z_measurements, bias=undefined) {
     if (qubits.length === 0) {
         throw new Error('qubits.length === 0');
     }
 
-    log_sim.qasm_log.push(`// toparity z on ${qubits}`);
+    log_sim.qasm_log.push(`// toric z on ${qubits}`);
     let col = Seq.repeat(1, Math.max(...qubits) + 1).toArray();
 
     let root = qubits[0];
@@ -221,7 +221,10 @@ function generatePortToQubitMap(graph) {
  * @param {!PauliProduct} mask
  * @param {!int} num_unmeasured
  */
-function doFixups(log_sim, graphStabilizers, mask, num_unmeasured) {
+function _zxEval_updatePauliFrame(log_sim, graphStabilizers, mask, num_unmeasured) {
+    log_sim.qasm_log.push('');
+    log_sim.qasm_log.push('// Adjust Pauli frame based on measurements.');
+
     let m = mask.paulis.length;
     let actions = graphStabilizersToMeasurementFixupActions(graphStabilizers, mask, num_unmeasured);
     for (let rem of actions.keys()) {
@@ -248,69 +251,105 @@ function doFixups(log_sim, graphStabilizers, mask, num_unmeasured) {
 }
 
 /**
- * @param {!ZxGraph} g
+ * @param {!ZxGraph} graph
  * @returns {!{wavefunction: !Matrix, stabilizers: !Array.<!PauliProduct>, qasm: !string, quirk_url: !string}}
  */
-function evalZxGraph(g) {
-    let {portToQubitMap, num_inputs: num_in, num_outputs: num_out} = generatePortToQubitMap(g);
-    let edge_qubits = new GeneralMap();
-    for (let e of g.edges.keys()) {
-        let v = e.adjacent_node_positions().map(n => portToQubitMap.get(new ZxPort(e, n)));
-        edge_qubits.set(e, v);
-    }
-
+function evalZxGraph(graph) {
+    // Prepare simulator.
+    let {portToQubitMap, num_inputs: num_in, num_outputs: num_out} = generatePortToQubitMap(graph);
     let raw_sim = new ChpSimulator(portToQubitMap.size);
     let log_sim = new LoggedSimulator(raw_sim);
-    let qs = [];
-    while (qs.length < portToQubitMap.size) {
-        qs.push(log_sim.qalloc());
+    log_sim.quirk_init = Seq.repeat(0, portToQubitMap.size).toArray();
+    for (let k = 0; k < portToQubitMap.size; k++) {
+        log_sim.qalloc();
     }
 
-    // Initialize EPR pairs.
-    let quirk_init = Seq.repeat(0, portToQubitMap.size).toArray();
+    // Perform operations congruent to the ZX graph.
+    _zxEval_initEprPairs(graph, log_sim, portToQubitMap);
+    let fixupMask = _zxEval_performToricMeasurements(graph, log_sim, portToQubitMap);
+    let graphStabilizers = stabilizerTableOfGraph(graph, portToQubitMap);
+    _zxEval_updatePauliFrame(log_sim, graphStabilizers, fixupMask, num_in + num_out);
+
+    // Derive wavefunction and etc for caller.
+    return _zxEval_packageOutput(log_sim, portToQubitMap, num_in, num_out);
+}
+
+/**
+ * @param {!ZxGraph} graph
+ * @param {!LoggedSimulator} log_sim
+ * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
+ * @private
+ */
+function _zxEval_initEprPairs(graph, log_sim, portToQubitMap) {
+    // Identify edge qubit pairs.
+    let pairs = [...graph.edges.keys()].map(e => {
+        let qs = e.ports().map(p => portToQubitMap.get(p));
+        qs.sort();
+        return qs;
+    });
+    pairs.sort();
+
+    // For each edge, create an EPR pair |00> + |11> between its qubits.
     log_sim.qasm_log.push('');
     log_sim.qasm_log.push('// Init per-edge EPR pairs.');
-    for (let [q0, q1] of edge_qubits.values()) {
-        log_sim.sub.hadamard(q0);
-        quirk_init[q0] = '+';
+    for (let [q0, q1] of pairs) {
+        log_sim.hadamard(q0);
+        log_sim.quirk_log.pop();
+        log_sim.quirk_init[q0] = '+';
         log_sim.cnot(q0, q1);
     }
+}
 
+/**
+ * @param {!ZxGraph} graph
+ * @param {!LoggedSimulator} log_sim
+ * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
+ * @returns {!PauliProduct} A stabilizer whose Paulis are the relevant measurement qubit axes.
+ * @private
+ */
+function _zxEval_performToricMeasurements(graph, log_sim, portToQubitMap) {
     log_sim.qasm_log.push('');
     log_sim.qasm_log.push('// Perform measurements for each node.');
-    let nodes = [...g.nodes.keys()];
+    let nodes = [...graph.nodes.keys()];
     nodes.sort();
-    let x_measurements = [];
-    let z_measurements = [];
+    let x_measured_qubits = [];
+    let z_measured_qubits = [];
     for (let n of nodes) {
-        let kind = g.nodes.get(n);
-        let edges = g.edges_of(n);
+        let kind = graph.nodes.get(n);
+        let edges = graph.edges_of(n);
         if (['O', '@'].indexOf(kind) !== -1) {
-            let measure_func = kind === '@' ? measure_toparity_x : measure_toparity_z;
+            let measure_func = kind === '@' ? toric_measurement_x : toric_measurement_z;
             let node_qubits = edges.map(e => portToQubitMap.get(new ZxPort(e, n)));
-            measure_func(log_sim, node_qubits, x_measurements, z_measurements, 0);
+            measure_func(log_sim, node_qubits, x_measured_qubits, z_measured_qubits, 0);
         } else if (['in', 'out'].indexOf(kind) === -1) {
-            throw new Error(`Unrecognized kind ${kind}`);
+            throw new Error(`Unrecognized node kind ${kind}`);
         }
     }
-    let col2 = Seq.repeat(1, portToQubitMap.size).toArray();
-    let col3 = Seq.repeat(1, portToQubitMap.size).toArray();
-    for (let k of x_measurements) {
-        col2[k] = 'H';
-        col3[k] = 'Measure';
-    }
-    for (let k of z_measurements) {
-        col3[k] = 'Measure';
-    }
-    log_sim.quirk_log.push(col2);
-    log_sim.quirk_log.push(col3);
 
-    log_sim.qasm_log.push('');
-    log_sim.qasm_log.push('// Adjust Pauli frame based on measurements.');
-    let mask = PauliProduct.fromSparseByType(portToQubitMap.size, {X: x_measurements, Z: z_measurements});
-    let graphStabilizers = stabilizerTableOfGraph(g, portToQubitMap);
-    doFixups(log_sim, graphStabilizers, mask, num_in + num_out);
+    let quirkHadamardCol = Seq.repeat(1, portToQubitMap.size).toArray();
+    for (let k of x_measured_qubits) {
+        quirkHadamardCol[k] = 'H';
+    }
+    log_sim.quirk_log.push(quirkHadamardCol);
 
+    let quirkMeasureCol = Seq.repeat(1, portToQubitMap.size).toArray();
+    for (let k of [...x_measured_qubits, ...z_measured_qubits]) {
+        quirkMeasureCol[k] = 'Measure';
+    }
+    log_sim.quirk_log.push(quirkMeasureCol);
+
+    return PauliProduct.fromSparseByType(portToQubitMap.size, {X: x_measured_qubits, Z: z_measured_qubits});
+}
+
+/**
+ * @param {!LoggedSimulator} log_sim
+ * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
+ * @param {!int} num_in
+ * @param {!int} num_out
+ * @returns {{stabilizers: !Array.<!PauliProduct>, wavefunction: !Matrix, qasm: string, quirk_url: string}}
+ * @private
+ */
+function _zxEval_packageOutput(log_sim, portToQubitMap, num_in, num_out) {
     let qasm = [
         'OPENQASM 2.0;',
         'include "qelib1.inc";',
@@ -321,13 +360,21 @@ function evalZxGraph(g) {
     let ampDisp = Seq.repeat(1, portToQubitMap.size - num_in - num_out).toArray();
     ampDisp.push(`Amps${num_in+num_out}`);
     log_sim.quirk_log.push(ampDisp);
-    let quirk_url = `https://algassert.com/quirk#circuit=${JSON.stringify({'cols': log_sim.quirk_log, 'init': quirk_init})}`;
-    let stabilizers = _extractRelevantStabilizers(raw_sim, num_in, num_out);
+    let quirk_url = `https://algassert.com/quirk#circuit=${JSON.stringify({
+        'cols': log_sim.quirk_log, 
+        'init': log_sim.quirk_init
+    })}`;
 
-    let wavefunction = stabilizerStateToWavefunction(stabilizers);
+    let simStateStabilizers = _extractRelevantStabilizers(log_sim.sub, num_in, num_out);
+    let wavefunction = stabilizerStateToWavefunction(simStateStabilizers);
     wavefunction = new Matrix(1 << num_in, 1 << num_out, wavefunction.rawBuffer());
 
-    return {stabilizers, wavefunction, qasm, quirk_url};
+    return {
+        stabilizers: simStateStabilizers,
+        wavefunction: wavefunction,
+        qasm: qasm,
+        quirk_url: quirk_url,
+    };
 }
 
 /**

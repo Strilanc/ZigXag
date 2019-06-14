@@ -9,6 +9,7 @@ class LoggedSimulator extends SimulatorSpec {
     constructor(sub) {
         super();
         this.qasm_log = [];
+        this.quirk_init = [];
         this.quirk_log = [];
         this.sub = sub;
     }

@@ -128,7 +128,7 @@ class ZxEdgePos {
      * @returns {!string}
      */
     toString() {
-        return `EdgePos(${this.n_x}, ${this.n_y}, ${this.horizontal})`;
+        return `(${this.n_x},${this.n_y},${this.horizontal ? '>' : 'V'})`;
     }
 
     /**
