@@ -167,50 +167,53 @@ function graphStabilizersToMeasurementFixupActions(stabilizers, measuredAxes, ri
 }
 
 /**
- * @param {!ZxGraph} g
- * @returns {!{qubit_map: !GeneralMap<!ZxPort, !int>, num_inputs: !int, num_outputs: !int}}
+ * @param {!ZxGraph} graph
+ * @returns {!{portToQubitMap: !GeneralMap<!ZxPort, !int>, num_inputs: !int, num_outputs: !int}}
  */
-function generatePortToQubitMap(g) {
-    let qubit_map = /** @type {!GeneralMap<!ZxPort, !int>} */ new GeneralMap();
+function generatePortToQubitMap(graph) {
+    let portToQubitMap = /** @type {!GeneralMap<!ZxPort, !int>} */ new GeneralMap();
 
-    let ks = [...g.nodes.keys()];
-    ks.sort();
+    // Sort and classify nodes.
+    let nodes = [...graph.nodes.keys()];
+    nodes.sort();
+    let inputNodes = nodes.filter(node => graph.nodes.get(node) === 'in');
+    let outputNodes = nodes.filter(node => graph.nodes.get(node) === 'out');
+    let measurementNodes = nodes.filter(node => ['O', '@'].indexOf(graph.nodes.get(node)) !== -1);
+    if (inputNodes.length + outputNodes.length + measurementNodes.length !== nodes.length) {
+        throw new Error('Unrecognized node(s).');
+    }
 
-    for (let n of ks) {
-        if (['O', '@'].indexOf(g.nodes.get(n)) !== -1) {
-            for (let p of g.ports_of(n)) {
-                qubit_map.set(p, qubit_map.size);
-            }
+    // CAREFUL: The order of the nodes' qubits matters!
+    // Earlier qubits are isolated by Gaussian eliminations, expressing them in terms of later qubits.
+    // Therefore it is important that qubits for nodes we want to eliminate to have qubits that come first.
+
+    // Measurement nodes go first.
+    for (let node of measurementNodes) {
+        for (let p of graph.ports_of(node)) {
+            portToQubitMap.set(p, portToQubitMap.size);
         }
     }
 
-    let num_inputs = 0;
-    for (let n of ks) {
-        if (g.nodes.get(n) === 'in') {
-            let ports = g.ports_of(n);
-            if (ports.length !== 1) {
-                throw new Error('ports.length !== 1')
-            }
-            num_inputs += 1;
-            qubit_map.set(ports[0], qubit_map.size);
+    // Then input nodes.
+    for (let node of inputNodes) {
+        let ports = graph.ports_of(node);
+        if (ports.length !== 1) {
+            throw new Error('ports.length !== 1')
         }
+        portToQubitMap.set(ports[0], portToQubitMap.size);
     }
 
-    let num_outputs = 0;
-    for (let n of ks) {
-        if (g.nodes.get(n) === 'out') {
-            let ports = g.ports_of(n);
-            if (ports.length !== 1) {
-                throw new Error('ports.length !== 1')
-            }
-            num_outputs += 1;
-            qubit_map.set(ports[0], qubit_map.size);
+    // And lastly output nodes.
+    for (let node of outputNodes) {
+        let ports = graph.ports_of(node);
+        if (ports.length !== 1) {
+            throw new Error('ports.length !== 1')
         }
+        portToQubitMap.set(ports[0], portToQubitMap.size);
     }
 
-    return {qubit_map, num_inputs, num_outputs};
+    return {portToQubitMap, num_inputs: inputNodes.length, num_outputs: outputNodes.length};
 }
-
 
 /**
  * @param {!LoggedSimulator} log_sim
@@ -244,28 +247,27 @@ function doFixups(log_sim, graphStabilizers, mask, num_unmeasured) {
     }
 }
 
-
 /**
  * @param {!ZxGraph} g
  * @returns {!{wavefunction: !Matrix, stabilizers: !Array.<!PauliProduct>, qasm: !string, quirk_url: !string}}
  */
 function evalZxGraph(g) {
-    let {qubit_map, num_inputs: num_in, num_outputs: num_out} = generatePortToQubitMap(g);
+    let {portToQubitMap, num_inputs: num_in, num_outputs: num_out} = generatePortToQubitMap(g);
     let edge_qubits = new GeneralMap();
     for (let e of g.edges.keys()) {
-        let v = e.adjacent_node_positions().map(n => qubit_map.get(new ZxPort(e, n)));
+        let v = e.adjacent_node_positions().map(n => portToQubitMap.get(new ZxPort(e, n)));
         edge_qubits.set(e, v);
     }
 
-    let raw_sim = new ChpSimulator(qubit_map.size);
+    let raw_sim = new ChpSimulator(portToQubitMap.size);
     let log_sim = new LoggedSimulator(raw_sim);
     let qs = [];
-    while (qs.length < qubit_map.size) {
+    while (qs.length < portToQubitMap.size) {
         qs.push(log_sim.qalloc());
     }
 
     // Initialize EPR pairs.
-    let quirk_init = Seq.repeat(0, qubit_map.size).toArray();
+    let quirk_init = Seq.repeat(0, portToQubitMap.size).toArray();
     log_sim.qasm_log.push('');
     log_sim.qasm_log.push('// Init per-edge EPR pairs.');
     for (let [q0, q1] of edge_qubits.values()) {
@@ -285,14 +287,14 @@ function evalZxGraph(g) {
         let edges = g.edges_of(n);
         if (['O', '@'].indexOf(kind) !== -1) {
             let measure_func = kind === '@' ? measure_toparity_x : measure_toparity_z;
-            let node_qubits = edges.map(e => qubit_map.get(new ZxPort(e, n)));
+            let node_qubits = edges.map(e => portToQubitMap.get(new ZxPort(e, n)));
             measure_func(log_sim, node_qubits, x_measurements, z_measurements, 0);
         } else if (['in', 'out'].indexOf(kind) === -1) {
             throw new Error(`Unrecognized kind ${kind}`);
         }
     }
-    let col2 = Seq.repeat(1, qubit_map.size).toArray();
-    let col3 = Seq.repeat(1, qubit_map.size).toArray();
+    let col2 = Seq.repeat(1, portToQubitMap.size).toArray();
+    let col3 = Seq.repeat(1, portToQubitMap.size).toArray();
     for (let k of x_measurements) {
         col2[k] = 'H';
         col3[k] = 'Measure';
@@ -305,18 +307,18 @@ function evalZxGraph(g) {
 
     log_sim.qasm_log.push('');
     log_sim.qasm_log.push('// Adjust Pauli frame based on measurements.');
-    let mask = PauliProduct.fromSparseByType(qubit_map.size, {X: x_measurements, Z: z_measurements});
-    let graphStabilizers = stabilizerTableOfGraph(g, qubit_map);
+    let mask = PauliProduct.fromSparseByType(portToQubitMap.size, {X: x_measurements, Z: z_measurements});
+    let graphStabilizers = stabilizerTableOfGraph(g, portToQubitMap);
     doFixups(log_sim, graphStabilizers, mask, num_in + num_out);
 
     let qasm = [
         'OPENQASM 2.0;',
         'include "qelib1.inc";',
-        `qreg q[${qubit_map.size}]`,
-        `creg m[${qubit_map.size - num_in - num_out}]`,
+        `qreg q[${portToQubitMap.size}]`,
+        `creg m[${portToQubitMap.size - num_in - num_out}]`,
         ...log_sim.qasm_log,
     ].join('\n');
-    let ampDisp = Seq.repeat(1, qubit_map.size - num_in - num_out).toArray();
+    let ampDisp = Seq.repeat(1, portToQubitMap.size - num_in - num_out).toArray();
     ampDisp.push(`Amps${num_in+num_out}`);
     log_sim.quirk_log.push(ampDisp);
     let quirk_url = `https://algassert.com/quirk#circuit=${JSON.stringify({'cols': log_sim.quirk_log, 'init': quirk_init})}`;
