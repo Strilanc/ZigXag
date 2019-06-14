@@ -6,7 +6,7 @@ import {VectorSimulator} from "src/sim/VectorSimulator.js"
 import {Measurement} from "src/sim/Measurement.js"
 import {Complex} from "src/base/Complex.js"
 import {Matrix} from "src/base/Matrix.js"
-import {ZxEdgePortPos, ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js"
+import {ZxPort, ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js"
 import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
 import {LoggedSimulator} from "src/sim/LoggedSimulator.js";

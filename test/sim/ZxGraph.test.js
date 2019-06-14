@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
-import {ZxGraph, ZxNodePos, ZxEdgePos, ZxEdgePortPos} from "src/sim/ZxGraph.js"
+import {ZxGraph, ZxNodePos, ZxEdgePos, ZxPort} from "src/sim/ZxGraph.js"
 
 let suite = new Suite("ZxGraph");
 
@@ -42,10 +42,10 @@ suite.test('node_adjacent_edge_positions', () => {
 suite.test('node_ports', () => {
     let n = new ZxNodePos(2, 3);
     assertThat(n.ports()).isEqualTo([
-        new ZxEdgePortPos(new ZxEdgePos(2, 3, true), n),
-        new ZxEdgePortPos(new ZxEdgePos(2, 2, false), n),
-        new ZxEdgePortPos(new ZxEdgePos(1, 3, true), n),
-        new ZxEdgePortPos(new ZxEdgePos(2, 3, false), n),
+        new ZxPort(new ZxEdgePos(2, 3, true), n),
+        new ZxPort(new ZxEdgePos(2, 2, false), n),
+        new ZxPort(new ZxEdgePos(1, 3, true), n),
+        new ZxPort(new ZxEdgePos(2, 3, false), n),
     ]);
 });
 

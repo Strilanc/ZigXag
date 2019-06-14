@@ -1,5 +1,5 @@
 import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
-import {ZxGraph, ZxNodePos, ZxEdgePos, ZxEdgePortPos} from "src/sim/ZxGraph.js"
+import {ZxGraph, ZxNodePos, ZxEdgePos, ZxPort} from "src/sim/ZxGraph.js"
 import {evalZxGraph, stabilizerStateToWavefunction} from "src/sim/ZxGraphEval.js"
 import {Matrix} from "src/base/Matrix.js"
 import {Complex} from "src/base/Complex.js"

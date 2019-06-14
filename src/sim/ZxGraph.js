@@ -24,10 +24,10 @@ class ZxNodePos {
     }
 
     /**
-     * @returns {!Array.<!ZxEdgePortPos>}
+     * @returns {!Array.<!ZxPort>}
      */
     ports() {
-        return this.adjacent_edge_positions().map(e => new ZxEdgePortPos(e, this));
+        return this.adjacent_edge_positions().map(e => new ZxPort(e, this));
     }
 
     /**
@@ -103,10 +103,10 @@ class ZxEdgePos {
     }
 
     /**
-     * @returns {!Array.<!ZxEdgePortPos>}
+     * @returns {!Array.<!ZxPort>}
      */
     ports() {
-        return this.adjacent_node_positions().map(n => new ZxEdgePortPos(this, n));
+        return this.adjacent_node_positions().map(n => new ZxPort(this, n));
     }
 
     /**
@@ -144,7 +144,10 @@ class ZxEdgePos {
 }
 
 
-class ZxEdgePortPos {
+/**
+ * The location where an edge is entering into a node. An adjacent edge/node combination.
+ */
+class ZxPort {
     /**
      * @param {!ZxEdgePos} edge
      * @param {!ZxNodePos} node
@@ -155,11 +158,11 @@ class ZxEdgePortPos {
     }
 
     /**
-     * @param {object|!ZxEdgePortPos} other
+     * @param {object|!ZxPort} other
      * @returns {!boolean}
      */
     isEqualTo(other) {
-        if (!(other instanceof ZxEdgePortPos)) {
+        if (!(other instanceof ZxPort)) {
             return false;
         }
         return other.edge.isEqualTo(this.edge) && other.node.isEqualTo(this.node);
@@ -193,7 +196,7 @@ class ZxGraph {
 
     /**
      * @param {!ZxNodePos|!ZxEdgePos} nodeOrEdge
-     * @returns {!Array.<!ZxEdgePortPos>}
+     * @returns {!Array.<!ZxPort>}
      */
     ports_of(nodeOrEdge) {
         return nodeOrEdge.ports().filter(p => this.edges.has(p.edge) && this.nodes.has(p.node));
@@ -336,4 +339,4 @@ class ZxGraph {
     }
 }
 
-export {ZxNodePos, ZxEdgePos, ZxEdgePortPos, ZxGraph}
+export {ZxNodePos, ZxEdgePos, ZxPort, ZxGraph}

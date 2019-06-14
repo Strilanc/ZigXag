@@ -6,7 +6,7 @@ import {VectorSimulator} from "src/sim/VectorSimulator.js"
 import {Measurement} from "src/sim/Measurement.js"
 import {Complex} from "src/base/Complex.js"
 import {Matrix} from "src/base/Matrix.js"
-import {ZxEdgePortPos, ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js"
+import {ZxPort, ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js"
 import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
 import {LoggedSimulator} from "src/sim/LoggedSimulator.js";
@@ -87,7 +87,7 @@ function measure_toparity_z(log_sim, qubits, x_measurements, z_measurements, bia
 
 /**
  * @param {!ZxGraph} g
- * @param {!GeneralMap.<!ZxEdgePortPos, !int>} qubit_map
+ * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
  * @returns {!Array.<!PauliProduct>}
  */
 function stabilizerTableOfGraph(g, qubit_map) {
@@ -168,10 +168,10 @@ function graphStabilizersToMeasurementFixupActions(stabilizers, measuredAxes, ri
 
 /**
  * @param {!ZxGraph} g
- * @returns {!{qubit_map: !GeneralMap<!ZxEdgePortPos, !int>, num_inputs: !int, num_outputs: !int}}
+ * @returns {!{qubit_map: !GeneralMap<!ZxPort, !int>, num_inputs: !int, num_outputs: !int}}
  */
-function makeQubitMap(g) {
-    let qubit_map = /** @type {!GeneralMap<!ZxEdgePortPos, !int>} */ new GeneralMap();
+function generatePortToQubitMap(g) {
+    let qubit_map = /** @type {!GeneralMap<!ZxPort, !int>} */ new GeneralMap();
 
     let ks = [...g.nodes.keys()];
     ks.sort();
@@ -250,17 +250,12 @@ function doFixups(log_sim, graphStabilizers, mask, num_unmeasured) {
  * @returns {!{wavefunction: !Matrix, stabilizers: !Array.<!PauliProduct>, qasm: !string, quirk_url: !string}}
  */
 function evalZxGraph(g) {
-    let {qubit_map, num_inputs: num_in, num_outputs: num_out} = makeQubitMap(g);
+    let {qubit_map, num_inputs: num_in, num_outputs: num_out} = generatePortToQubitMap(g);
     let edge_qubits = new GeneralMap();
     for (let e of g.edges.keys()) {
-        let v = e.adjacent_node_positions().map(n => qubit_map.get(new ZxEdgePortPos(e, n)));
+        let v = e.adjacent_node_positions().map(n => qubit_map.get(new ZxPort(e, n)));
         edge_qubits.set(e, v);
     }
-    // let rewrites = graphStabilizersToFixupActions(constraints, num_in + num_out);
-    // for (let re of rewrites.keys()) {
-    //     let v = rewrites.get(re);
-    //     console.log(`REWRITE ${re} INTO ${v}`);
-    // }
 
     let raw_sim = new ChpSimulator(qubit_map.size);
     let log_sim = new LoggedSimulator(raw_sim);
@@ -290,7 +285,7 @@ function evalZxGraph(g) {
         let edges = g.edges_of(n);
         if (['O', '@'].indexOf(kind) !== -1) {
             let measure_func = kind === '@' ? measure_toparity_x : measure_toparity_z;
-            let node_qubits = edges.map(e => qubit_map.get(new ZxEdgePortPos(e, n)));
+            let node_qubits = edges.map(e => qubit_map.get(new ZxPort(e, n)));
             measure_func(log_sim, node_qubits, x_measurements, z_measurements, 0);
         } else if (['in', 'out'].indexOf(kind) === -1) {
             throw new Error(`Unrecognized kind ${kind}`);
