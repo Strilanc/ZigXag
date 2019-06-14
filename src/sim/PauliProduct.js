@@ -65,12 +65,8 @@ class PauliProduct {
     static fromSparseQubitAxes(n, qubitAxes) {
         let result = new PauliProduct(0, new Uint8Array(n));
         for (let qa of qubitAxes) {
-            let i = qa.qubit;
-            let p = qa.axis ? 2 : 1;
-            result.phase_exponent += _pauli_product_phase(result.paulis[i], p);
-            result.paulis[i] ^= p;
+            result.inline_times(qa);
         }
-        result.phase_exponent &= 3;
         return result;
     }
 
@@ -104,7 +100,11 @@ class PauliProduct {
         let paulis = new Uint8Array(n);
         for (let k of Object.keys(typeToIndexMap)) {
             let p = _PAULI_NAMES.indexOf(k);
-            for (let i of typeToIndexMap[k]) {
+            let indices = typeToIndexMap[k];
+            if (!Array.isArray(indices)) {
+                indices = [indices];
+            }
+            for (let i of indices) {
                 if (i < 0 || i >= n) {
                     throw new Error(`Bad index ${i}.`);
                 }
@@ -180,18 +180,19 @@ class PauliProduct {
     /**
      * @param {!PauliProduct|!Complex|!int} other
      */
-    times(other) {
+    inline_times(other) {
         if (other instanceof PauliProduct) {
-            let phase = this.phase_exponent + other.phase_exponent;
-            let n = Math.max(this.paulis.length, other.paulis.length);
-            let paulis = new Uint8Array(n);
-            for (let i = 0; i < n; i++) {
-                let p1 = this.paulis[i] || 0;
-                let p2 = other.paulis[i] || 0;
-                paulis[i] = p1 ^ p2;
-                phase += _pauli_product_phase(p1, p2);
+            for (let i = 0; i < other.paulis.length; i++) {
+                let p = other.paulis[i];
+                this.phase_exponent += _pauli_product_phase(this.paulis[i], p);
+                this.paulis[i] ^= p;
             }
-            return new PauliProduct(phase, paulis);
+            this.phase_exponent += other.phase_exponent;
+        } else if (other instanceof QubitAxis) {
+            let i = other.qubit;
+            let p = other.axis ? 2 : 1;
+            this.phase_exponent += _pauli_product_phase(this.paulis[i], p);
+            this.paulis[i] ^= p;
         } else {
             let c = Complex.from(other);
             let p;
@@ -206,8 +207,28 @@ class PauliProduct {
             } else {
                 throw new Error(`Multiplied PauliProduct by unsupported value ${other}.`);
             }
-            return new PauliProduct(this.phase_exponent + p, new Uint8Array(this.paulis));
+            this.phase_exponent += p;
         }
+        this.phase_exponent &= 3;
+        return this;
+    }
+
+    /**
+     * @param {!PauliProduct|!Complex|!int} other
+     */
+    times(other) {
+        let n = this.paulis.length;
+        if (other instanceof PauliProduct) {
+            n = Math.max(n, other.paulis.length);
+        } else if (other instanceof QubitAxis) {
+            n = Math.max(n, other.qubit + 1);
+        }
+        let copy = new PauliProduct(this.phase_exponent, new Uint8Array(n));
+        for (let i = 0; i < this.paulis.length; i++) {
+            copy.paulis[i] = this.paulis[i];
+        }
+        copy.inline_times(other);
+        return copy;
     }
 
     /**

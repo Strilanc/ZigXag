@@ -49,6 +49,10 @@ suite.test('fromSparseQubitAxes', () => {
         new QubitAxis(7, false),
         new QubitAxis(7, true),
     ])).isEqualTo(PauliProduct.fromString('-i..X.Z..Y..'));
+    assertThat(PauliProduct.fromSparseQubitAxes(5, [
+        new QubitAxis(2, true),
+        new QubitAxis(2, false),
+    ])).isEqualTo(PauliProduct.fromString('i..Y..'));
 });
 
 suite.test('activeQubitAxes', () => {
@@ -74,6 +78,7 @@ suite.test('xzBitWeight', () => {
 
 suite.test('fromSparseByType', () => {
     assertThat(PauliProduct.fromSparseByType(10, {X: [2, 3], Y: [6]})).isEqualTo(PauliProduct.fromString('..XX..Y...'));
+    assertThat(PauliProduct.fromSparseByType(10, {X: [2, 3], Y: 6})).isEqualTo(PauliProduct.fromString('..XX..Y...'));
 });
 
 suite.test('times', () => {
@@ -89,6 +94,11 @@ suite.test('times', () => {
         PauliProduct.fromString('-X'));
     assertThat(PauliProduct.fromString('iX').times(Complex.I)).isEqualTo(
         PauliProduct.fromString('-X'));
+
+    assertThat(PauliProduct.fromString('-.Z....Z.Z.').times(PauliProduct.fromString('-.Z........'))).isEqualTo(
+        PauliProduct.fromString('+......Z.Z.'));
+    assertThat(PauliProduct.fromString('XXXX').times(new QubitAxis(2, true))).isEqualTo(
+        PauliProduct.fromString('-iXXYX'));
 });
 
 suite.test('bitwiseAnd', () => {
