@@ -9,28 +9,6 @@ import {PauliProduct} from "src/sim/PauliProduct.js"
 let suite = new Suite("ZxGraphEval");
 
 
-suite.test("stabilizerStateToWavefunction", () => {
-    let s = Math.sqrt(0.5);
-    let i = Complex.I;
-    let f = (...e) => stabilizerStateToWavefunction(e.map(PauliProduct.fromString));
-
-    assertThat(f('+Z')).isApproximatelyEqualTo(Matrix.col(1, 0));
-    assertThat(f('-Z')).isApproximatelyEqualTo(Matrix.col(0, 1));
-    assertThat(f('+X')).isApproximatelyEqualTo(Matrix.col(s, s));
-    assertThat(f('-X')).isApproximatelyEqualTo(Matrix.col(s, -s));
-    assertThat(f('+Y')).isApproximatelyEqualTo(Matrix.col(s, i.times(s)));
-    assertThat(f('-Y')).isApproximatelyEqualTo(Matrix.col(s, i.times(-s)));
-
-    assertThat(f('+Z.', '+.Z')).isApproximatelyEqualTo(Matrix.col(1, 0, 0, 0));
-    assertThat(f('+Z.', '+ZZ')).isApproximatelyEqualTo(Matrix.col(1, 0, 0, 0));
-    assertThat(f('-Z.', '+ZZ')).isApproximatelyEqualTo(Matrix.col(0, 0, 0, 1));
-    assertThat(f('+ZZ', '+XX')).isApproximatelyEqualTo(Matrix.col(s, 0, 0, s));
-
-    assertThat(f('+XX', '-YY')).isApproximatelyEqualTo(Matrix.col(s, 0, 0, s));
-    assertThat(f('+XYZ', '+XZY', '+ZZZ')).isApproximatelyEqualTo(
-        Matrix.col(0.5, 0, 0, i.times(0.5), 0, i.times(0.5), 0.5, 0));
-});
-
 suite.test("evalZxGraph_cnot", () => {
     let g = new ZxGraph();
     g.add_line(new ZxNodePos(0, 0), new ZxNodePos(2, 0), ['in', '@', 'out']);

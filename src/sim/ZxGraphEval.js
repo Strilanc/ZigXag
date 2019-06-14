@@ -11,6 +11,7 @@ import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
 import {LoggedSimulator} from "src/sim/LoggedSimulator.js";
 import {popcnt} from "src/base/Util.js";
+import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 
 
 /**
@@ -212,109 +213,6 @@ function makeQubitMap(g) {
 
 
 /**
- * @param {!Float64Array} buf
- * @private
- */
-function _normalize(buf) {
-    let t = 0;
-    for (let k = 0; k < buf.length; k++) {
-        t += buf[k]*buf[k];
-    }
-    t = Math.sqrt(t);
-    for (let k = 0; k < buf.length; k++) {
-        buf[k] /= t;
-    }
-}
-
-/**
- * @param {!Float64Array} buf
- * @private
- */
-function _phaseCorrect(buf) {
-    let best = 0;
-    let phase = Complex.ONE;
-    for (let k = 0; k < buf.length; k += 2) {
-        let r = buf[k];
-        let i = buf[k+1];
-        let d = r*r + i*i;
-        if (d > best) {
-            best = d;
-            phase = new Complex(r, i).unit().conjugate();
-        }
-    }
-
-    for (let k = 0; k < buf.length; k += 2) {
-        let c = new Complex(buf[k], buf[k+1]).times(phase);
-        buf[k] = c.real;
-        buf[k+1] = c.imag;
-    }
-}
-
-/**
- * @param {!Array.<!PauliProduct>} stabilizers
- * @returns {!Matrix}
- */
-function stabilizerStateToWavefunction(stabilizers) {
-    let n = stabilizers.length;
-    let sim = new VectorSimulator();
-    for (let k = 0; k < n; k++) {
-        sim.qalloc();
-    }
-
-    let buf = sim._state.rawBuffer();
-    for (let k = 0; k < buf.length; k++) {
-        buf[k] = Math.random()*2-1;
-    }
-    _normalize(buf);
-
-    for (let stabilizer of stabilizers) {
-        if (stabilizer.paulis.length !== n) {
-            throw new Error('stabilizer.paulis.length !== n');
-        }
-        if ((stabilizer.phase_exponent & 1) !== 0) {
-            throw new Error('imaginary stabilizer');
-        }
-        let mask = 0;
-        for (let i = 0; i < n; i++) {
-            let c = stabilizer.paulis[i];
-            if (c !== 0) {
-                mask |= 1 << i;
-            }
-            if (c === 1) {
-                sim.hadamard(i);
-            } else if (c === 3) {
-                sim.phase(i);
-                sim.hadamard(i);
-            }
-        }
-        buf = sim._state.rawBuffer();
-
-        let parity = stabilizer.phase_exponent >> 1;
-        for (let k = 0; k < buf.length; k++) {
-            if ((popcnt((k >> 1) & mask) & 1) !== parity) {
-                buf[k] = 0;
-            }
-        }
-        _normalize(buf);
-
-        for (let i = 0; i < n; i++) {
-            let c = stabilizer.paulis[i];
-            if (c === 1) {
-                sim.hadamard(i);
-            } else if (c === 3) {
-                sim.hadamard(i);
-                sim.phase(i);
-            }
-        }
-        buf = sim._state.rawBuffer();
-    }
-
-    _phaseCorrect(buf);
-    return new Matrix(1, buf.length >> 1, buf);
-}
-
-
-/**
  * @param {!LoggedSimulator} log_sim
  * @param {!Array.<!PauliProduct>} graphStabilizers
  * @param {!PauliProduct} mask
@@ -458,4 +356,4 @@ function _extractRelevantStabilizers(sim, num_ins, num_outs) {
     return PauliProduct.gaussianEliminate(paulis);
 }
 
-export {evalZxGraph, stabilizerStateToWavefunction}
+export {evalZxGraph}
