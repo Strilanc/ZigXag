@@ -92,14 +92,18 @@ measure q[4] -> c[4]
 measure q[5] -> c[5]
 
 // Adjust Pauli frame based on measurements.
-if (m[0]) z q[8];
-if (m[4]) z q[8];
-if (m[5]) z q[8];
-if (m[1]) x q[8];
-if (m[5]) z q[9];
-if (m[1]) x q[9];
-if (m[2]) x q[9];
-if (m[3]) x q[9];
+if (m[0] ^ m[4] ^ m[5]) {
+    z q[8];
+}
+if (m[1]) {
+    x q[8];
+}
+if (m[5]) {
+    z q[9];
+}
+if (m[1] ^ m[2] ^ m[3]) {
+    x q[9];
+}
     `.trim());
 });
 

@@ -171,9 +171,10 @@ class QasmLog {
         if (!Array.isArray(parityControls)) {
             parityControls = [parityControls];
         }
-        for (let control of parityControls) {
-            this.lines.push(`if (m[${control}]) ${pauli.axis ? 'x' : 'z'} q[${pauli.qubit}];`);
-        }
+        let condition = parityControls.map(e => `m[${e}]`).join(' ^ ');
+        this.lines.push(`if (${condition}) {
+    ${pauli.axis ? 'x' : 'z'} q[${pauli.qubit}];
+}`);
     }
 
     /**
