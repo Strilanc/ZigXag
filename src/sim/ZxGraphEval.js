@@ -22,10 +22,11 @@ import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 function stabilizerTableOfGraph(g, qubit_map) {
     let stabilizers = [];
 
-    let addProd = (type, qubits) => {
+    let addProd = (type, qubits, negate) => {
         let d = {};
         d[type] = qubits;
-        stabilizers.push(PauliProduct.fromSparseByType(qubit_map.size, d));
+        let sign = negate ? -1 : 1;
+        stabilizers.push(PauliProduct.fromSparseByType(qubit_map.size, d).times(sign));
     };
 
     for (let [n, kind] of g.nodes.entries()) {
@@ -59,6 +60,12 @@ function stabilizerTableOfGraph(g, qubit_map) {
             stabilizers.push(PauliProduct.fromSparseQubitAxes(
                 qubit_map.size,
                 [new QubitAxis(q1, false), new QubitAxis(q2, true)]));
+        } else if (kind === 'x') {
+            addProd('X', [q1, q2]);
+            addProd('Z', [q1, q2], true);
+        } else if (kind === 'z') {
+            addProd('X', [q1, q2], true);
+            addProd('Z', [q1, q2]);
         } else {
             throw new Error(`Unrecognized edge kind ${kind}.`);
         }
@@ -212,14 +219,16 @@ function _zxEval_initEprPairs(graph, state, portToQubitMap) {
 
     // Make + states.
     let heads = pairs.map(e => e[0][0]);
-    let tails = pairs.filter(e => e[1] === 'h').map(e => e[0][1]);
     state.initPlus(heads);
 
     // Expand + states into EPR pairs.
     for (let [[q0, q1], _] of pairs) {
         state.cnot(q0, q1);
     }
-    state.hadamard(tails);
+
+    let knownBasisChanges = ['h', 'x', 'z', 's', 'f'];
+    let basisChanges = pairs.filter(e => knownBasisChanges.indexOf(e[1]) !== -1).map(e => [e[0][1], e[1]]);
+    state.basisChange(basisChanges);
 }
 
 /**

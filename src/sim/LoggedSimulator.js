@@ -62,6 +62,38 @@ class LoggedSimulation {
     }
 
     /**
+     * @param {!Array.<![!int, !string]>} changes
+     */
+    basisChange(changes) {
+        if (changes.length === 0) {
+            return;
+        }
+        this.quirk_logger.basisChange(changes);
+        this.qasm_logger.basisChange(changes);
+        for (let [target, basis] of changes) {
+            if (basis === 'h') {
+                this.sim.hadamard(target);
+            } else if (basis === 'x') {
+                this.sim.hadamard(target);
+                this.sim.phase(target);
+                this.sim.phase(target);
+                this.sim.hadamard(target);
+            } else if (basis === 'z') {
+                this.sim.phase(target);
+                this.sim.phase(target);
+            } else if (basis === 's') {
+                this.sim.phase(target);
+            } else if (basis === 'f') {
+                this.sim.hadamard(target);
+                this.sim.phase(target);
+                this.sim.hadamard(target);
+            } else {
+                throw new Error(`Unrecognized basis change: ${basis}`);
+            }
+        }
+    }
+
+    /**
      * @param {!int|!Array.<!int>} targets
      */
     hadamard(targets) {
@@ -75,6 +107,23 @@ class LoggedSimulation {
         this.qasm_logger.hadamard(targets);
         for (let target of targets) {
             this.sim.hadamard(target);
+        }
+    }
+
+    /**
+     * @param {!int|!Array.<!int>} targets
+     */
+    phase(targets) {
+        if (!Array.isArray(targets)) {
+            targets = [targets];
+        }
+        if (targets.length === 0) {
+            return;
+        }
+        this.quirk_logger.phase(targets);
+        this.qasm_logger.phase(targets);
+        for (let target of targets) {
+            this.sim.phase(target);
         }
     }
 
@@ -148,7 +197,7 @@ class QasmLog {
             targets = [targets];
         }
         if (!controlXz && !targetXz) {
-            this.hadamard(control);
+            this.hadamard([control]);
         }
         for (let target of targets) {
             if (controlXz && targetXz) {
@@ -162,7 +211,25 @@ class QasmLog {
             }
         }
         if (!controlXz && !targetXz) {
-            this.hadamard(control);
+            this.hadamard([control]);
+        }
+    }
+
+    /**
+     * @param {!Array.<![!int, !string]>} changes
+     */
+    basisChange(changes) {
+        let rewrites = {
+            'h': ['h'],
+            'x': ['x'],
+            'z': ['z'],
+            's': ['s'],
+            'f': ['h', 's', 'h'],
+        };
+        for (let [target, basis] of changes) {
+            for (let op of rewrites[basis]) {
+                this.lines.push(`${op} q[${target}];`);
+            }
         }
     }
 
@@ -276,6 +343,20 @@ class QuirkLog {
             [control, controlXz ? '•' : '⊖'],
             ...targets.map(target => [target, targetXz ? 'Z' : 'X'])
         );
+    }
+
+    /**
+     * @param {!Array.<![!int, !string]>} changes
+     */
+    basisChange(changes) {
+        let rewrites = {
+            'h': 'H',
+            'x': 'X',
+            'z': 'Z',
+            's': 'Z^½',
+            'f': 'X^½',
+        };
+        this.sparse(...changes.map(e => [e[0], rewrites[e[1]]]));
     }
 
     /**

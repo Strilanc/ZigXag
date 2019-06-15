@@ -59,11 +59,6 @@ let mouseDownY = undefined;
 
 let curGraph = undefined;
 let revision = new Revision([initialCommit()], 0, false);
-revision.latestActiveCommit().subscribe(text => {
-    curGraph = ZxGraph.deserialize(text);
-    document.location.hash = text;
-    draw();
-});
 
 
 /**
@@ -195,12 +190,24 @@ function drawEdge(ctx, edge, thickness=1, color='black', showKind=true) {
     ctx.stroke();
 
     if (showKind) {
-        let r = [(x1 + x2) / 2 - 4, (y1 + y2) / 2 - 4, 8, 8];
+        let [cx, cy] = graphElementToCenterXy(edge);
+        let r = [cx - 4, cy - 4, 8, 8];
         if (kind === 'h') {
             ctx.fillStyle = 'yellow';
             ctx.strokeStyle = 'black';
             ctx.fillRect(...r);
             ctx.strokeRect(...r)
+        } else if (kind === 'z' || kind === 'x' || kind === 's' || kind === 'f') {
+            let b = kind === 'x' || kind === 'f';
+            ctx.fillStyle = b ? 'white' : 'black';
+            ctx.strokeStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 7, 0, 2*Math.PI);
+            ctx.stroke();
+            ctx.fill();
+            ctx.fillStyle = b ? 'black' : 'white';
+            ctx.font = '12px monospace';
+            ctx.fillText(kind, cx-3, cy+3);
         } else if (kind !== '-') {
             ctx.fillStyle = 'red';
             ctx.strokeStyle = 'black';
@@ -240,10 +247,7 @@ function drawFadedNearbyRegion(ctx) {
 /**
  * @param {!CanvasRenderingContext2D} ctx
  */
-function drawPossibleEdit(ctx) {
-    let deletePref = curWantDeleteEdit();
-    let choices = deletePref === undefined ? [false, true] : [deletePref];
-
+function drawFocus(ctx) {
     ctx.globalAlpha *= 0.5;
     let element = xyToGraphElement(mouseX, mouseY);
     if (element !== undefined) {
@@ -254,6 +258,14 @@ function drawPossibleEdit(ctx) {
         }
     }
     ctx.globalAlpha *= 2;
+}
+
+/**
+ * @param {!CanvasRenderingContext2D} ctx
+ */
+function drawPossibleEdit(ctx) {
+    let deletePref = curWantDeleteEdit();
+    let choices = deletePref === undefined ? [false, true] : [deletePref];
 
     if (deletePref === undefined) {
         ctx.globalAlpha *= 0.25;
@@ -287,6 +299,18 @@ function drawResults() {
     MathPainter.paintMatrix(new Painter(canvas), results.wavefunction, s);
 }
 
+/**
+ * @param {!CanvasRenderingContext2D} ctx
+ */
+function drawGraph(ctx) {
+    for (let edge of curGraph.edges.keys()) {
+        drawEdge(ctx, edge);
+    }
+    for (let node of curGraph.nodes.keys()) {
+        drawNode(ctx, node);
+    }
+}
+
 function draw() {
     canvas.width = canvasDiv.clientWidth;
     canvas.height = 300;
@@ -294,17 +318,14 @@ function draw() {
     let ctx = /** @type {!CanvasRenderingContext2D} */ canvas.getContext('2d');
     ctx.clearRect(0, 0, 10000, 10000);
 
-    drawResults();
-    drawFadedNearbyRegion(ctx);
-
-    for (let edge of curGraph.edges.keys()) {
-        drawEdge(ctx, edge);
+    drawFocus(ctx);
+    try {
+        drawResults();
+        drawFadedNearbyRegion(ctx);
+    } finally {
+        drawGraph(ctx);
+        drawPossibleEdit(ctx);
     }
-    for (let node of curGraph.nodes.keys()) {
-        drawNode(ctx, node);
-    }
-
-    drawPossibleEdit(ctx);
 }
 
 let keyListeners = /** @type {!Map.<!int, !Array.<!function(!KeyboardEvent)>>} */ new Map();
@@ -518,7 +539,7 @@ function changeEdgeKindEdit(edge) {
     return new Edit(
         () => `cycle ${edge}`,
         graph => {
-            let cycle = ['-', 'h'];
+            let cycle = ['-', 'h', 'x', 'z'];
             let kind = curGraph.edges.get(edge);
             let i = cycle.indexOf(kind);
             i++;
@@ -703,5 +724,11 @@ document.addEventListener('keydown', ev => {
 
 document.addEventListener('keyup', ev => {
     curCtrlKey = ev.ctrlKey;
+    draw();
+});
+
+revision.latestActiveCommit().subscribe(text => {
+    curGraph = ZxGraph.deserialize(text);
+    document.location.hash = text;
     draw();
 });
