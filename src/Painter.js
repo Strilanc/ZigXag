@@ -20,13 +20,13 @@ import {Util} from "src/base/Util.js"
 
 class Painter {
     /**
-     * @param {!HTMLCanvasElement} canvas
+     * @param {!HTMLCanvasElement|!CanvasRenderingContext2D} canvasOrCtx
      */
-    constructor(canvas) {
+    constructor(canvasOrCtx) {
         /** @type {!HTMLCanvasElement} */
-        this.canvas = canvas;
+        this.canvas = canvasOrCtx instanceof CanvasRenderingContext2D ? canvasOrCtx.canvas : canvasOrCtx;
         /** @type {!CanvasRenderingContext2D} */
-        this.ctx = canvas.getContext("2d");
+        this.ctx = canvasOrCtx instanceof CanvasRenderingContext2D ? canvasOrCtx : canvasOrCtx.getContext("2d");
         /**
          * @type {!Array.<!function()>}
          * @private
@@ -530,12 +530,23 @@ class Tracer {
      * @param {number} facingAngle The direction the arrow head is pointing towards.
      * @param {number} sweptAngle The angle swept out by the back of the arrow head, relative to its center (not the
      * point at the front).
+     * @param {!string} root
      */
-    arrowHead(x, y, radius, facingAngle, sweptAngle) {
+    arrowHead(x, y, radius, facingAngle, sweptAngle, root='center') {
         let a1 = facingAngle + sweptAngle/2 + Math.PI;
         let a2 = facingAngle - sweptAngle/2 + Math.PI;
+        let c = Math.cos(facingAngle);
+        let s = Math.sin(facingAngle);
+        if (root === 'tip') {
+            x -= c*radius;
+            y -= s*radius;
+        }
+        if (root === 'stem') {
+            x += c*radius;
+            y += s*radius;
+        }
         this.polygon([
-            x + Math.cos(facingAngle)*radius, y + Math.sin(facingAngle)*radius,
+            x + c*radius, y + s*radius,
             x + Math.cos(a1)*radius, y + Math.sin(a1)*radius,
             x + Math.cos(a2)*radius, y + Math.sin(a2)*radius
         ]);
