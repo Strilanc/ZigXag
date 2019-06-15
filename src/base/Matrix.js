@@ -885,6 +885,32 @@ class Matrix {
     }
 
     /**
+     * Equivalent to applying a swap gate in a quantum circuit.
+     * @param {!int} qubit1
+     * @param {!int} qubit2
+     * @returns {!Matrix}
+     */
+    afterQubitSwap(qubit1, qubit2) {
+        if (qubit1 === qubit2) {
+            throw new DetailedError('Self-swap', {qubit1, qubit2});
+        }
+        if ((1 << qubit1) > this.height() || (1 << qubit2) > this.height()) {
+            throw new DetailedError('Out of range swap', {qubit1, qubit2, height: this.height()});
+        }
+
+        let result = this._clone();
+        let n = this.height();
+        for (let i = 0; i < n; i++) {
+            let m1 = (i >> qubit1) & 1;
+            let m2 = (i >> qubit2) & 1;
+            if (m1 === 1 && m2 === 0) {
+                result._inline_rowSwap(i, i - (1 << qubit1) + (1 << qubit2));
+            }
+        }
+        return result;
+    }
+
+    /**
      * @param {!int} row
      * @param {!Complex} scale
      * @private
@@ -911,6 +937,24 @@ class Matrix {
             let k = (row*this._width + col)*2;
             this._buffer[k] = v2.real;
             this._buffer[k+1] = v2.imag;
+        }
+    }
+
+    /**
+     * @param {!int} row1
+     * @param {!int} row2
+     * @private
+     */
+    _inline_rowSwap(row1, row2) {
+        for (let col = 0; col < this._width; col++) {
+            let k1 = (row1*this._width + col)*2;
+            let k2 = (row2*this._width + col)*2;
+            let t1 = this._buffer[k1];
+            let t2 = this._buffer[k1+1];
+            this._buffer[k1] = this._buffer[k2];
+            this._buffer[k1+1] = this._buffer[k2+1];
+            this._buffer[k2] = t1;
+            this._buffer[k2+1] = t2;
         }
     }
 

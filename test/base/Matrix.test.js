@@ -1185,3 +1185,54 @@ suite.test("applyToStateVectorAtQubitWithControls", () => {
             p.cell(0, 1),
             new Complex(114, 115)));
 });
+
+suite.test('afterQubitSwap', () => {
+    let m = Matrix.identity(4);
+    assertThat(m.afterQubitSwap(0, 1)).isEqualTo(Matrix.square(
+        1, 0, 0, 0,
+        0, 0, 1, 0,
+        0, 1, 0, 0,
+        0, 0, 0, 1,
+    ));
+
+    let m2 = Matrix.fromRows([
+        [1, 9],
+        [2, 10],
+        [3, 11],
+        [4, 12],
+        [5, 13],
+        [6, 14],
+        [7, 15],
+        [8, 16],
+    ]);
+    assertThat(m2.afterQubitSwap(0, 2)).isEqualTo(Matrix.fromRows([
+        [1, 9],
+        [5, 13],
+        [3, 11],
+        [7, 15],
+        [2, 10],
+        [6, 14],
+        [4, 12],
+        [8, 16],
+    ]));
+    assertThat(m2.afterQubitSwap(2, 0)).isEqualTo(Matrix.fromRows([
+        [1, 9],
+        [5, 13],
+        [3, 11],
+        [7, 15],
+        [2, 10],
+        [6, 14],
+        [4, 12],
+        [8, 16],
+    ]));
+    assertThat(m2.afterQubitSwap(0, 1)).isEqualTo(Matrix.fromRows([
+        [1, 9],
+        [3, 11],
+        [2, 10],
+        [4, 12],
+        [5, 13],
+        [7, 15],
+        [6, 14],
+        [8, 16],
+    ]));
+});

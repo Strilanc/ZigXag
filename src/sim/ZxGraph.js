@@ -139,6 +139,13 @@ class ZxEdgePos {
     }
 
     /**
+     * @returns {!number}
+     */
+    orderValXThenY() {
+        return this.n_x * 10000.1 + this.n_y + (this.horizontal ? 0.5 : 0);
+    }
+
+    /**
      * @returns {!string}
      */
     toString() {
@@ -169,6 +176,13 @@ class ZxPort {
     constructor(edge, node) {
         this.edge = edge;
         this.node = node;
+    }
+
+    /**
+     * @returns {!ZxPort}
+     */
+    opposite() {
+        return new ZxPort(this.edge, this.edge.opposite(this.node));
     }
 
     /**
