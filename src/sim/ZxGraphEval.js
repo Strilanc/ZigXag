@@ -89,15 +89,15 @@ function _edgeStabilizers(graph, edge, qubit_map) {
 
     if (kind === 's') {
         return [
-            PauliProduct.fromSparseByType(qubit_map.size, {X: q1, Y: q2}),
-            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}),
+            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}),
+            PauliProduct.fromSparseByType(qubit_map.size, {Y: q1, Z: q2}),
         ];
     }
 
     if (kind === 'f') {
         return [
-            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}),
-            PauliProduct.fromSparseByType(qubit_map.size, {Y: q1, Z: q2}),
+            PauliProduct.fromSparseByType(qubit_map.size, {X: q1, Y: q2}).times(-1),
+            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}),
         ];
     }
 

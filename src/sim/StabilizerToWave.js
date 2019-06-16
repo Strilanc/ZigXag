@@ -70,6 +70,8 @@ function _simProjectOntoStabilizer(sim, stabilizer) {
             sim.hadamard(i);
         } else if (p === 3) {
             sim.phase(i);
+            sim.phase(i);
+            sim.phase(i);
             sim.hadamard(i);
         }
     }

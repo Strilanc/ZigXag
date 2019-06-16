@@ -307,3 +307,78 @@ suite.test("evalZxGraph_phasedLoop2", () => {
         [0, -1],
     ]).times(Math.sqrt(0.5)));
 });
+
+
+suite.test("evalZxGraph_zGate", () => {
+    let r = evalZxGraph(ZxGraph.fromDiagram(`
+        !---@-Z-@---?
+    `));
+    assertThat(r.stabilizers).isEqualTo([
+        "-XX",
+        "+ZZ",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0],
+        [0, -1],
+    ]).times(Math.sqrt(0.5)));
+});
+
+
+suite.test("evalZxGraph_xGate", () => {
+    let r = evalZxGraph(ZxGraph.fromDiagram(`
+        !---@-X-@---?
+    `));
+    assertThat(r.stabilizers).isEqualTo([
+        "+XX",
+        "-ZZ",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.fromRows([
+        [0, 1],
+        [1, 0],
+    ]).times(Math.sqrt(0.5)));
+});
+
+
+suite.test("evalZxGraph_hGate", () => {
+    let r = evalZxGraph(ZxGraph.fromDiagram(`
+        !---@-H-@---?
+    `));
+    assertThat(r.stabilizers).isEqualTo([
+        "+XZ",
+        "+ZX",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 1],
+        [1, -1],
+    ]).times(0.5));
+});
+
+
+suite.test("evalZxGraph_phaseGate", () => {
+    let r = evalZxGraph(ZxGraph.fromDiagram(`
+        !---@-S-@---?
+    `));
+    assertThat(r.stabilizers).isEqualTo([
+        "+XY",
+        "+ZZ",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0],
+        [0, Complex.I],
+    ]).times(Math.sqrt(0.5)));
+});
+
+
+suite.test("evalZxGraph_xPhaseGate", () => {
+    let r = evalZxGraph(ZxGraph.fromDiagram(`
+        !---@-F-@---?
+    `));
+    assertThat(r.stabilizers).isEqualTo([
+        "+XX",
+        "-ZY",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, Complex.I.neg()],
+        [Complex.I.neg(), 1],
+    ]).times(0.5));
+});

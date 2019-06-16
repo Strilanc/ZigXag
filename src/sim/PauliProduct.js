@@ -358,6 +358,9 @@ class PauliProduct {
      */
     static gaussianEliminate(table) {
         table = [...table];
+        if (table.length === 0) {
+            return table;
+        }
 
         let h = table.length;
         let w = table[0].paulis.length;

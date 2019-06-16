@@ -220,6 +220,31 @@ class Matrix {
     }
 
     /**
+     * @param {!Matrix} other
+     * @returns {!Matrix}
+     */
+    phaseMatchedTo(other) {
+        let w = Math.min(this._width, other._width);
+        let h = Math.min(this._height, other._height);
+        let bestRow = 0;
+        let bestCol = 0;
+        let bestScore = -1;
+        for (let row = 0; row < h; row++) {
+            for (let col = 0; col < w; col++) {
+                let score = Math.min(this.cell(col, row).norm2(), other.cell(col, row).norm2());
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestRow = row;
+                    bestCol = col;
+                }
+            }
+        }
+        let angle1 = this.cell(bestCol, bestRow).phase();
+        let angle2 = other.cell(bestCol, bestRow).phase();
+        return this.times(Complex.polar(1, angle2 - angle1));
+    }
+
+    /**
      * Returns a 1x1 matrix containing the given value.
      * @param {!number|!Complex} coef
      * @returns {!Matrix}

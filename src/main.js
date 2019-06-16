@@ -303,6 +303,7 @@ function drawResults(ctx) {
     let painter = new Painter(ctx);
     MathPainter.paintMatrix(painter, results.wavefunction, s);
     let groundTruth = evalZxGraphGroundTruth(curGraph).times(Math.sqrt(0.5));
+    groundTruth = groundTruth.phaseMatchedTo(results.wavefunction);
     ctx.globalAlpha *= 0.5;
     MathPainter.paintMatrix(painter, groundTruth, s, 'yellow', 'black', '#00000000', '#00000000');
     ctx.globalAlpha *= 2;

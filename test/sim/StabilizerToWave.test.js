@@ -29,4 +29,6 @@ suite.test("stabilizerStateToWavefunction", () => {
     assertThat(f('+XX', '-YY')).isApproximatelyEqualTo(Matrix.col(s, 0, 0, s));
     assertThat(f('+XYZ', '+XZY', '+ZZZ')).isApproximatelyEqualTo(
         Matrix.col(0.5, 0, 0, i.times(0.5), 0, i.times(0.5), 0.5, 0));
+
+    assertThat(f('+XX', '-ZY')).isApproximatelyEqualTo(Matrix.col(1, i.neg(), i.neg(), 1).times(0.5));
 });

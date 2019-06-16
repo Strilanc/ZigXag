@@ -1236,3 +1236,15 @@ suite.test('afterQubitSwap', () => {
         [8, 16],
     ]));
 });
+
+suite.test('phaseMatchedTo', () => {
+    assertThat(Matrix.solo(Complex.I).phaseMatchedTo(Matrix.solo(-2))).isEqualTo(Matrix.solo(-1));
+    assertThat(Matrix.col(1, 2, 3).phaseMatchedTo(Matrix.col(0.5, Complex.I, -0.5))).isEqualTo(
+        Matrix.col(1, 2, 3).times(Complex.I));
+    assertThat(Matrix.col(1, 2, 3).phaseMatchedTo(Matrix.solo(new Complex(1, 1)))).isEqualTo(
+        Matrix.col(1, 2, 3).times(new Complex(1, 1).times(Math.sqrt(0.5))));
+    assertThat(Matrix.square(1, 2, 3, 4).phaseMatchedTo(Matrix.square(0, 0, 0, 0))).isEqualTo(
+        Matrix.square(1, 2, 3, 4));
+    assertThat(Matrix.square(1, 2, 3, 4).phaseMatchedTo(Matrix.square(0, 0, Complex.I, 0))).isEqualTo(
+        Matrix.square(1, 2, 3, 4).times(Complex.I));
+});
