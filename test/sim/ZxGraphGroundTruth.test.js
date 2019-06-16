@@ -329,3 +329,28 @@ suite.test('evalZxGraphGroundTruth_selfLoop', () => {
         [0, 0],
     ]));
 });
+
+suite.test('evalZxGraphGroundTruth_disjoint', () => {
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !---O---?
+
+
+
+        !---O---?
+    `))).isApproximatelyEqualTo(Matrix.identity(4));
+});
+
+suite.test('evalZxGraphGroundTruth_disjoint', () => {
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !---O-X-?
+
+
+
+        !---O---?
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [0, 1, 0, 0],
+        [1, 0, 0, 0],
+        [0, 0, 0, 1],
+        [0, 0, 1, 0],
+    ]))
+});

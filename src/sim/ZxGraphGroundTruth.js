@@ -146,6 +146,16 @@ class Tensor {
     }
 
     /**
+     * @param {!Tensor} other
+     * @returns {!Tensor}
+     */
+    tensorProduct(other) {
+        return new Tensor(
+            this.data.tensorProduct(other.data),
+            [...other.ports, ...this.ports]);
+    }
+
+    /**
      * @param {!ZxPort} thisPort
      * @param {!Tensor} other
      * @param {!ZxPort} otherPort
@@ -256,6 +266,7 @@ function basisChangeDict() {
  */
 function evalZxGraphGroundTruth(graph) {
     let portToTensorMap = /** @type {!GeneralMap.<ZxPort, Tensor>} */new GeneralMap();
+    let globalScalar = Complex.ONE;
 
     let inputPorts = [];
     let outputPorts = [];
@@ -308,14 +319,18 @@ function evalZxGraphGroundTruth(graph) {
         }
         portToTensorMap.delete(p1);
         portToTensorMap.delete(p2);
+        if (t3.ports.length === 0) {
+            globalScalar = globalScalar.times(t3.data.cell(0, 0));
+        }
     }
 
-    let values = seq(portToTensorMap.values()).distinct().toArray();
-    if (values.length !== 1) {
-        throw new Error('values.length !== 1');
+    let result = new Tensor(Matrix.solo(globalScalar), []);
+    let tensorFactors = seq(portToTensorMap.values()).distinctBy(e => e.ports[0]).toArray();
+    for (let factor of tensorFactors) {
+        result = result.tensorProduct(factor);
     }
-    values[0].inline_reorderPorts([...inputPorts, ...outputPorts]);
-    return new Matrix(1 << inputPorts.length, 1 << outputPorts.length, values[0].data.rawBuffer());
+    result.inline_reorderPorts([...inputPorts, ...outputPorts]);
+    return new Matrix(1 << inputPorts.length, 1 << outputPorts.length, result.data.rawBuffer());
 }
 
 export {zBasisEqualityMatrix, xBasisEqualityMatrix, Tensor, evalZxGraphGroundTruth}
