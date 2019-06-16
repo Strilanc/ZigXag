@@ -139,6 +139,15 @@ suite.test('_pauli_product_phase', () => {
     }
 });
 
+suite.test('fromXzParity', () => {
+    assertThat(PauliProduct.fromXzParity(10, false, [2, 3, 5, 5, 7], false)).isEqualTo(
+        PauliProduct.fromString('+..XX...X..'));
+    assertThat(PauliProduct.fromXzParity(8, true, [0, 4, 7], true)).isEqualTo(
+        PauliProduct.fromString('-Z...Z..Z'));
+    assertThat(PauliProduct.fromXzParity(8, true, [0, 4, 7], false)).isEqualTo(
+        PauliProduct.fromString('+Z...Z..Z'));
+});
+
 suite.test('gaussianEliminate', () => {
     assertThat(PauliProduct.gaussianEliminate([
         "+.X.X",

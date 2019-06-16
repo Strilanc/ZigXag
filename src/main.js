@@ -329,7 +329,7 @@ function draw() {
 
     drawFocus(ctx);
     try {
-        drawResults();
+        drawResults(ctx);
         drawFadedNearbyRegion(ctx);
     } finally {
         drawGraph(ctx);

@@ -115,6 +115,22 @@ class PauliProduct {
     }
 
     /**
+     * @param {!int} n
+     * @param {!boolean} axis False means X, true means Z.
+     * @param {!Array.<!int>} qubits
+     * @param {!boolean=false} negate
+     */
+    static fromXzParity(n, axis, qubits, negate=false) {
+        let p = axis ? 2 : 1;
+        let paulis = new Uint8Array(n);
+        for (let q of qubits) {
+            paulis[q] ^= p;
+        }
+        let phase = negate ? 2 : 0;
+        return new PauliProduct(phase, paulis);
+    }
+
+    /**
      * @param {!string} text
      * @returns {!PauliProduct}
      */

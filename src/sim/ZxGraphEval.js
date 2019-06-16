@@ -15,60 +15,109 @@ import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 
 
 /**
- * @param {!ZxGraph} g
+ * @param {!ZxGraph} graph
+ * @param {!ZxNodePos} node
+ * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
+ * @private
+ */
+function _nodeStabilizers(graph, node, qubit_map) {
+    let ports = graph.activePortsOf(node);
+    let kind = graph.kind(node);
+
+    if (kind === 'in' || kind === 'out') {
+        return [];
+    }
+
+    if (kind === 'O' || kind === '@') {
+        if (ports.length === 0) {
+            throw new Error('ports.length === 0');
+        }
+
+        let axis = kind === '@';
+        let qs = ports.map(p => qubit_map.get(p));
+
+        let result = [];
+        result.push(PauliProduct.fromXzParity(qubit_map.size, axis, qs));
+        for (let i = 1; i < qs.length; i++) {
+            result.push(PauliProduct.fromXzParity(qubit_map.size, !axis, [qs[0], qs[i]]));
+        }
+        return result;
+    }
+
+    throw new Error(`Unrecognized node kind ${kind}.`);
+}
+
+/**
+ * @param {!ZxGraph} graph
+ * @param {!ZxEdgePos} edge
+ * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
+ * @private
+ */
+function _edgeStabilizers(graph, edge, qubit_map) {
+    let [p1, p2] = edge.ports();
+    let kind = graph.kind(edge);
+    let q1 = qubit_map.get(p1);
+    let q2 = qubit_map.get(p2);
+
+    if (kind === '-') {
+        return [
+            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}),
+            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}),
+        ];
+    }
+
+    if (kind === 'h') {
+        return [
+            PauliProduct.fromSparseByType(qubit_map.size, {X: q1, Z: q2}),
+            PauliProduct.fromSparseByType(qubit_map.size, {Z: q1, X: q2}),
+        ];
+    }
+
+    if (kind === 'x') {
+        return [
+            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}),
+            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}).times(-1),
+        ];
+    }
+
+    if (kind === 'z') {
+        return [
+            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}).times(-1),
+            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}),
+        ];
+    }
+
+    if (kind === 's') {
+        return [
+            PauliProduct.fromSparseByType(qubit_map.size, {X: q1, Y: q2}),
+            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}),
+        ];
+    }
+
+    if (kind === 'f') {
+        return [
+            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}),
+            PauliProduct.fromSparseByType(qubit_map.size, {Y: q1, Z: q2}),
+        ];
+    }
+
+    throw new Error(`Unrecognized edge kind ${kind}.`);
+}
+
+/**
+ * @param {!ZxGraph} graph
  * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
  * @returns {!Array.<!PauliProduct>}
  */
-function stabilizerTableOfGraph(g, qubit_map) {
+function stabilizerTableOfGraph(graph, qubit_map) {
     let stabilizers = [];
 
-    let addProd = (type, qubits, negate) => {
-        let d = {};
-        d[type] = qubits;
-        let sign = negate ? -1 : 1;
-        stabilizers.push(PauliProduct.fromSparseByType(qubit_map.size, d).times(sign));
-    };
-
-    for (let [n, kind] of g.nodes.entries()) {
-        let ports = g.activePortsOf(n);
-        if (['O', '@'].indexOf(kind) !== -1) {
-            if (ports.length === 0) {
-                throw new Error('edges.length === 0');
-            }
-
-            let axis1 = kind === '@' ? 'Z' : 'X';
-            let axis2 = kind === '@' ? 'X' : 'Z';
-            let qs = ports.map(p => qubit_map.get(p));
-            addProd(axis1, qs);
-
-            for (let i = 1; i < qs.length; i++) {
-                addProd(axis2, [qs[0], qs[i]]);
-            }
-        }
+    for (let node of graph.nodes.keys()) {
+        stabilizers.push(..._nodeStabilizers(graph, node, qubit_map));
     }
-    for (let [e, kind] of g.edges.entries()) {
-        let [p1, p2] = e.ports();
-        let q1 = qubit_map.get(p1);
-        let q2 = qubit_map.get(p2);
-        if (kind === '-') {
-            addProd('X', [q1, q2]);
-            addProd('Z', [q1, q2]);
-        } else if (kind === 'h') {
-            stabilizers.push(PauliProduct.fromSparseQubitAxes(
-                qubit_map.size,
-                [new QubitAxis(q1, true), new QubitAxis(q2, false)]));
-            stabilizers.push(PauliProduct.fromSparseQubitAxes(
-                qubit_map.size,
-                [new QubitAxis(q1, false), new QubitAxis(q2, true)]));
-        } else if (kind === 'x') {
-            addProd('X', [q1, q2]);
-            addProd('Z', [q1, q2], true);
-        } else if (kind === 'z') {
-            addProd('X', [q1, q2], true);
-            addProd('Z', [q1, q2]);
-        } else {
-            throw new Error(`Unrecognized edge kind ${kind}.`);
-        }
+
+    for (let edge of graph.edges.keys()) {
+        stabilizers.push(..._edgeStabilizers(graph, edge, qubit_map));
     }
 
     return stabilizers;
