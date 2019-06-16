@@ -74,7 +74,7 @@ function arbitraryPorts(n) {
     return result;
 }
 
-suite.test('tensor', () => {
+suite.test('contracted', () => {
     let [a1, a2, b1, b2] = arbitraryPorts(4);
     let a = new Tensor(Matrix.col(1, 2, 3, 4), [a1, a2]);
     let b = new Tensor(Matrix.col(2, 3, 5, 7), [b1, b2]);
@@ -85,6 +85,10 @@ suite.test('tensor', () => {
     assertThat(a.contracted(a1, b, b2)).isEqualTo(new Tensor(
         Matrix.col(12, 26, 17, 37),
         [a2, b1]
+    ));
+    assertThat(a.contracted(a1, a, a2)).isEqualTo(new Tensor(
+        Matrix.solo(5),
+        []
     ));
 });
 
@@ -218,12 +222,20 @@ suite.test('evalZxGraphGroundTruth_basisChange', () => {
         [0, Complex.I],
     ]));
 
+    let a = new Complex(0.5, 0.5);
     assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
         !-F-?
     `))).isApproximatelyEqualTo(Matrix.fromRows([
-        [1, Complex.I.neg()],
-        [Complex.I.neg(), 1],
-    ]).times(Math.sqrt(0.5)));
+        [a, a.conjugate()],
+        [a.conjugate(), a],
+    ]));
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !-H-@-S-@-H-?
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [a, a.conjugate()],
+        [a.conjugate(), a],
+    ]));
 
     assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
         !-H-?
@@ -231,6 +243,13 @@ suite.test('evalZxGraphGroundTruth_basisChange', () => {
         [1, 1],
         [1, -1],
     ]).times(Math.sqrt(0.5)));
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !-H-@-F-@-S-@-F-?
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0],
+        [0, 1],
+    ]).times(Complex.polar(1, Math.PI / 4)));
 });
 
 suite.test('evalZxGraphGroundTruth_x_measure', () => {
@@ -257,4 +276,56 @@ suite.test('evalZxGraphGroundTruth_z_measure', () => {
         [1, 0],
         [0, 0],
     ]).times(Math.sqrt(2)));
+});
+
+suite.test('evalZxGraphGroundTruth_decomposedHadamard', () => {
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !-S-O-S-?
+            |
+            S
+            |
+            @
+            |
+            Z
+            |
+            @
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 1],
+        [1, -1],
+    ]).times(Math.sqrt(0.5)));
+});
+
+suite.test('evalZxGraphGroundTruth_selfLoop', () => {
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !---O---O---?
+            |   |
+            |   |
+            |   |
+            O---O
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0],
+        [0, 1],
+    ]));
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !---O---O---?
+            |   |
+            |   |
+            |   |
+            O-X-O
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [0, 1],
+        [1, 0],
+    ]));
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !---O---O---?
+            |   |
+            |   |
+            |   |
+            O-Z-O
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [0, 0],
+        [0, 0],
+    ]));
 });

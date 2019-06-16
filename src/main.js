@@ -20,6 +20,7 @@ import {equate} from "src/base/Equate.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
 import {ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js";
 import {evalZxGraph} from "src/sim/ZxGraphEval.js";
+import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js";
 import {Util} from "src/base/Util.js";
 import {MathPainter} from "src/MathPainter.js";
 import {Painter} from "src/Painter.js";
@@ -285,7 +286,10 @@ function drawPossibleEdit(ctx) {
     }
 }
 
-function drawResults() {
+/**
+ * @param {!CanvasRenderingContext2D} ctx
+ */
+function drawResults(ctx) {
     let results = evalZxGraph(curGraph);
     let numIn = curGraph.inputNodes().length;
     function descStabilizer(s) {
@@ -296,7 +300,12 @@ function drawResults() {
     quirkAnchor.href = results.quirk_url;
     qasmDiv.innerText = results.qasm;
     let s = new Rect(canvas.clientWidth - 300, 0, 300, 300);
-    MathPainter.paintMatrix(new Painter(canvas), results.wavefunction, s);
+    let painter = new Painter(ctx);
+    MathPainter.paintMatrix(painter, results.wavefunction, s);
+    let groundTruth = evalZxGraphGroundTruth(curGraph).times(Math.sqrt(0.5));
+    ctx.globalAlpha *= 0.5;
+    MathPainter.paintMatrix(painter, groundTruth, s, 'yellow', 'black', '#00000000', '#00000000');
+    ctx.globalAlpha *= 2;
 }
 
 /**
@@ -730,5 +739,9 @@ document.addEventListener('keyup', ev => {
 revision.latestActiveCommit().subscribe(text => {
     curGraph = ZxGraph.deserialize(text);
     document.location.hash = text;
-    draw();
+    try {
+        draw();
+    } catch (ex) {
+        // Ensure subscription starts. Will be rethrown on next draw anyways.
+    }
 });

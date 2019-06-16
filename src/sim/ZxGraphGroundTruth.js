@@ -14,6 +14,7 @@ import {LoggedSimulation} from "src/sim/LoggedSimulator.js";
 import {popcnt} from "src/base/Util.js";
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 import {Controls} from "src/sim/Controls.js";
+import {Util} from "src/base/Util.js";
 
 
 /**
@@ -104,12 +105,57 @@ class Tensor {
     }
 
     /**
+     * @param {!ZxPort} port1
+     * @param {!ZxPort} port2
+     * @returns {!Tensor}
+     */
+    _selfContract(port1, port2) {
+        let p1 = this._indexOfPort(port1);
+        let p2 = this._indexOfPort(port2);
+        if (p1 === p2) {
+            throw new Error("Contracted port with itself.");
+        }
+        if (p1 > p2) {
+            [p1, p2] = [p2, p1];
+        }
+
+        let ports = [
+            ...this.ports.slice(0, p1),
+            ...this.ports.slice(p1 + 1, p2),
+            ...this.ports.slice(p2 + 1),
+        ];
+        let data = Matrix.zero(1, this.data.height() / 4);
+
+        let buf1 = this.data.rawBuffer();
+        let buf2 = data.rawBuffer();
+        let n1 = buf1.length >> 1;
+        for (let k = 0; k < n1; k++) {
+            // Contraction axes must agree.
+            let b1 = (k & (1 << p1)) !== 0;
+            let b2 = (k & (1 << p2)) !== 0;
+            if (b1 !== b2) {
+                continue;
+            }
+
+            // Add into output.
+            let k2 = dropBit(dropBit(k, p2), p1);
+            buf2[k2*2] += buf1[k*2];
+            buf2[k2*2+1] += buf1[k*2+1];
+        }
+        return new Tensor(data, ports);
+    }
+
+    /**
      * @param {!ZxPort} thisPort
      * @param {!Tensor} other
      * @param {!ZxPort} otherPort
      * @returns {!Tensor}
      */
     contracted(thisPort, other, otherPort) {
+        if (this === other) {
+            return this._selfContract(thisPort, otherPort);
+        }
+
         let p1 = this._indexOfPort(thisPort);
         let p2 = other._indexOfPort(otherPort);
         let ports = [
@@ -123,13 +169,12 @@ class Tensor {
         let buf1 = this.data.rawBuffer();
         let buf2 = other.data.rawBuffer();
         let buf3 = data.rawBuffer();
-        let shift2 = p1;
-        let shift3 = this.ports.length - 1;
-        let shift4 = shift3 + p2;
+        let secondWord = this.ports.length - 1;
         let n1 = buf1.length >> 1;
         let n2 = buf2.length >> 1;
         for (let k1 = 0; k1 < n1; k1++) {
             let c1 = this.data.cell(0, k1);
+            let i1 = dropBit(k1, p1);
             for (let k2 = 0; k2 < n2; k2++) {
                 // Contraction axes must agree.
                 let b1 = (k1 & (1 << p1)) !== 0;
@@ -138,14 +183,9 @@ class Tensor {
                     continue;
                 }
 
-                // Determine index in result tensor from non-contraction axes.
-                let word1 = k1 & ((1 << p1) - 1);
-                let word2 = k1 >> (p1 + 1);
-                let word3 = k2 & ((1 << p2) - 1);
-                let word4 = k2 >> (p2 + 1);
-                let k3 = word1 | (word2 << shift2) | (word3 << shift3) | (word4 << shift4);
-
                 // Add input product into output.
+                let i2 = dropBit(k2, p2);
+                let k3 = i1 | (i2 << secondWord);
                 let c2 = other.data.cell(0, k2);
                 let c3 = c1.times(c2);
                 buf3[k3*2] += c3.real;
@@ -185,16 +225,28 @@ class Tensor {
     }
 }
 
+
+/**
+ * @param {!int} val
+ * @param {!int} bit
+ * @returns {!int}
+ */
+function dropBit(val, bit) {
+    let low = val & ((1 << bit) - 1);
+    let high = val >> (bit + 1);
+    return low | (high << bit);
+}
+
 function basisChangeDict() {
     let s = Math.sqrt(0.5);
-    let nis = Complex.I.times(-s);
+    let a = new Complex(0.5, 0.5);
     return {
         '-': 1,
         'h': Matrix.square(s, s, s, -s),
         'x': Matrix.square(0, 1, 1, 0),
         'z': Matrix.square(1, 0, 0, -1),
         's': Matrix.square(1, 0, 0, Complex.I),
-        'f': Matrix.square(s, nis, nis, s),
+        'f': Matrix.square(a, a.conjugate(), a.conjugate(), a),
     };
 }
 
