@@ -14,6 +14,7 @@
 
 import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
 import {ZxGraph, ZxNodePos, ZxEdgePos, ZxPort} from "src/sim/ZxGraph.js"
+import {GeneralMap} from "src/base/GeneralMap.js"
 
 let suite = new Suite("ZxGraph");
 
@@ -75,4 +76,77 @@ suite.test("toString", () => {
 suite.test("serialize", () => {
     let g = cnotGraph();
     assertThat(ZxGraph.deserialize(g.serialize())).isEqualTo(g);
+});
+
+suite.test('fromDiagram', () => {
+    let diagram = `
+            !---@---?
+                |
+                |
+                |
+            !---@
+    `;
+    assertThat(ZxGraph.fromDiagram(diagram).toString()).isEqualTo(`
+!---@---?
+    |
+    |
+    |
+!---@
+    `.trim());
+
+    assertThrows(() => ZxGraph.fromDiagram(`
+@---@
+|
+@---@
+    `));
+
+    assertThrows(() => ZxGraph.fromDiagram(`
+@---@
+|
+|
+@---@
+    `));
+
+    assertThrows(() => ZxGraph.fromDiagram(`
+@--@
+|
+|
+|
+@--@
+    `));
+
+    assertThrows(() => ZxGraph.fromDiagram(`
+@-@
+|
+|
+|
+@-@
+    `));
+
+    assertThat(ZxGraph.fromDiagram(`
+@---@
+|
+|
+|
+@-X-@
+    `)).isEqualTo(new ZxGraph(new GeneralMap(
+            [new ZxNodePos(0, 0), '@'],
+            [new ZxNodePos(1, 0), '@'],
+            [new ZxNodePos(0, 1), '@'],
+            [new ZxNodePos(1, 1), '@'],
+        ),
+        new GeneralMap(
+            [new ZxEdgePos(0, 0, false), '-'],
+            [new ZxEdgePos(0, 0, true), '-'],
+            [new ZxEdgePos(0, 1, true), 'x'],
+        ),
+    ));
+
+    assertThat(ZxGraph.fromDiagram(`
+@---@
+|
+|
+|
+@---@
+    `)).isNotEqualTo(undefined);
 });

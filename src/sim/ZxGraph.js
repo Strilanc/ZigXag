@@ -1,4 +1,5 @@
 import {GeneralMap} from "src/base/GeneralMap.js";
+import {Seq, seq} from "src/base/Seq.js";
 
 
 class ZxNodePos {
@@ -206,9 +207,19 @@ class ZxPort {
 
 
 class ZxGraph {
-    constructor() {
-        this.nodes = /** @type {!GeneralMap.<!ZxNodePos, !string>} */ new GeneralMap();
-        this.edges = /** @type {!GeneralMap.<!ZxEdgePos, !string>} */ new GeneralMap();
+    /**
+     * @param {!GeneralMap.<!ZxNodePos, !string>=} nodes
+     * @param {!GeneralMap.<!ZxEdgePos, !string>=} edges
+     */
+    constructor(nodes=undefined, edges=undefined) {
+        if (nodes === undefined) {
+            nodes = new GeneralMap();
+        }
+        if (edges === undefined) {
+            edges = new GeneralMap();
+        }
+        this.nodes = nodes;
+        this.edges = edges;
     }
 
     /**
@@ -326,6 +337,149 @@ class ZxGraph {
     }
 
     /**
+     * @param {!string} text
+     * @returns {!ZxGraph}
+     */
+    static fromDiagram(text) {
+        let lines = text.split('\n');
+
+        // Drop blank leading and trailing lines.
+        while (lines.length > 0 && lines[0].trim() === '') {
+            lines.shift();
+        }
+        while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+            lines.pop();
+        }
+
+        // Drop indentation and trailing spaces.
+        let indent = Math.min(...lines.filter(e => e.trim() !== '').map(e => rtrim(e).length - e.trim().length));
+        lines = lines.map(e => rtrim(e.substr(indent)));
+
+        // Consistency checks.
+        if (lines.length % 4 !== 1) {
+            throw new Error('Misaligned diagram. Number of non-empty lines must equal 1 mod 4.');
+        }
+        for (let line of lines) {
+            if (line !== '' && line.length % 4 !== 1) {
+                throw new Error(`Misaligned diagram. Length must equal 1 mod 4: "${line}".`);
+            }
+        }
+        for (let row = 0; row < lines.length; row++) {
+            let line = lines[row];
+            for (let col = 0; col < line.length; col++) {
+                if (line[col] !== ' ' && row % 4 !== 0 && col % 4 !== 0) {
+                    throw new Error(`Misaligned diagram. Content outside row|col=0%4 at row=${row} col=${col}.`);
+                }
+                if (line[col] !== '|' && line[col] !== ' ' && row % 2 === 1) {
+                    throw new Error(`Must use pipe for v edge at row=${row} col=${col}.`);
+                }
+                if (line[col] !== '-' && line[col] !== ' ' && col % 2 === 1) {
+                    throw new Error(`Must use dash for h edge at row=${row} col=${col}.`);
+                }
+            }
+        }
+
+        function assertEdge(edge, present, desc) {
+            let col = edge.n_x * 4;
+            let row = edge.n_y * 4;
+            let dxs = [0];
+            let dys = [1, 2, 3];
+            if (edge.horizontal) {
+                [dxs, dys] = [dys, dxs];
+            }
+            for (let dy of dys) {
+                let line = lines[row + dy] || '';
+                for (let dx of dxs) {
+                    let c = line[col + dx] || ' ';
+                    if ((c !== ' ') !== present) {
+                        throw new Error(`${desc} at row=${row+dy} col=${col+dx} "${c}".`)
+                    }
+                }
+            }
+        }
+
+        let graph = new ZxGraph();
+
+        let edgeKindMap = {
+            '-': '-',
+            '|': '-',
+            'x': 'x',
+            'X': 'x',
+            'z': 'z',
+            'Z': 'z',
+            'f': 'f',
+            'F': 'f',
+            's': 's',
+            'S': 's',
+            'h': 'h',
+            'H': 'h',
+        };
+        let nodeKindMap = {
+            '@': '@',
+            'O': 'O',
+            '!': 'in',
+            '?': 'out',
+        };
+
+        // Nodes.
+        for (let row = 0; row < lines.length; row += 4) {
+            let line = lines[row];
+            for (let col = 0; col < line.length; col += 4) {
+                let c = line[col];
+                let n = new ZxNodePos(col >> 2, row >> 2);
+                if (c === ' ') {
+                    for (let e of n.adjacent_edge_positions()) {
+                        assertEdge(e, false, 'Nodeless edge');
+                    }
+                    continue;
+                }
+
+                let kind = nodeKindMap[c];
+                if (kind === undefined) {
+                    throw new Error(`Unrecognized node character: "${c}".`);
+                }
+                graph.nodes.set(n, kind);
+            }
+        }
+
+        // Vertical edges.
+        for (let row = 2; row < lines.length; row += 4) {
+            let line = lines[row];
+            for (let col = 0; col < line.length; col += 4) {
+                let c = line[col];
+                let e = new ZxEdgePos(col >> 2, row >> 2, false);
+                assertEdge(e, c !== ' ', 'Broken v edge');
+                if (c !== ' ') {
+                    let kind = edgeKindMap[c];
+                    if (kind === undefined) {
+                        throw new Error(`Unrecognized edge character: "${c}".`);
+                    }
+                    graph.edges.set(e, kind);
+                }
+            }
+        }
+
+        // Horizontal edges.
+        for (let row = 0; row < lines.length; row += 4) {
+            let line = lines[row];
+            for (let col = 2; col < line.length; col += 4) {
+                let c = line[col];
+                let e = new ZxEdgePos(col >> 2, row >> 2, true);
+                assertEdge(e, c !== ' ', 'Broken h edge');
+                if (c !== ' ') {
+                    let kind = edgeKindMap[c];
+                    if (kind === undefined) {
+                        throw new Error(`Unrecognized edge character: "${c}".`);
+                    }
+                    graph.edges.set(e, kind);
+                }
+            }
+        }
+
+        return graph;
+    }
+
+    /**
      * @param {!ZxNodePos} n
      * @returns {!Array.<!ZxEdgePos>}
      */
@@ -432,15 +586,13 @@ class ZxGraph {
 
         let lines = [];
         let node_reps = {
-            '': '.',
+            '': ' ',
             '@': '@',
             'O': 'O',
             'in': '!',
             'out': '?',
         };
         let horizontal_edge_reps = {
-            '': '   ',
-            '-': '---',
         };
         let vertical_edge_reps_out = {
             '': ' ',
@@ -475,19 +627,25 @@ class ZxGraph {
                 let p = new ZxNodePos(col, row);
 
                 if (col > 0) {
-                    let c = this.edges.get(p.left_edge_position()) || '';
-                    chars.push(horizontal_edge_reps[c] || c);
+                    let c = this.edges.get(p.left_edge_position());
+                    if (c === undefined) {
+                        chars.push('   ');
+                    } else {
+                        chars.push('-' + (horizontal_edge_reps[c] || c) + '-');
+                    }
+
                 }
                 let c = this.nodes.get(p) || '';
                 chars.push(node_reps[c] || c);
             }
             lines.push(chars.join(''));
         }
-        function rtrim(e) {
-            return e.replace(/ +$/g, '');
-        }
         return lines.map(rtrim).join('\n')
     }
+}
+
+function rtrim(e) {
+    return e.replace(/ +$/g, '');
 }
 
 export {ZxNodePos, ZxEdgePos, ZxPort, ZxGraph}
