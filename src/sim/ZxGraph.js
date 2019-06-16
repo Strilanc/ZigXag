@@ -244,10 +244,8 @@ class ZxGraph {
      * @returns {!string}
      */
     serialize() {
-        let nodes = [...this.nodes.keys()];
-        let edges = [...this.edges.keys()];
-        nodes.sort((a, b) => a.orderVal() - b.orderVal());
-        edges.sort((a, b) => a.orderVal() - b.orderVal());
+        let nodes = this.sortedNodes();
+        let edges = this.sortedEdges();
         let nodeText = nodes.map(n => `${n.x},${n.y},${this.nodes.get(n)}`).join(';');
         let edgeText = edges.map(e => `${e.n_x},${e.n_y},${e.horizontal ? 'h' : 'v'},${this.edges.get(e)}`).join(';');
         return `${nodeText}:${edgeText}`;
@@ -290,10 +288,8 @@ class ZxGraph {
      * @returns {!Array.<!ZxNodePos>}
      */
     inputNodes() {
-        let nodes = [...this.nodes.keys()];
-        nodes.sort((a, b) => a.orderVal() - b.orderVal());
         let result = [];
-        for (let node of nodes) {
+        for (let node of this.sortedNodes()) {
             let kind = this.nodes.get(node);
             if (kind === 'in') {
                 result.push(node);
@@ -306,10 +302,8 @@ class ZxGraph {
      * @returns {!Array.<!ZxNodePos>}
      */
     outputNodes() {
-        let nodes = [...this.nodes.keys()];
-        nodes.sort((a, b) => a.orderVal() - b.orderVal());
         let result = [];
-        for (let node of nodes) {
+        for (let node of this.sortedNodes()) {
             let kind = this.nodes.get(node);
             if (kind === 'out') {
                 result.push(node);
@@ -322,10 +316,8 @@ class ZxGraph {
      * @returns {!Array.<!{node: !ZxNodePos, axis: !boolean}>}
      */
     toricMeasurementNodes() {
-        let nodes = [...this.nodes.keys()];
-        nodes.sort((a, b) => a.orderVal() - b.orderVal());
         let result = [];
-        for (let node of nodes) {
+        for (let node of this.sortedNodes()) {
             let kind = this.nodes.get(node);
             if (kind === 'O') {
                 result.push({node, axis: true});
@@ -334,6 +326,26 @@ class ZxGraph {
             }
         }
         return result;
+    }
+
+    /**
+     * Ordered top to bottom, then left to right.
+     * @returns {!Array.<!ZxNodePos>}
+     */
+    sortedNodes() {
+        let nodes = [...this.nodes.keys()];
+        nodes.sort((a, b) => a.orderVal() - b.orderVal());
+        return nodes;
+    }
+
+    /**
+     * Ordered top to bottom, then left to right.
+     * @returns {!Array.<!ZxEdgePos>}
+     */
+    sortedEdges() {
+        let edges = [...this.edges.keys()];
+        edges.sort((a, b) => a.orderVal() - b.orderVal());
+        return edges;
     }
 
     /**
@@ -579,8 +591,8 @@ class ZxGraph {
      * @returns {!string}
      */
     toString() {
-        let xs = [...this.nodes.keys()].map(n => n.x);
-        let ys = [...this.nodes.keys()].map(n => n.y);
+        let xs = this.sortedNodes().map(n => n.x);
+        let ys = this.sortedNodes().map(n => n.y);
         let w = Math.max(...xs) + 1;
         let h = Math.max(...ys) + 1;
 

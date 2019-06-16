@@ -259,9 +259,7 @@ function evalZxGraphGroundTruth(graph) {
 
     let inputPorts = [];
     let outputPorts = [];
-    let nodes = [...graph.nodes.keys()];
-    nodes.sort((a, b) => a.orderVal() - b.orderVal());
-    for (let node of nodes) {
+    for (let node of graph.sortedNodes()) {
         let kind = graph.nodes.get(node);
         let ports = graph.activePortsOf(node);
         let degree = ports.length;
@@ -288,9 +286,7 @@ function evalZxGraphGroundTruth(graph) {
         }
     }
 
-    let edges = [...graph.edges.keys()];
-    edges.sort((a, b) => a.orderValXThenY() - b.orderValXThenY());
-    for (let edge of graph.edges.keys()) {
+    for (let edge of graph.sortedEdges()) {
         let kind = graph.edges.get(edge);
         let [p1, p2] = graph.activePortsOf(edge);
         let t1 = portToTensorMap.get(p1);
