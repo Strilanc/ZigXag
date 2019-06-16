@@ -127,35 +127,73 @@ function stabilizerTableOfGraph(graph, qubit_map) {
 /**
  * @param {!Array.<!PauliProduct>} stabilizers
  * @param {!PauliProduct} measuredAxes
- * @param {!int} rightKeepLen
+ * @param {!int} numIn
+ * @param {!int} numOut
  * @returns {!GeneralMap<!QubitAxis, !Array.<!int>>} Remaining qubit axis to measured parity control qubit.
  */
-function graphStabilizersToMeasurementFixupActions(stabilizers, measuredAxes, rightKeepLen) {
+function graphStabilizersToMeasurementFixupActions(stabilizers, measuredAxes, numIn, numOut) {
     stabilizers = PauliProduct.gaussianEliminate(stabilizers);
 
     let m = stabilizers[0].paulis.length;
-    let leftUpdateLen = m - rightKeepLen;
-    let out = /** @type {!GeneralMap<!int, !Array.<!int>>} */ new GeneralMap();
-    for (let i = leftUpdateLen; i < m; i++) {
+    let parityNodeCount = m - numIn - numOut;
+    let out = /** @type {!GeneralMap<!QubitAxis, !Array.<!int>>} */ new GeneralMap();
+    for (let i = parityNodeCount; i < m; i++) {
         out.set(new QubitAxis(i, false), []);
         out.set(new QubitAxis(i, true), []);
     }
 
     for (let stabilizer of stabilizers) {
-        let inputOutputRegion = stabilizer.slice(leftUpdateLen);
-        let measuredRegion = stabilizer.slice(0, leftUpdateLen);
+        let weight = stabilizer.xzBitWeight();
+        let outputWeight = stabilizer.slice(m - numOut).xzBitWeight();
+        let parityRegion = stabilizer.slice(0, parityNodeCount);
+        let parityWeight = parityRegion.xzBitWeight();
 
-        if (measuredRegion.xzBitWeight() !== 1) {
+        // Does it anti-commute with the measurements we did?
+        if (!parityRegion.bitwiseAnd(measuredAxes).isEqualTo(parityRegion)) {
+            // Can't care.
             continue;
         }
 
-        let m = measuredRegion.xzSingleton();
-        if (measuredAxes._hasPauliXZ(m.qubit, m.axis)) {
-            for (let flip of inputOutputRegion.activeQubitAxes()) {
-                flip.qubit += leftUpdateLen;
+        // Is it a redundant row?
+        if (weight === 0) {
+            // Don't care.
+            continue;
+        }
+
+        // Is it an assertion about what measurement results are possible?
+        if (parityWeight === weight) {
+            // Don't care.
+            continue;
+        }
+
+        // Is it a derived input/output relationship?
+        if (parityWeight === 0) {
+            // Don't care.
+            continue;
+        }
+
+        // Is it a measurement?
+        if (outputWeight === weight) {
+            console.warn("SKIPPING MEASUREMENT");
+            continue;
+        }
+
+        // Is it a non-trivial parity?
+        if (parityWeight > 1) {
+            console.warn("SKIPPING MULTIPARITY FIXUP");
+            continue;
+        }
+
+        if (parityWeight === 1) {
+            let m = parityRegion.xzSingleton();
+            for (let flip of stabilizer.slice(parityNodeCount).activeQubitAxes()) {
+                flip.qubit += parityNodeCount;
                 out.get(flip).push(m.qubit);
             }
+            continue;
         }
+
+        throw new Error(`Unhandled graphStabilizersToMeasurementFixupActions case: ${stabilizer}`);
     }
     return out;
 }
@@ -212,13 +250,14 @@ function generatePortToQubitMap(graph) {
  * @param {!Array.<!PauliProduct>} graphStabilizers
  * @param {!PauliProduct} basis
  * @param {!Array.<!boolean>} results
- * @param {!int} num_unmeasured
+ * @param {!int} numIn
+ * @param {!int} numOut
  */
-function _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, num_unmeasured) {
+function _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, numIn, numOut) {
     state.qasm_logger.lines.push('');
     state.qasm_logger.lines.push('// Adjust Pauli frame based on measurements.');
 
-    let actions = graphStabilizersToMeasurementFixupActions(graphStabilizers, basis, num_unmeasured);
+    let actions = graphStabilizersToMeasurementFixupActions(graphStabilizers, basis, numIn, numOut);
     for (let [target, parityControls] of actions.entries()) {
         state.feedback(parityControls, results, target);
     }
@@ -241,7 +280,7 @@ function evalZxGraph(graph) {
     _zxEval_initEprPairs(graph, state, portToQubitMap);
     let {basis, results} = _zxEval_performToricMeasurements(graph, state, portToQubitMap);
     let graphStabilizers = stabilizerTableOfGraph(graph, portToQubitMap);
-    _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, num_in + num_out);
+    _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, num_in, num_out);
 
     // Derive wavefunction and etc for caller.
     return _zxEval_packageOutput(state, portToQubitMap, num_in, num_out);

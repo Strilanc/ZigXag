@@ -548,7 +548,7 @@ function changeEdgeKindEdit(edge) {
     return new Edit(
         () => `cycle ${edge}`,
         graph => {
-            let cycle = ['-', 'h', 'x', 'z'];
+            let cycle = ['-', 'h', 'x', 'z', 'f', 's'];
             let kind = curGraph.edges.get(edge);
             let i = cycle.indexOf(kind);
             i++;
