@@ -190,7 +190,7 @@ class PauliProduct {
         if (this.xzBitWeight() !== 1) {
             throw new Error('Not a singleton.');
         }
-        return this._first_non_identity();
+        return this.firstActiveQubitAxis();
     }
 
     /**
@@ -245,6 +245,13 @@ class PauliProduct {
         }
         copy.inline_times(other);
         return copy;
+    }
+
+    /**
+     * @returns {!PauliProduct}
+     */
+    abs() {
+        return new PauliProduct(0, new Uint8Array(this.paulis));
     }
 
     /**
@@ -310,13 +317,28 @@ class PauliProduct {
     /**
      * @returns {!QubitAxis|undefined}
      */
-    _first_non_identity() {
+    firstActiveQubitAxis() {
         for (let i = 0; i < this.paulis.length; i++) {
             if (this.paulis[i] !== 0) {
                 return new QubitAxis(i, (this.paulis[i] & 2) !== 0);
             }
         }
         return undefined;
+    }
+
+    /**
+     * @param {!PauliProduct} other
+     * @returns {!boolean}
+     */
+    commutesWith(other) {
+        let n = Math.min(this.paulis.length, other.paulis.length);
+        let t = 0;
+        for (let k = 0; k < n; k++) {
+            if (_pauli_product_phase(this.paulis[k], other.paulis[k]) !== 0) {
+                t++;
+            }
+        }
+        return (t & 1) === 0;
     }
 
     /**

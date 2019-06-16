@@ -230,3 +230,80 @@ suite.test("evalZxGraph_fuse", () => {
         [0, 0, 0, s],
     ]));
 });
+
+
+suite.test("evalZxGraph_loop", () => {
+    let g = ZxGraph.fromDiagram(`
+        !---@---@---?
+            |   |
+            |   |
+            |   |
+            @---@
+    `);
+
+    let r = evalZxGraph(g);
+    assertThat(r.stabilizers).isEqualTo([
+        "+XX",
+        "+ZZ",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0],
+        [0, 1],
+    ]).times(Math.sqrt(0.5)));
+});
+
+
+suite.test("evalZxGraph_loop", () => {
+    let r = evalZxGraph(ZxGraph.fromDiagram(`
+        !---@---@---?
+            |   |
+            |   |
+            |   |
+            @---@
+    `));
+    assertThat(r.stabilizers).isEqualTo([
+        "+XX",
+        "+ZZ",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0],
+        [0, 1],
+    ]).times(Math.sqrt(0.5)));
+});
+
+
+suite.test("evalZxGraph_phasedLoop", () => {
+    let r = evalZxGraph(ZxGraph.fromDiagram(`
+        !---@-Z-@---?
+            |   |
+            |   |
+            |   |
+            @---@
+    `));
+    assertThat(r.stabilizers).isEqualTo([
+        "-XX",
+        "+ZZ",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0],
+        [0, -1],
+    ]).times(Math.sqrt(0.5)));
+});
+
+suite.test("evalZxGraph_phasedLoop2", () => {
+    let r = evalZxGraph(ZxGraph.fromDiagram(`
+        !---@---@---?
+            |   |
+            Z   Z
+            |   |
+            @-Z-@
+    `));
+    assertThat(r.stabilizers).isEqualTo([
+        "-XX",
+        "+ZZ",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0],
+        [0, -1],
+    ]).times(Math.sqrt(0.5)));
+});

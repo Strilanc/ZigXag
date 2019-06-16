@@ -1,4 +1,4 @@
-import {Suite, assertThat, EqualsTester} from "test/TestUtil.js"
+import {Suite, assertThat, EqualsTester, assertTrue, assertFalse} from "test/TestUtil.js"
 
 import {PauliProduct, _pauli_product_phase} from "src/sim/PauliProduct.js"
 import {Complex} from "src/base/Complex.js"
@@ -180,4 +180,64 @@ suite.test('gaussianEliminate', () => {
         "+.Z.Z",
         "+..ZZ",
     ].map(PauliProduct.fromString));
+    assertThat(PauliProduct.gaussianEliminate([
+        '+ZZZ.........',
+        '+XX..........',
+        '+X.X.........',
+        '+...ZZZ......',
+        '+...XX.......',
+        '+...X.X......',
+        '+......ZZ....',
+        '+......XX....',
+        '+........ZZ..',
+        '+........XX..',
+        '+..X....X....',
+        '+..Z....Z....',
+        '+.....X..X...',
+        '+.....Z..Z...',
+        '+.X........X.',
+        '+.Z........Z.',
+        '-X...X.......',
+        '+Z...Z.......',
+        '+...X.......X',
+        '+...Z.......Z',
+        '+......X..X..',
+        '+......Z..Z..',
+    ].map(PauliProduct.fromString))).isEqualTo([
+        '-X..........X',
+        '+Z........Z.Z',
+        '-.X.........X',
+        '+.Z.........Z',
+        '-..X........X',
+        '+..Z......Z..',
+        '+...X.......X',
+        '+...Z.......Z',
+        '+....X......X',
+        '+....Z....Z.Z',
+        '+.....X.....X',
+        '+.....Z...Z..',
+        '-......X....X',
+        '+......Z..Z..',
+        '-.......X...X',
+        '+.......Z.Z..',
+        '+........X..X',
+        '+........ZZ..',
+        '+.........X.X',
+        '-..........XX',
+        '+..........ZZ',
+        '-............',
+    ].map(PauliProduct.fromString));
+});
+
+suite.test('commutesWith', () => {
+    assertTrue(PauliProduct.fromString('+.').commutesWith(PauliProduct.fromString('+X')));
+    assertTrue(PauliProduct.fromString('+X').commutesWith(PauliProduct.fromString('+X')));
+    assertTrue(PauliProduct.fromString('-X').commutesWith(PauliProduct.fromString('+X')));
+    assertTrue(PauliProduct.fromString('-XX').commutesWith(PauliProduct.fromString('+ZZ')));
+    assertTrue(PauliProduct.fromString('-XYZ').commutesWith(PauliProduct.fromString('+ZYX')));
+    assertTrue(PauliProduct.fromString('-X.Y.Z').commutesWith(PauliProduct.fromString('+Z.Y.X')));
+
+    assertFalse(PauliProduct.fromString('+X').commutesWith(PauliProduct.fromString('+Y')));
+    assertFalse(PauliProduct.fromString('+XXX').commutesWith(PauliProduct.fromString('+YYY')));
+    assertFalse(PauliProduct.fromString('+XYZ').commutesWith(PauliProduct.fromString('+YZX')));
 });

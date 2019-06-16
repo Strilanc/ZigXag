@@ -148,8 +148,9 @@ function graphStabilizersToMeasurementFixupActions(stabilizers, measuredAxes, nu
         let parityRegion = stabilizer.slice(0, parityNodeCount);
         let parityWeight = parityRegion.xzBitWeight();
 
-        // Does it anti-commute with the measurements we did?
-        if (!parityRegion.bitwiseAnd(measuredAxes).isEqualTo(parityRegion)) {
+        // Does it involve measurements we didn't even do?
+        let parityRegionAbs = parityRegion.abs();
+        if (!parityRegionAbs.bitwiseAnd(measuredAxes).isEqualTo(parityRegionAbs)) {
             // Can't care.
             continue;
         }
@@ -178,14 +179,12 @@ function graphStabilizersToMeasurementFixupActions(stabilizers, measuredAxes, nu
             continue;
         }
 
-        // Is it a non-trivial parity?
-        if (parityWeight > 1) {
-            console.warn("SKIPPING MULTIPARITY FIXUP");
-            continue;
-        }
-
-        if (parityWeight === 1) {
-            let m = parityRegion.xzSingleton();
+        // Is it parity interaction between the measurements and the output?
+        if (parityWeight > 0) {
+            // NOTE: When multiple measurement bits are in the stabilizer, it seems like any one of the measurement
+            // bits can be used. It seems to indicate those two bits will be set (or not set) simultaneously. Which is
+            // surprising... why is it not that *all* of them have to be used?
+            let m = parityRegion.firstActiveQubitAxis();
             for (let flip of stabilizer.slice(parityNodeCount).activeQubitAxes()) {
                 flip.qubit += parityNodeCount;
                 out.get(flip).push(m.qubit);
