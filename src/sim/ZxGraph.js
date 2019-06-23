@@ -315,7 +315,7 @@ class ZxGraph {
     /**
      * @returns {!Array.<!{node: !ZxNodePos, axis: !boolean}>}
      */
-    toricMeasurementNodes() {
+    spiderMeasurementNodes() {
         let result = [];
         for (let node of this.sortedNodes()) {
             let kind = this.nodes.get(node);

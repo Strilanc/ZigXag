@@ -207,7 +207,7 @@ function generatePortToQubitMap(graph) {
     // Sort and classify nodes.
     let inputNodes = graph.inputNodes();
     let outputNodes = graph.outputNodes();
-    let measurementNodes = graph.toricMeasurementNodes();
+    let measurementNodes = graph.spiderMeasurementNodes();
     if (inputNodes.length + outputNodes.length + measurementNodes.length !== graph.nodes.size) {
         throw new Error('Unrecognized node(s).');
     }
@@ -277,7 +277,7 @@ function evalZxGraph(graph) {
 
     // Perform operations congruent to the ZX graph.
     _zxEval_initEprPairs(graph, state, portToQubitMap);
-    let {basis, results} = _zxEval_performToricMeasurements(graph, state, portToQubitMap);
+    let {basis, results} = _zxEval_performSpiderMeasurements(graph, state, portToQubitMap);
     let graphStabilizers = stabilizerTableOfGraph(graph, portToQubitMap);
     _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, num_in, num_out);
 
@@ -329,14 +329,14 @@ function _zxEval_initEprPairs(graph, state, portToQubitMap) {
  *      in other locations.
  * @private
  */
-function _zxEval_performToricMeasurements(graph, state, portToQubitMap) {
+function _zxEval_performSpiderMeasurements(graph, state, portToQubitMap) {
     state.qasm_logger.lines.push('');
-    state.qasm_logger.lines.push('// Perform per-node toric measurements.');
+    state.qasm_logger.lines.push('// Perform per-node spider measurements.');
 
     // Perform 2-qubit operations and determine what to measure.
     let xMeasured = [];
     let zMeasured = [];
-    for (let {node, axis} of graph.toricMeasurementNodes()) {
+    for (let {node, axis} of graph.spiderMeasurementNodes()) {
         let [head, ...tail] = graph.activePortsOf(node).map(p => portToQubitMap.get(p));
         state.cnot(head, tail, !axis, axis);
         (axis ? zMeasured : xMeasured).push(head);

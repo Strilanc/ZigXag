@@ -73,7 +73,7 @@ cx q[2], q[4];
 cx q[3], q[9];
 cx q[5], q[7];
 
-// Perform per-node toric measurements.
+// Perform per-node spider measurements.
 cx q[0], q[1];
 cx q[0], q[2];
 cx q[4], q[3];
