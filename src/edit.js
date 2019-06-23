@@ -53,14 +53,14 @@ function removeEdgeEdit(edge) {
         () => `delete ${edge} and its leaf nodes`,
         graph => {
             graph.edges.delete(edge);
-            for (let n of edge.adjacent_node_positions()) {
+            for (let n of edge.nodes()) {
                 if (graph.nodes.has(n) && graph.edges_of(n).length === 0) {
                     graph.nodes.delete(n);
                 }
             }
         },
         (graph, ctx) => {
-            let [n1, n2] = edge.adjacent_node_positions();
+            let [n1, n2] = edge.nodes();
             let [x1, y1] = nodeToXy(n1);
             let [x2, y2] = nodeToXy(n2);
             ctx.beginPath();
@@ -107,7 +107,7 @@ function removeNodeEdit(node) {
             ctx.globalAlpha *= 2;
 
             for (let e of graph.edges_of(node)) {
-                let [n1, n2] = e.adjacent_node_positions();
+                let [n1, n2] = e.nodes();
                 let [x1, y1] = nodeToXy(n1);
                 let [x2, y2] = nodeToXy(n2);
                 ctx.beginPath();

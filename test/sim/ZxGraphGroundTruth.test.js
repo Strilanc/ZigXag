@@ -69,7 +69,7 @@ suite.test("xBasisEqualityTensor", () => {
 function arbitraryPorts(n) {
     let result = [];
     for (let k = 0; k < n; k++) {
-        result.push(new ZxPort(new ZxEdge(k, 0, false), new ZxNode(k, 0)));
+        result.push(new ZxPort(ZxEdge.makeVerticalUnit(k, 0), new ZxNode(k, 0)));
     }
     return result;
 }

@@ -33,20 +33,20 @@ suite.test('node_init', () => {
 suite.test('node_adjacent_edge_positions', () => {
     let n = new ZxNode(2, 3);
     assertThat(n.adjacent_edge_positions()).isEqualTo([
-        new ZxEdge(2, 3, true),
-        new ZxEdge(2, 2, false),
-        new ZxEdge(1, 3, true),
-        new ZxEdge(2, 3, false),
+        ZxEdge.makeUnit(2, 3, true),
+        ZxEdge.makeUnit(2, 2, false),
+        ZxEdge.makeUnit(1, 3, true),
+        ZxEdge.makeUnit(2, 3, false),
     ]);
 });
 
 suite.test('node_ports', () => {
     let n = new ZxNode(2, 3);
     assertThat(n.ports()).isEqualTo([
-        new ZxPort(new ZxEdge(2, 3, true), n),
-        new ZxPort(new ZxEdge(2, 2, false), n),
-        new ZxPort(new ZxEdge(1, 3, true), n),
-        new ZxPort(new ZxEdge(2, 3, false), n),
+        new ZxPort(ZxEdge.makeUnit(2, 3, true), n),
+        new ZxPort(ZxEdge.makeUnit(2, 2, false), n),
+        new ZxPort(ZxEdge.makeUnit(1, 3, true), n),
+        new ZxPort(ZxEdge.makeUnit(2, 3, false), n),
     ]);
 });
 
@@ -136,9 +136,9 @@ suite.test('fromDiagram', () => {
             [new ZxNode(1, 1), '@'],
         ),
         new GeneralMap(
-            [new ZxEdge(0, 0, false), '-'],
-            [new ZxEdge(0, 0, true), '-'],
-            [new ZxEdge(0, 1, true), 'x'],
+            [ZxEdge.makeUnit(0, 0, false), '-'],
+            [ZxEdge.makeUnit(0, 0, true), '-'],
+            [ZxEdge.makeUnit(0, 1, true), 'x'],
         ),
     ));
 

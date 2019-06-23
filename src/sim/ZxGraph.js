@@ -35,28 +35,28 @@ class ZxNode {
      * @returns {!ZxEdge}
      */
     right_edge_position() {
-        return new ZxEdge(this.x, this.y, true);
+        return ZxEdge.makeHorizontalUnit(this.x, this.y);
     }
 
     /**
      * @returns {!ZxEdge}
      */
     down_edge_position() {
-        return new ZxEdge(this.x, this.y, false);
+        return ZxEdge.makeVerticalUnit(this.x, this.y);
     }
 
     /**
      * @returns {!ZxEdge}
      */
     left_edge_position() {
-        return new ZxEdge(this.x - 1, this.y, true);
+        return ZxEdge.makeHorizontalUnit(this.x - 1, this.y);
     }
 
     /**
      * @returns {!ZxEdge}
      */
     up_edge_position() {
-        return new ZxEdge(this.x, this.y - 1, false);
+        return ZxEdge.makeVerticalUnit(this.x, this.y - 1);
     }
 
     /**
@@ -70,7 +70,14 @@ class ZxNode {
      * @returns {!number}
      */
     orderVal() {
-        return this.x + this.y * 10000.1;
+        return this.x + this.y * 1000.1;
+    }
+
+    /**
+     * @returns {!number}
+     */
+    orderValXThenY() {
+        return this.x * 1000.1 + this.y;
     }
 
     /**
@@ -88,33 +95,83 @@ class ZxNode {
 
 class ZxEdge {
     /**
-     * @param {!int} n_x
-     * @param {!int} n_y
-     * @param {!boolean} horizontal
+     * @param {!ZxNode} n1
+     * @param {!ZxNode} n2
      */
-    constructor(n_x, n_y, horizontal) {
-        this.n_x = n_x;
-        this.n_y = n_y;
-        this.horizontal = horizontal;
+    constructor(n1, n2) {
+        if (!(n1 instanceof ZxNode)) {
+            throw new Error(`Not a ZxNode: ${n1}`);
+        }
+        if (!(n2 instanceof ZxNode)) {
+            throw new Error(`Not a ZxNode: ${n2}`);
+        }
+        this.n1 = n1;
+        this.n2 = n2;
+    }
+
+    /**
+     * @param {!int} x
+     * @param {!int} y
+     * @param {!boolean} horizontal
+     * @returns {!ZxEdge}
+     */
+    static makeUnit(x, y, horizontal) {
+        return horizontal ? this.makeHorizontalUnit(x, y) : this.makeVerticalUnit(x, y);
+    }
+
+    /**
+     * @param {!int} x
+     * @param {!int} y
+     * @returns {!ZxEdge}
+     */
+    static makeHorizontalUnit(x, y) {
+        return new ZxEdge(new ZxNode(x, y), new ZxNode(x + 1, y));
+    }
+
+    /**
+     * @param {!int} x
+     * @param {!int} y
+     * @returns {!ZxEdge}
+     */
+    static makeVerticalUnit(x, y) {
+        return new ZxEdge(new ZxNode(x, y), new ZxNode(x, y + 1));
+    }
+
+    /**
+     * @returns {!boolean}
+     */
+    isUnit() {
+        let dx = Math.abs(this.n1.x - this.n2.x);
+        let dy = Math.abs(this.n1.y - this.n2.y);
+        return dx + dy === 1;
+    }
+
+    /**
+     * @returns {!boolean}
+     */
+    isHorizontal() {
+        return this.n1.y === this.n2.y;
+    }
+
+    /**
+     * @returns {!boolean}
+     */
+    isVertical() {
+        return this.n1.x === this.n2.x;
     }
 
     /**
      * @returns {!Array.<!ZxNode>}
      */
-    adjacent_node_positions() {
-        let dx = this.horizontal ? 1 : 0;
-        let dy = 1 - dx;
-        return [
-            new ZxNode(this.n_x, this.n_y),
-            new ZxNode(this.n_x + dx, this.n_y + dy),
-        ];
+    nodes() {
+        return [this.n1, this.n2];
     }
 
     /**
      * @returns {!Array.<!ZxPort>}
      */
     ports() {
-        return this.adjacent_node_positions().map(n => new ZxPort(this, n));
+        return this.nodes().map(n => new ZxPort(this, n));
     }
 
     /**
@@ -122,7 +179,7 @@ class ZxEdge {
      * @returns {!ZxNode}
      */
     opposite(node) {
-        let nodes = this.adjacent_node_positions();
+        let nodes = this.nodes();
         if (node.isEqualTo(nodes[0])) {
             return nodes[1];
         }
@@ -136,21 +193,21 @@ class ZxEdge {
      * @returns {!number}
      */
     orderVal() {
-        return this.n_x + this.n_y * 10000.1 + (this.horizontal ? 0.5 : 0);
+        return this.n1.orderVal() * 1000000.2 + this.n2.orderVal();
     }
 
     /**
      * @returns {!number}
      */
     orderValXThenY() {
-        return this.n_x * 10000.1 + this.n_y + (this.horizontal ? 0.5 : 0);
+        return this.n1.orderValXThenY() * 1000000.2 + this.n2.orderValXThenY();
     }
 
     /**
      * @returns {!string}
      */
     toString() {
-        return `(${this.n_x},${this.n_y},${this.horizontal ? '>' : 'V'})`;
+        return `(${this.n1}, ${this.n2})`;
     }
 
     /**
@@ -161,7 +218,7 @@ class ZxEdge {
         if (!(other instanceof ZxEdge)) {
             return false;
         }
-        return this.n_x === other.n_x && this.n_y === other.n_y && this.horizontal === other.horizontal;
+        return this.n1.isEqualTo(other.n1) && this.n2.isEqualTo(other.n2);
     }
 }
 
@@ -246,8 +303,13 @@ class ZxGraph {
     serialize() {
         let nodes = this.sortedNodes();
         let edges = this.sortedEdges();
-        let nodeText = nodes.map(n => `${n.x},${n.y},${this.nodes.get(n)}`).join(';');
-        let edgeText = edges.map(e => `${e.n_x},${e.n_y},${e.horizontal ? 'h' : 'v'},${this.edges.get(e)}`).join(';');
+        let nodeText = nodes.map(n => `${n.x},${n.y},${this.kind(n)}`).join(';');
+        let edgeText = edges.map(e => {
+            if (!e.isUnit() || e.n1.x > e.n2.x || e.n1.y > e.n2.y) {
+                throw new Error(`Non-unit edge: ${e}`);
+            }
+            return `${e.n1.x},${e.n1.y},${e.isHorizontal() ? 'h' : 'v'},${this.kind(e)}`;
+        }).join(';');
         return `${nodeText}:${edgeText}`;
     }
 
@@ -273,7 +335,7 @@ class ZxGraph {
 
         function parseEdge(t) {
             let [x, y, h, k] = t.split(',');
-            let e = new ZxEdge(parseInt(x), parseInt(y), h === 'h');
+            let e = ZxEdge.makeUnit(parseInt(x), parseInt(y), h === 'h');
             result.edges.set(e, k);
         }
 
@@ -391,19 +453,24 @@ class ZxGraph {
             }
         }
 
-        function assertEdge(edge, present, desc) {
-            let col = edge.n_x * 4;
-            let row = edge.n_y * 4;
+        /**
+         * @param {!ZxEdge} edge
+         * @param {!boolean} shouldBePresent
+         * @param {!string} desc
+         */
+        function assertEdge(edge, shouldBePresent, desc) {
+            let col = edge.n1.x * 4;
+            let row = edge.n1.y * 4;
             let dxs = [0];
             let dys = [1, 2, 3];
-            if (edge.horizontal) {
+            if (edge.isHorizontal()) {
                 [dxs, dys] = [dys, dxs];
             }
             for (let dy of dys) {
                 let line = lines[row + dy] || '';
                 for (let dx of dxs) {
                     let c = line[col + dx] || ' ';
-                    if ((c !== ' ') !== present) {
+                    if ((c !== ' ') !== shouldBePresent) {
                         throw new Error(`${desc} at row=${row+dy} col=${col+dx} "${c}".`)
                     }
                 }
@@ -459,7 +526,7 @@ class ZxGraph {
             let line = lines[row];
             for (let col = 0; col < line.length; col += 4) {
                 let c = line[col];
-                let e = new ZxEdge(col >> 2, row >> 2, false);
+                let e = ZxEdge.makeVerticalUnit(col >> 2, row >> 2);
                 assertEdge(e, c !== ' ', 'Broken v edge');
                 if (c !== ' ') {
                     let kind = edgeKindMap[c];
@@ -476,7 +543,7 @@ class ZxGraph {
             let line = lines[row];
             for (let col = 2; col < line.length; col += 4) {
                 let c = line[col];
-                let e = new ZxEdge(col >> 2, row >> 2, true);
+                let e = ZxEdge.makeHorizontalUnit(col >> 2, row >> 2);
                 assertEdge(e, c !== ' ', 'Broken h edge');
                 if (c !== ' ') {
                     let kind = edgeKindMap[c];
@@ -540,7 +607,7 @@ class ZxGraph {
             if (x === end.x && y === end.y) {
                 break;
             }
-            edges.push(new ZxEdge(
+            edges.push(ZxEdge.makeUnit(
                 x + Math.min(dx, 0),
                 y + Math.min(dy, 0),
                 horizontal));

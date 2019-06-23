@@ -87,7 +87,7 @@ function* floodFillNodeAndEdgePositions(element) {
         if (next instanceof ZxNode) {
             queue.push(...next.adjacent_edge_positions())
         } else {
-            queue.push(...next.adjacent_node_positions())
+            queue.push(...next.nodes())
         }
     }
 }
@@ -100,7 +100,7 @@ function graphElementToCenterXy(element) {
     if (element instanceof ZxNode) {
         return nodeToXy(element);
     } else {
-        let [n1, n2] = element.adjacent_node_positions();
+        let [n1, n2] = element.nodes();
         let [x1, y1] = nodeToXy(n1);
         let [x2, y2] = nodeToXy(n2);
         return [(x1 + x2) / 2, (y1 + y2) / 2];
@@ -180,7 +180,7 @@ function drawNode(ctx, node, radius=8, fill=undefined, stroke='black') {
  */
 function drawEdge(ctx, edge, thickness=1, color='black', showKind=true) {
     let kind = curGraph.edges.get(edge);
-    let [n1, n2] = edge.adjacent_node_positions();
+    let [n1, n2] = edge.nodes();
     ctx.beginPath();
     let [x1, y1] = nodeToXy(n1);
     let [x2, y2] = nodeToXy(n2);
@@ -360,7 +360,7 @@ function maybeExtendAlongEdgeEdit(edge) {
         return undefined;
     }
 
-    let [n1, n2] = edge.adjacent_node_positions();
+    let [n1, n2] = edge.nodes();
     let b1 = curGraph.nodes.has(n1);
     let b2 = curGraph.nodes.has(n2);
     if (b1 === b2) {
@@ -479,7 +479,7 @@ function maybeRetractNodeEdit(node) {
  * @returns {undefined|!Edit}
  */
 function maybeContractEdgeEdit(edge) {
-    for (let node of edge.adjacent_node_positions()) {
+    for (let node of edge.nodes()) {
         let edit = maybeRetractNodeEdit(node);
         if (edit !== undefined) {
             return edit;
@@ -579,7 +579,7 @@ function changeEdgeKindEdit(edge) {
 function maybeIntroduceEdgeEdit(edge) {
     // Check for blocking neighbor.
     let blockKinds = ['in', 'out'];
-    for (let node of edge.adjacent_node_positions()) {
+    for (let node of edge.nodes()) {
         let kind = curGraph.nodes.get(node);
         if (blockKinds.indexOf(kind) !== -1) {
             return undefined;
@@ -590,7 +590,7 @@ function maybeIntroduceEdgeEdit(edge) {
         () => `introduce ${edge}`,
         graph => {
             graph.edges.set(edge, '-');
-            for (let node of edge.adjacent_node_positions()) {
+            for (let node of edge.nodes()) {
                 if (!graph.nodes.has(node)) {
                     graph.nodes.set(node, 'O');
                 }
