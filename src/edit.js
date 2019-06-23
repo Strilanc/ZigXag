@@ -8,7 +8,7 @@ import {Revision} from "src/base/Revision.js";
 import {Reader, Writer} from "src/base/Serialize.js";
 import {GeneralMap} from "src/base/GeneralMap.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
-import {ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js";
+import {ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js";
 import {evalZxGraph} from "src/sim/ZxGraphEval.js";
 import {Util} from "src/base/Util.js";
 import {MathPainter} from "src/MathPainter.js";
@@ -36,7 +36,7 @@ class Edit {
 
 
 /**
- * @param {!ZxNodePos} n
+ * @param {!ZxNode} n
  * @returns {![!number, !number]}
  */
 function nodeToXy(n) {
@@ -45,7 +45,7 @@ function nodeToXy(n) {
 
 /**
  * Removes an edge from the graph, along with its leaf nodes.
- * @param {!ZxEdgePos} edge
+ * @param {!ZxEdge} edge
  * @returns {!Edit}
  */
 function removeEdgeEdit(edge) {
@@ -87,7 +87,7 @@ function removeEdgeEdit(edge) {
 
 /**
  * Removes a node from the graph, along with its edges.
- * @param {!ZxNodePos} node
+ * @param {!ZxNode} node
  * @returns {!Edit}
  */
 function removeNodeEdit(node) {

@@ -6,7 +6,7 @@ import {VectorSimulator} from "src/sim/VectorSimulator.js"
 import {Measurement} from "src/sim/Measurement.js"
 import {Complex} from "src/base/Complex.js"
 import {Matrix} from "src/base/Matrix.js"
-import {ZxPort, ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js"
+import {ZxPort, ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js"
 import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
 import {LoggedSimulation} from "src/sim/LoggedSimulator.js";
@@ -16,7 +16,7 @@ import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 
 /**
  * @param {!ZxGraph} graph
- * @param {!ZxNodePos} node
+ * @param {!ZxNode} node
  * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
  * @private
  */
@@ -49,7 +49,7 @@ function _nodeStabilizers(graph, node, qubit_map) {
 
 /**
  * @param {!ZxGraph} graph
- * @param {!ZxEdgePos} edge
+ * @param {!ZxEdge} edge
  * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
  * @private
  */

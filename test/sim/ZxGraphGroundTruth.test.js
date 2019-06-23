@@ -1,5 +1,5 @@
 import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
-import {ZxGraph, ZxNodePos, ZxEdgePos, ZxPort} from "src/sim/ZxGraph.js"
+import {ZxGraph, ZxNode, ZxEdge, ZxPort} from "src/sim/ZxGraph.js"
 import {Matrix} from "src/base/Matrix.js"
 import {Complex} from "src/base/Complex.js"
 import {PauliProduct} from "src/sim/PauliProduct.js"
@@ -69,7 +69,7 @@ suite.test("xBasisEqualityTensor", () => {
 function arbitraryPorts(n) {
     let result = [];
     for (let k = 0; k < n; k++) {
-        result.push(new ZxPort(new ZxEdgePos(k, 0, false), new ZxNodePos(k, 0)));
+        result.push(new ZxPort(new ZxEdge(k, 0, false), new ZxNode(k, 0)));
     }
     return result;
 }

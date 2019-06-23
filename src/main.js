@@ -18,7 +18,7 @@ import {Reader, Writer} from "src/base/Serialize.js";
 import {GeneralMap} from "src/base/GeneralMap.js";
 import {equate} from "src/base/Equate.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
-import {ZxGraph, ZxEdgePos, ZxNodePos} from "src/sim/ZxGraph.js";
+import {ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js";
 import {evalZxGraph} from "src/sim/ZxGraphEval.js";
 import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js";
 import {Util} from "src/base/Util.js";
@@ -39,9 +39,9 @@ function initialCommit() {
     let g = new ZxGraph();
     let x = 4;
     let y = 4;
-    g.add_line(new ZxNodePos(x, y), new ZxNodePos(x+2, y), ['in', '@', 'out']);
-    g.add_line(new ZxNodePos(x, y+1), new ZxNodePos(x+2, y+1), ['in', 'O', 'out']);
-    g.add_line(new ZxNodePos(x+1, y), new ZxNodePos(x+1, y+1));
+    g.add_line(new ZxNode(x, y), new ZxNode(x+2, y), ['in', '@', 'out']);
+    g.add_line(new ZxNode(x, y+1), new ZxNode(x+2, y+1), ['in', 'O', 'out']);
+    g.add_line(new ZxNode(x+1, y), new ZxNode(x+1, y+1));
     return g.serialize();
 }
 
@@ -63,7 +63,7 @@ let revision = new Revision([initialCommit()], 0, false);
 
 
 /**
- * @param {!ZxNodePos} n
+ * @param {!ZxNode} n
  * @returns {![!number, !number]}
  */
 function nodeToXy(n) {
@@ -71,7 +71,7 @@ function nodeToXy(n) {
 }
 
 /**
- * @param {!ZxNodePos|!ZxEdgePos} element
+ * @param {!ZxNode|!ZxEdge} element
  * @yields {!ZxNodePos|!ZxEdgePos}
  */
 function* floodFillNodeAndEdgePositions(element) {
@@ -84,7 +84,7 @@ function* floodFillNodeAndEdgePositions(element) {
         }
         seen.add(next);
         yield next;
-        if (next instanceof ZxNodePos) {
+        if (next instanceof ZxNode) {
             queue.push(...next.adjacent_edge_positions())
         } else {
             queue.push(...next.adjacent_node_positions())
@@ -93,11 +93,11 @@ function* floodFillNodeAndEdgePositions(element) {
 }
 
 /**
- * @param {!ZxNodePos|!ZxEdgePos} element
+ * @param {!ZxNode|!ZxEdge} element
  * @returns {![!number, !number]}
  */
 function graphElementToCenterXy(element) {
-    if (element instanceof ZxNodePos) {
+    if (element instanceof ZxNode) {
         return nodeToXy(element);
     } else {
         let [n1, n2] = element.adjacent_node_positions();
@@ -110,7 +110,7 @@ function graphElementToCenterXy(element) {
 /**
  * @param {!number} x
  * @param {!number} y
- * @param {!ZxNodePos|!ZxEdgePos} element
+ * @param {!ZxNode|!ZxEdge} element
  */
 function xyDistanceToGraphElement(x, y, element) {
     let [cx, cy] = graphElementToCenterXy(element);
@@ -122,7 +122,7 @@ function xyDistanceToGraphElement(x, y, element) {
 /**
  * @param {!number|undefined} x
  * @param {!number|undefined} y
- * @returns {undefined|!ZxNodePos|!ZxEdgePos}
+ * @returns {undefined|!ZxNode|!ZxEdge}
  */
 function xyToGraphElement(x, y) {
     if (x === undefined || y === undefined) {
@@ -130,14 +130,14 @@ function xyToGraphElement(x, y) {
     }
     let nx = Math.floor((x + 100) / 50 + 0.25);
     let ny = Math.floor((y + 100) / 50 + 0.25);
-    let region = seq(floodFillNodeAndEdgePositions(new ZxNodePos(nx, ny))).take(20);
-    region = region.filter(e => e instanceof ZxEdgePos || curGraph.has(e));
+    let region = seq(floodFillNodeAndEdgePositions(new ZxNode(nx, ny))).take(20);
+    region = region.filter(e => e instanceof ZxEdge || curGraph.has(e));
     return region.minBy(e => xyDistanceToGraphElement(x, y, e));
 }
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
- * @param {!ZxNodePos} node
+ * @param {!ZxNode} node
  * @param {!number=} radius
  * @param {!string=} fill
  * @param {!string=} stroke
@@ -173,7 +173,7 @@ function drawNode(ctx, node, radius=8, fill=undefined, stroke='black') {
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
- * @param {!ZxEdgePos} edge
+ * @param {!ZxEdge} edge
  * @param {!number=} thickness
  * @param {!string=} color
  * @param {!boolean} showKind
@@ -231,7 +231,7 @@ function drawFadedNearbyRegion(ctx) {
     let nearby = seq(floodFillNodeAndEdgePositions(element)).take(150);
     let [cx, cy] = graphElementToCenterXy(element);
     for (let e of nearby) {
-        if (curGraph.has(e) || !(e instanceof ZxEdgePos)) {
+        if (curGraph.has(e) || !(e instanceof ZxEdge)) {
             continue;
         }
 
@@ -252,9 +252,9 @@ function drawFocus(ctx) {
     ctx.globalAlpha *= 0.5;
     let element = xyToGraphElement(mouseX, mouseY);
     if (element !== undefined) {
-        if (element instanceof ZxNodePos) {
+        if (element instanceof ZxNode) {
             drawNode(ctx, element, curGraph.has(element) ? 12 : 7, 'gray', '#00000000');
-        } else if (element instanceof ZxEdgePos) {
+        } else if (element instanceof ZxEdge) {
             drawEdge(ctx, element, 7, 'gray', false);
         }
     }
@@ -352,7 +352,7 @@ function eventPosRelativeTo(ev, element) {
 
 
 /**
- * @param {!ZxEdgePos} edge
+ * @param {!ZxEdge} edge
  * @returns {undefined|!Edit}
  */
 function maybeExtendAlongEdgeEdit(edge) {
@@ -403,7 +403,7 @@ function maybeExtendAlongEdgeEdit(edge) {
 
 
     /**
- * @param {!ZxNodePos} node
+ * @param {!ZxNode} node
  * @returns {undefined|!Edit}
  */
 function maybeExtendToNodeEdit(node) {
@@ -417,7 +417,7 @@ function maybeExtendToNodeEdit(node) {
 }
 
 /**
- * @param {!ZxNodePos} node
+ * @param {!ZxNode} node
  * @returns {undefined|!Edit}
  */
 function maybeRetractNodeEdit(node) {
@@ -475,7 +475,7 @@ function maybeRetractNodeEdit(node) {
 
 
 /**
- * @param {!ZxEdgePos} edge
+ * @param {!ZxEdge} edge
  * @returns {undefined|!Edit}
  */
 function maybeContractEdgeEdit(edge) {
@@ -490,7 +490,7 @@ function maybeContractEdgeEdit(edge) {
 
 
 /**
- * @param {!ZxNodePos|!ZxEdgePos} element
+ * @param {!ZxNode|!ZxEdge} element
  * @returns {undefined|!Edit}
  */
 function maybeDeleteElementEdit(element) {
@@ -498,9 +498,9 @@ function maybeDeleteElementEdit(element) {
         return undefined;
     }
 
-    if (element instanceof ZxNodePos) {
+    if (element instanceof ZxNode) {
         return maybeRetractNodeEdit(element) || removeNodeEdit(element);
-    } else if (element instanceof ZxEdgePos) {
+    } else if (element instanceof ZxEdge) {
         return maybeContractEdgeEdit(element) || removeEdgeEdit(element);
     }
 }
@@ -508,7 +508,7 @@ function maybeDeleteElementEdit(element) {
 
 
 /**
- * @param {!ZxNodePos} node
+ * @param {!ZxNode} node
  * @returns {!Edit}
  */
 function changeNodeKindEdit(node) {
@@ -542,7 +542,7 @@ function changeNodeKindEdit(node) {
 
 
 /**
- * @param {!ZxEdgePos} edge
+ * @param {!ZxEdge} edge
  * @returns {!Edit}
  */
 function changeEdgeKindEdit(edge) {
@@ -573,7 +573,7 @@ function changeEdgeKindEdit(edge) {
 
 
 /**
- * @param {!ZxEdgePos} edge
+ * @param {!ZxEdge} edge
  * @returns {undefined|!Edit}
  */
 function maybeIntroduceEdgeEdit(edge) {
@@ -619,7 +619,7 @@ function pickEdit(wantDelete, x, y) {
         return maybeDeleteElementEdit(element);
     }
 
-    if (element instanceof ZxNodePos) {
+    if (element instanceof ZxNode) {
         if (curGraph.has(element)) {
             return changeNodeKindEdit(element);
         }
@@ -627,7 +627,7 @@ function pickEdit(wantDelete, x, y) {
         return maybeExtendToNodeEdit(element);
     }
 
-    if (element instanceof ZxEdgePos) {
+    if (element instanceof ZxEdge) {
         if (curGraph.has(element)) {
             return changeEdgeKindEdit(element);
         }

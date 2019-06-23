@@ -2,7 +2,7 @@ import {GeneralMap} from "src/base/GeneralMap.js";
 import {Seq, seq} from "src/base/Seq.js";
 
 
-class ZxNodePos {
+class ZxNode {
     /**
      * @param {!int} x
      * @param {!int} y
@@ -13,7 +13,7 @@ class ZxNodePos {
     }
 
     /**
-     * @returns {!Array.<!ZxEdgePos>}
+     * @returns {!Array.<!ZxEdge>}
      */
     adjacent_edge_positions() {
         return [
@@ -32,31 +32,31 @@ class ZxNodePos {
     }
 
     /**
-     * @returns {!ZxEdgePos}
+     * @returns {!ZxEdge}
      */
     right_edge_position() {
-        return new ZxEdgePos(this.x, this.y, true);
+        return new ZxEdge(this.x, this.y, true);
     }
 
     /**
-     * @returns {!ZxEdgePos}
+     * @returns {!ZxEdge}
      */
     down_edge_position() {
-        return new ZxEdgePos(this.x, this.y, false);
+        return new ZxEdge(this.x, this.y, false);
     }
 
     /**
-     * @returns {!ZxEdgePos}
+     * @returns {!ZxEdge}
      */
     left_edge_position() {
-        return new ZxEdgePos(this.x - 1, this.y, true);
+        return new ZxEdge(this.x - 1, this.y, true);
     }
 
     /**
-     * @returns {!ZxEdgePos}
+     * @returns {!ZxEdge}
      */
     up_edge_position() {
-        return new ZxEdgePos(this.x, this.y - 1, false);
+        return new ZxEdge(this.x, this.y - 1, false);
     }
 
     /**
@@ -74,11 +74,11 @@ class ZxNodePos {
     }
 
     /**
-     * @param {object|!ZxNodePos} other
+     * @param {object|!ZxNode} other
      * @returns {!boolean}
      */
     isEqualTo(other) {
-        if (!(other instanceof ZxNodePos)) {
+        if (!(other instanceof ZxNode)) {
             return false;
         }
         return this.x === other.x && this.y === other.y;
@@ -86,7 +86,7 @@ class ZxNodePos {
 }
 
 
-class ZxEdgePos {
+class ZxEdge {
     /**
      * @param {!int} n_x
      * @param {!int} n_y
@@ -99,14 +99,14 @@ class ZxEdgePos {
     }
 
     /**
-     * @returns {!Array.<!ZxNodePos>}
+     * @returns {!Array.<!ZxNode>}
      */
     adjacent_node_positions() {
         let dx = this.horizontal ? 1 : 0;
         let dy = 1 - dx;
         return [
-            new ZxNodePos(this.n_x, this.n_y),
-            new ZxNodePos(this.n_x + dx, this.n_y + dy),
+            new ZxNode(this.n_x, this.n_y),
+            new ZxNode(this.n_x + dx, this.n_y + dy),
         ];
     }
 
@@ -118,8 +118,8 @@ class ZxEdgePos {
     }
 
     /**
-     * @param {!ZxNodePos} node
-     * @returns {!ZxNodePos}
+     * @param {!ZxNode} node
+     * @returns {!ZxNode}
      */
     opposite(node) {
         let nodes = this.adjacent_node_positions();
@@ -154,11 +154,11 @@ class ZxEdgePos {
     }
 
     /**
-     * @param {object|!ZxEdgePos} other
+     * @param {object|!ZxEdge} other
      * @returns {!boolean}
      */
     isEqualTo(other) {
-        if (!(other instanceof ZxEdgePos)) {
+        if (!(other instanceof ZxEdge)) {
             return false;
         }
         return this.n_x === other.n_x && this.n_y === other.n_y && this.horizontal === other.horizontal;
@@ -171,8 +171,8 @@ class ZxEdgePos {
  */
 class ZxPort {
     /**
-     * @param {!ZxEdgePos} edge
-     * @param {!ZxNodePos} node
+     * @param {!ZxEdge} edge
+     * @param {!ZxNode} node
      */
     constructor(edge, node) {
         this.edge = edge;
@@ -208,8 +208,8 @@ class ZxPort {
 
 class ZxGraph {
     /**
-     * @param {!GeneralMap.<!ZxNodePos, !string>=} nodes
-     * @param {!GeneralMap.<!ZxEdgePos, !string>=} edges
+     * @param {!GeneralMap.<!ZxNode, !string>=} nodes
+     * @param {!GeneralMap.<!ZxEdge, !string>=} edges
      */
     constructor(nodes=undefined, edges=undefined) {
         if (nodes === undefined) {
@@ -223,20 +223,20 @@ class ZxGraph {
     }
 
     /**
-     * @param {!ZxNodePos|!ZxEdgePos} nodeOrEdge
+     * @param {!ZxNode|!ZxEdge} nodeOrEdge
      * @returns {!boolean}
      */
     has(nodeOrEdge) {
-        let map = (nodeOrEdge instanceof ZxNodePos) ? this.nodes : this.edges;
+        let map = (nodeOrEdge instanceof ZxNode) ? this.nodes : this.edges;
         return map.has(nodeOrEdge);
     }
 
     /**
-     * @param {!ZxNodePos|!ZxEdgePos} nodeOrEdge
+     * @param {!ZxNode|!ZxEdge} nodeOrEdge
      * @returns {undefined|!string}
      */
     kind(nodeOrEdge) {
-        let map = (nodeOrEdge instanceof ZxNodePos) ? this.nodes : this.edges;
+        let map = (nodeOrEdge instanceof ZxNode) ? this.nodes : this.edges;
         return map.get(nodeOrEdge);
     }
 
@@ -267,13 +267,13 @@ class ZxGraph {
 
         function parseNode(t) {
             let [x, y, k] = t.split(',');
-            let n = new ZxNodePos(parseInt(x), parseInt(y));
+            let n = new ZxNode(parseInt(x), parseInt(y));
             result.nodes.set(n, k);
         }
 
         function parseEdge(t) {
             let [x, y, h, k] = t.split(',');
-            let e = new ZxEdgePos(parseInt(x), parseInt(y), h === 'h');
+            let e = new ZxEdge(parseInt(x), parseInt(y), h === 'h');
             result.edges.set(e, k);
         }
 
@@ -285,7 +285,7 @@ class ZxGraph {
     }
 
     /**
-     * @returns {!Array.<!ZxNodePos>}
+     * @returns {!Array.<!ZxNode>}
      */
     inputNodes() {
         let result = [];
@@ -299,7 +299,7 @@ class ZxGraph {
     }
 
     /**
-     * @returns {!Array.<!ZxNodePos>}
+     * @returns {!Array.<!ZxNode>}
      */
     outputNodes() {
         let result = [];
@@ -313,7 +313,7 @@ class ZxGraph {
     }
 
     /**
-     * @returns {!Array.<!{node: !ZxNodePos, axis: !boolean}>}
+     * @returns {!Array.<!{node: !ZxNode, axis: !boolean}>}
      */
     spiderMeasurementNodes() {
         let result = [];
@@ -330,7 +330,7 @@ class ZxGraph {
 
     /**
      * Ordered top to bottom, then left to right.
-     * @returns {!Array.<!ZxNodePos>}
+     * @returns {!Array.<!ZxNode>}
      */
     sortedNodes() {
         let nodes = [...this.nodes.keys()];
@@ -340,7 +340,7 @@ class ZxGraph {
 
     /**
      * Ordered top to bottom, then left to right.
-     * @returns {!Array.<!ZxEdgePos>}
+     * @returns {!Array.<!ZxEdge>}
      */
     sortedEdges() {
         let edges = [...this.edges.keys()];
@@ -438,7 +438,7 @@ class ZxGraph {
             let line = lines[row];
             for (let col = 0; col < line.length; col += 4) {
                 let c = line[col];
-                let n = new ZxNodePos(col >> 2, row >> 2);
+                let n = new ZxNode(col >> 2, row >> 2);
                 if (c === ' ') {
                     for (let e of n.adjacent_edge_positions()) {
                         assertEdge(e, false, 'Nodeless edge');
@@ -459,7 +459,7 @@ class ZxGraph {
             let line = lines[row];
             for (let col = 0; col < line.length; col += 4) {
                 let c = line[col];
-                let e = new ZxEdgePos(col >> 2, row >> 2, false);
+                let e = new ZxEdge(col >> 2, row >> 2, false);
                 assertEdge(e, c !== ' ', 'Broken v edge');
                 if (c !== ' ') {
                     let kind = edgeKindMap[c];
@@ -476,7 +476,7 @@ class ZxGraph {
             let line = lines[row];
             for (let col = 2; col < line.length; col += 4) {
                 let c = line[col];
-                let e = new ZxEdgePos(col >> 2, row >> 2, true);
+                let e = new ZxEdge(col >> 2, row >> 2, true);
                 assertEdge(e, c !== ' ', 'Broken h edge');
                 if (c !== ' ') {
                     let kind = edgeKindMap[c];
@@ -492,8 +492,8 @@ class ZxGraph {
     }
 
     /**
-     * @param {!ZxNodePos} n
-     * @returns {!Array.<!ZxEdgePos>}
+     * @param {!ZxNode} n
+     * @returns {!Array.<!ZxEdge>}
      */
     edges_of(n) {
         if (!this.nodes.has(n)) {
@@ -503,7 +503,7 @@ class ZxGraph {
     }
 
     /**
-     * @param {!ZxNodePos|!ZxEdgePos} nodeOrEdge
+     * @param {!ZxNode|!ZxEdge} nodeOrEdge
      * @returns {!Array.<!ZxPort>}
      */
     activePortsOf(nodeOrEdge) {
@@ -511,17 +511,17 @@ class ZxGraph {
     }
 
     /**
-     * @param {!ZxNodePos} n
-     * @returns {!Array.<!ZxNodePos>}
+     * @param {!ZxNode} n
+     * @returns {!Array.<!ZxNode>}
      */
     neighbors_of(n) {
         return this.edges_of(n).map(e => e.opposite(n));
     }
 
     /**
-     * @param {!ZxNodePos} start
-     * @param {!ZxNodePos} end
-     * @returns {![!Array.<!ZxNodePos>, !Array.<!ZxEdgePos>]}
+     * @param {!ZxNode} start
+     * @param {!ZxNode} end
+     * @returns {![!Array.<!ZxNode>, !Array.<!ZxEdge>]}
      * @private
      */
     static _line(start, end) {
@@ -536,11 +536,11 @@ class ZxGraph {
         let nodes = [];
         let edges = [];
         while (true) {
-            nodes.push(new ZxNodePos(x, y));
+            nodes.push(new ZxNode(x, y));
             if (x === end.x && y === end.y) {
                 break;
             }
-            edges.push(new ZxEdgePos(
+            edges.push(new ZxEdge(
                 x + Math.min(dx, 0),
                 y + Math.min(dy, 0),
                 horizontal));
@@ -551,8 +551,8 @@ class ZxGraph {
     }
 
     /**
-     * @param {!ZxNodePos} start
-     * @param {!ZxNodePos} end
+     * @param {!ZxNode} start
+     * @param {!ZxNode} end
      * @param {!Array.<!string>|undefined=undefined} node_types
      */
     add_line(start, end, node_types=undefined) {
@@ -624,7 +624,7 @@ class ZxGraph {
                         out_chars.push('   ');
                         in_chars.push('   ');
                     }
-                    let e = new ZxNodePos(col, row).up_edge_position();
+                    let e = new ZxNode(col, row).up_edge_position();
                     let c = this.edges.get(e) || '';
                     out_chars.push(vertical_edge_reps_out[c] || c);
                     in_chars.push(vertical_edge_reps_in[c] || c);
@@ -636,7 +636,7 @@ class ZxGraph {
             }
             let chars = [];
             for (let col = 0; col < w; col++) {
-                let p = new ZxNodePos(col, row);
+                let p = new ZxNode(col, row);
 
                 if (col > 0) {
                     let c = this.edges.get(p.left_edge_position());
@@ -660,4 +660,4 @@ function rtrim(e) {
     return e.replace(/ +$/g, '');
 }
 
-export {ZxNodePos, ZxEdgePos, ZxPort, ZxGraph}
+export {ZxNode, ZxEdge, ZxPort, ZxGraph}
