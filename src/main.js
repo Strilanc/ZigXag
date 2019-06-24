@@ -74,7 +74,7 @@ function nodeToXy(n) {
  * @param {!ZxNode|!ZxEdge} element
  * @yields {!ZxNodePos|!ZxEdgePos}
  */
-function* floodFillNodeAndEdgePositions(element) {
+function* floodFillNodeAndUnitEdgeSpace(element) {
     let queue = [element];
     let seen = new GeneralSet();
     while (queue.length >= 0) {
@@ -85,7 +85,7 @@ function* floodFillNodeAndEdgePositions(element) {
         seen.add(next);
         yield next;
         if (next instanceof ZxNode) {
-            queue.push(...next.adjacent_edge_positions())
+            queue.push(...next.unitEdges())
         } else {
             queue.push(...next.nodes())
         }
@@ -130,7 +130,7 @@ function xyToGraphElement(x, y) {
     }
     let nx = Math.floor((x + 100) / 50 + 0.25);
     let ny = Math.floor((y + 100) / 50 + 0.25);
-    let region = seq(floodFillNodeAndEdgePositions(new ZxNode(nx, ny))).take(20);
+    let region = seq(floodFillNodeAndUnitEdgeSpace(new ZxNode(nx, ny))).take(20);
     region = region.filter(e => e instanceof ZxEdge || curGraph.has(e));
     return region.minBy(e => xyDistanceToGraphElement(x, y, e));
 }
@@ -228,7 +228,7 @@ function drawFadedNearbyRegion(ctx) {
     }
 
     ctx.globalAlpha *= 0.25;
-    let nearby = seq(floodFillNodeAndEdgePositions(element)).take(150);
+    let nearby = seq(floodFillNodeAndUnitEdgeSpace(element)).take(150);
     let [cx, cy] = graphElementToCenterXy(element);
     for (let e of nearby) {
         if (curGraph.has(e) || !(e instanceof ZxEdge)) {
@@ -290,7 +290,7 @@ function drawPossibleEdit(ctx) {
  * @param {!CanvasRenderingContext2D} ctx
  */
 function drawResults(ctx) {
-    let results = evalZxGraph(curGraph);
+    let results = evalZxGraph(curGraph.copy().inlineSimplify());
     let numIn = curGraph.inputNodes().length;
     function descStabilizer(s) {
         let r = s.toString();
@@ -407,7 +407,7 @@ function maybeExtendAlongEdgeEdit(edge) {
  * @returns {undefined|!Edit}
  */
 function maybeExtendToNodeEdit(node) {
-    for (let edge of node.adjacent_edge_positions()) {
+    for (let edge of node.unitEdges()) {
         let edit = maybeExtendAlongEdgeEdit(edge);
         if (edit !== undefined) {
             return edit;
@@ -421,13 +421,13 @@ function maybeExtendToNodeEdit(node) {
  * @returns {undefined|!Edit}
  */
 function maybeRetractNodeEdit(node) {
-    let edges = curGraph.edges_of(node);
+    let edges = curGraph.activeUnitEdgesOf(node);
     if (edges.length !== 1) {
         return undefined;
     }
     let edge = edges[0];
     let opp = edge.opposite(node);
-    let oppDeg = curGraph.edges_of(opp).length;
+    let oppDeg = curGraph.activeUnitEdgesOf(opp).length;
     let kind = curGraph.nodes.get(node);
     let oppKind = curGraph.nodes.get(opp);
     let acceptableOverwrites = ['@', 'O'];
@@ -520,7 +520,7 @@ function changeNodeKindEdit(node) {
             let i = cycle.indexOf(kind);
             i++;
             i %= cycle.length;
-            if (i >= 2 && graph.edges_of(node).length !== 1) {
+            if (i >= 2 && graph.activeUnitEdgesOf(node).length !== 1) {
                 i = 0;
             }
             graph.nodes.set(node, cycle[i]);

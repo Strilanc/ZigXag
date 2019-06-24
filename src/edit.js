@@ -54,7 +54,7 @@ function removeEdgeEdit(edge) {
         graph => {
             graph.edges.delete(edge);
             for (let n of edge.nodes()) {
-                if (graph.nodes.has(n) && graph.edges_of(n).length === 0) {
+                if (graph.nodes.has(n) && graph.activeUnitEdgesOf(n).length === 0) {
                     graph.nodes.delete(n);
                 }
             }
@@ -73,7 +73,7 @@ function removeEdgeEdit(edge) {
             ctx.stroke();
 
             for (let n of [n1, n2]) {
-                if (graph.edges_of(n).length === 1) {
+                if (graph.activeUnitEdgesOf(n).length === 1) {
                     ctx.beginPath();
                     ctx.arc(...nodeToXy(n), 4, 0, 2*Math.PI);
                     ctx.fillStyle = 'red';
@@ -94,7 +94,7 @@ function removeNodeEdit(node) {
     return new Edit(
         () => `delete ${node} and its edges.`,
         graph => {
-            for (let e of graph.edges_of(node)) {
+            for (let e of graph.activeUnitEdgesOf(node)) {
                 removeEdgeEdit(e).action(graph);
             }
         },
@@ -106,7 +106,7 @@ function removeNodeEdit(node) {
             ctx.fill();
             ctx.globalAlpha *= 2;
 
-            for (let e of graph.edges_of(node)) {
+            for (let e of graph.activeUnitEdgesOf(node)) {
                 let [n1, n2] = e.nodes();
                 let [x1, y1] = nodeToXy(n1);
                 let [x2, y2] = nodeToXy(n2);

@@ -32,7 +32,7 @@ suite.test('node_init', () => {
 
 suite.test('node_adjacent_edge_positions', () => {
     let n = new ZxNode(2, 3);
-    assertThat(n.adjacent_edge_positions()).isEqualTo([
+    assertThat(n.unitEdges()).isEqualTo([
         ZxEdge.makeUnit(2, 3, true),
         ZxEdge.makeUnit(2, 2, false),
         ZxEdge.makeUnit(1, 3, true),
@@ -42,7 +42,7 @@ suite.test('node_adjacent_edge_positions', () => {
 
 suite.test('node_ports', () => {
     let n = new ZxNode(2, 3);
-    assertThat(n.ports()).isEqualTo([
+    assertThat(n.unitPorts()).isEqualTo([
         new ZxPort(ZxEdge.makeUnit(2, 3, true), n),
         new ZxPort(ZxEdge.makeUnit(2, 2, false), n),
         new ZxPort(ZxEdge.makeUnit(1, 3, true), n),

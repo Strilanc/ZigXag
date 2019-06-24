@@ -15,47 +15,47 @@ class ZxNode {
     /**
      * @returns {!Array.<!ZxEdge>}
      */
-    adjacent_edge_positions() {
+    unitEdges() {
         return [
-            this.right_edge_position(),
-            this.up_edge_position(),
-            this.left_edge_position(),
-            this.down_edge_position(),
+            this.rightUnitEdge(),
+            this.upUnitEdge(),
+            this.leftUnitEdge(),
+            this.downUnitEdge(),
         ];
     }
 
     /**
      * @returns {!Array.<!ZxPort>}
      */
-    ports() {
-        return this.adjacent_edge_positions().map(e => new ZxPort(e, this));
+    unitPorts() {
+        return this.unitEdges().map(e => new ZxPort(e, this));
     }
 
     /**
      * @returns {!ZxEdge}
      */
-    right_edge_position() {
+    rightUnitEdge() {
         return ZxEdge.makeHorizontalUnit(this.x, this.y);
     }
 
     /**
      * @returns {!ZxEdge}
      */
-    down_edge_position() {
+    downUnitEdge() {
         return ZxEdge.makeVerticalUnit(this.x, this.y);
     }
 
     /**
      * @returns {!ZxEdge}
      */
-    left_edge_position() {
+    leftUnitEdge() {
         return ZxEdge.makeHorizontalUnit(this.x - 1, this.y);
     }
 
     /**
      * @returns {!ZxEdge}
      */
-    up_edge_position() {
+    upUnitEdge() {
         return ZxEdge.makeVerticalUnit(this.x, this.y - 1);
     }
 
@@ -144,20 +144,6 @@ class ZxEdge {
         let dx = Math.abs(this.n1.x - this.n2.x);
         let dy = Math.abs(this.n1.y - this.n2.y);
         return dx + dy === 1;
-    }
-
-    /**
-     * @returns {!boolean}
-     */
-    isHorizontal() {
-        return this.n1.y === this.n2.y;
-    }
-
-    /**
-     * @returns {!boolean}
-     */
-    isVertical() {
-        return this.n1.x === this.n2.x;
     }
 
     /**
@@ -308,7 +294,7 @@ class ZxGraph {
             if (!e.isUnit() || e.n1.x > e.n2.x || e.n1.y > e.n2.y) {
                 throw new Error(`Non-unit edge: ${e}`);
             }
-            return `${e.n1.x},${e.n1.y},${e.isHorizontal() ? 'h' : 'v'},${this.kind(e)}`;
+            return `${e.n1.x},${e.n1.y},${e.n2.x},${e.n2.y},${this.kind(e)}`;
         }).join(';');
         return `${nodeText}:${edgeText}`;
     }
@@ -334,8 +320,10 @@ class ZxGraph {
         }
 
         function parseEdge(t) {
-            let [x, y, h, k] = t.split(',');
-            let e = ZxEdge.makeUnit(parseInt(x), parseInt(y), h === 'h');
+            let [x1, y1, x2, y2, k] = t.split(',');
+            let e = new ZxEdge(
+                new ZxNode(parseInt(x1), parseInt(y1)),
+                new ZxNode(parseInt(x2), parseInt(y2)));
             result.edges.set(e, k);
         }
 
@@ -411,6 +399,28 @@ class ZxGraph {
     }
 
     /**
+     * Applies trivial rewrites to simplify the ZX graph.
+     * @returns {!ZxGraph} this
+     */
+    inlineSimplify() {
+        for (let {node} of this.spiderMeasurementNodes()) {
+            let edges = this.activeEdgesOf(node);
+            if (edges.length === 2) {
+                let [e1, e2] = edges;
+                if (this.kind(e1) === '-' && this.kind(e2) === '-') {
+                    let n1 = e1.opposite(node);
+                    let n2 = e2.opposite(node);
+                    this.edges.delete(e1);
+                    this.edges.delete(e2);
+                    this.nodes.delete(node);
+                    this.edges.set(new ZxEdge(n1, n2), '-');
+                }
+            }
+        }
+        return this;
+    }
+
+    /**
      * @param {!string} text
      * @returns {!ZxGraph}
      */
@@ -463,7 +473,7 @@ class ZxGraph {
             let row = edge.n1.y * 4;
             let dxs = [0];
             let dys = [1, 2, 3];
-            if (edge.isHorizontal()) {
+            if (edge.n1.y === edge.n2.y) {
                 [dxs, dys] = [dys, dxs];
             }
             for (let dy of dys) {
@@ -507,7 +517,7 @@ class ZxGraph {
                 let c = line[col];
                 let n = new ZxNode(col >> 2, row >> 2);
                 if (c === ' ') {
-                    for (let e of n.adjacent_edge_positions()) {
+                    for (let e of n.unitEdges()) {
                         assertEdge(e, false, 'Nodeless edge');
                     }
                     continue;
@@ -562,11 +572,22 @@ class ZxGraph {
      * @param {!ZxNode} n
      * @returns {!Array.<!ZxEdge>}
      */
-    edges_of(n) {
+    activeEdgesOf(n) {
         if (!this.nodes.has(n)) {
             return [];
         }
-        return n.adjacent_edge_positions().filter(e => this.edges.has(e));
+        return this.sortedEdges().filter(e => e.n1.isEqualTo(n) || e.n2.isEqualTo(n));
+    }
+
+    /**
+     * @param {!ZxNode} n
+     * @returns {!Array.<!ZxEdge>}
+     */
+    activeUnitEdgesOf(n) {
+        if (!this.nodes.has(n)) {
+            return [];
+        }
+        return n.unitEdges().filter(e => this.edges.has(e));
     }
 
     /**
@@ -574,15 +595,24 @@ class ZxGraph {
      * @returns {!Array.<!ZxPort>}
      */
     activePortsOf(nodeOrEdge) {
-        return nodeOrEdge.ports().filter(p => this.edges.has(p.edge) && this.nodes.has(p.node));
+        if (nodeOrEdge instanceof ZxEdge) {
+            return nodeOrEdge.ports();
+        }
+
+        if (nodeOrEdge instanceof ZxNode) {
+            let n = nodeOrEdge;
+            return this.activeEdgesOf(n).map(e => new ZxPort(e, n));
+        }
+
+        throw new Error(`Unrecognized: ${nodeOrEdge}`);
     }
 
     /**
      * @param {!ZxNode} n
      * @returns {!Array.<!ZxNode>}
      */
-    neighbors_of(n) {
-        return this.edges_of(n).map(e => e.opposite(n));
+    activeNeighborsOf(n) {
+        return this.activeEdgesOf(n).map(e => e.opposite(n));
     }
 
     /**
@@ -691,7 +721,7 @@ class ZxGraph {
                         out_chars.push('   ');
                         in_chars.push('   ');
                     }
-                    let e = new ZxNode(col, row).up_edge_position();
+                    let e = new ZxNode(col, row).upUnitEdge();
                     let c = this.edges.get(e) || '';
                     out_chars.push(vertical_edge_reps_out[c] || c);
                     in_chars.push(vertical_edge_reps_in[c] || c);
@@ -706,7 +736,7 @@ class ZxGraph {
                 let p = new ZxNode(col, row);
 
                 if (col > 0) {
-                    let c = this.edges.get(p.left_edge_position());
+                    let c = this.edges.get(p.leftUnitEdge());
                     if (c === undefined) {
                         chars.push('   ');
                     } else {
