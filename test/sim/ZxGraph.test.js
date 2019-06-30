@@ -286,4 +286,7 @@ O---+---+---O
     `).edges.keys());
     assertThat(graph.extendedUnblockedPath(new ZxEdge(new ZxNode(0, 1), new ZxNode(1, 1)))).isEqualTo(path2);
     assertThat(graph.extendedUnblockedPath(new ZxNode(1, 1))).isEqualTo(path2);
+
+    // Ambiguous union.
+    assertThat(graph.extendedUnblockedPath(new ZxNode(2, 1), false)).isEqualTo(new GeneralSet(...path1, ...path2));
 });

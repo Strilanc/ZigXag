@@ -92,7 +92,7 @@ function removeEdgeEdit(edge) {
  * @returns {undefined|!Edit}
  */
 function maybeRemoveConnectingPathEdit(graphAtFocusTime, elementOnPath) {
-    let path = graphAtFocusTime.extendedUnblockedPath(elementOnPath);
+    let path = graphAtFocusTime.extendedUnblockedPath(elementOnPath, false);
     if (path.size === 0) {
         return undefined;
     }
@@ -126,6 +126,34 @@ function maybeRemoveConnectingPathEdit(graphAtFocusTime, elementOnPath) {
                 ctx.stroke();
             }
         });
+}
+
+/**
+ * Removes a node from the graph, along with its edges.
+ * @param {!ZxGraph} graphAtFocusTime
+ * @param {!ZxNode} node
+ * @returns {!Edit}
+ */
+function maybeContractNodeEdit(graphAtFocusTime, node) {
+    let kind = graphAtFocusTime.has(node);
+    let degree = graphAtFocusTime.activeUnitEdgesOf(node).length;
+    if (kind === undefined || kind === '+' || degree % 2 === 1) {
+        return undefined;
+    }
+
+    return new Edit(
+        () => `contract ${node} to a crossing.`,
+        graph => {
+            graph.nodes.set(node, '+');
+        },
+        (graph, ctx) => {
+            ctx.beginPath();
+            ctx.arc(...nodeToXy(node), 4, 0, 2*Math.PI);
+            ctx.fillStyle = 'red';
+            ctx.globalAlpha *= 0.5;
+            ctx.fill();
+            ctx.globalAlpha *= 2;
+        })
 }
 
 /**
@@ -166,4 +194,4 @@ function removeNodeEdit(node) {
 }
 
 
-export {Edit, removeEdgeEdit, removeNodeEdit, maybeRemoveConnectingPathEdit};
+export {Edit, removeEdgeEdit, removeNodeEdit, maybeRemoveConnectingPathEdit, maybeContractNodeEdit};

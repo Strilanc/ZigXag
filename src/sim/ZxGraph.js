@@ -883,28 +883,33 @@ class ZxGraph {
 
     /**
      * @param {!ZxEdge|!ZxNode} element
+     * @param {!boolean=true} skipAmbiguous
      * @returns {!GeneralSet.<!ZxEdge>}
      */
-    extendedUnblockedPath(element) {
+    extendedUnblockedPath(element, skipAmbiguous=true) {
         if (!this.has(element)) {
             throw new Error(`Element is not in the graph and so cannot be part of an unblocked path: ${element}`);
         }
 
+        let result = new GeneralSet();
+        let queue = [];
+
         if (element instanceof ZxNode) {
             if (this.kind(element) !== '+') {
-                return new GeneralSet();
+                return result;
             }
             let pairs = this.activeCrossingPortPairs(element);
+            if (pairs.length !== 1 && skipAmbiguous) {
+                return result;
+            }
             for (let pair of pairs) {
+                queue.push(...pair)
             }
-            if (pairs.length !== 1) {
-                return new GeneralSet();
-            }
-            element = pairs[0][0].edge;
+        } else {
+            result.add(element);
+            queue.push(...element.ports())
         }
 
-        let result = new GeneralSet(element);
-        let queue = element.ports();
         while (queue.length > 0) {
             let curPort = queue.shift();
             let nextEdge = this.unblockedOppositeOfAcross(curPort.edge, curPort.node);
