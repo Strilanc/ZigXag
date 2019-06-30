@@ -440,3 +440,10 @@ suite.test('evalZxGraph_s_state_distillation', () => {
         1, Complex.I,
     ).times(Math.sqrt(0.5)));
 });
+
+suite.test('evalZxGraph_singleton', () => {
+    let g = ZxGraph.fromDiagram('@');
+    let r = evalZxGraph(g);
+    assertThat(r.stabilizers).isEqualTo([]);
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.col(1));
+});

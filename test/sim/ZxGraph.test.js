@@ -252,8 +252,9 @@ O---O---@---@
     `);
 
     // Ambiguous or blocked.
+    assertThat(graph.extendedUnblockedPath(new ZxNode(0, 0))).isEqualTo(new GeneralSet());
+    assertThat(graph.extendedUnblockedPath(new ZxNode(1, 0))).isEqualTo(new GeneralSet());
     assertThat(graph.extendedUnblockedPath(new ZxNode(0, 1))).isEqualTo(new GeneralSet());
-    assertThat(graph.extendedUnblockedPath(new ZxNode(0, 2))).isEqualTo(new GeneralSet());
     assertThat(graph.extendedUnblockedPath(new ZxNode(2, 1))).isEqualTo(new GeneralSet());
 
     let path1 = new GeneralSet(...ZxGraph.fromDiagram(`

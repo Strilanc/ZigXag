@@ -400,3 +400,9 @@ suite.test('s_state_distillation', () => {
     assertThat(w.height()).isEqualTo(2);
     assertThat(w.cell(0, 1)).isEqualTo(w.cell(0, 0).times(Complex.I));
 });
+
+suite.test('evalZxGraph_singleton', () => {
+    let g = ZxGraph.fromDiagram('@');
+    let r = evalZxGraphGroundTruth(g);
+    assertThat(r).isApproximatelyEqualTo(Matrix.col(1));
+});

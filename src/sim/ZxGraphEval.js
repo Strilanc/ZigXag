@@ -30,7 +30,7 @@ function _nodeStabilizers(graph, node, qubit_map) {
 
     if (kind === 'O' || kind === '@') {
         if (ports.length === 0) {
-            throw new Error('ports.length === 0');
+            return [];
         }
 
         let axis = kind === '@';
@@ -355,7 +355,11 @@ function _zxEval_performSpiderMeasurements(graph, state, portToQubitMap) {
     let xMeasured = [];
     let zMeasured = [];
     for (let {node, axis} of graph.spiderMeasurementNodes()) {
-        let [head, ...tail] = graph.activePortsOf(node).map(p => portToQubitMap.get(p));
+        let qubits = graph.activePortsOf(node).map(p => portToQubitMap.get(p));
+        if (qubits.length === 0) {
+            continue;
+        }
+        let [head, ...tail] = qubits;
         state.cnot(head, tail, !axis, axis);
         (axis ? zMeasured : xMeasured).push(head);
         (axis ? xMeasured : zMeasured).push(...tail);

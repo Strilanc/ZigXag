@@ -105,7 +105,7 @@ function maybeRemoveConnectingPathEdit(graphAtFocusTime, elementOnPath) {
             }
             for (let e of path) {
                 for (let n of e.nodes()) {
-                    if (graph.has(n) && graph.activeUnitEdgesOf(n).length === 0) {
+                    if (graph.kind(n) === '+' && graph.activeUnitEdgesOf(n).length === 0) {
                         graph.nodes.delete(n);
                     }
                 }
