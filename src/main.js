@@ -26,7 +26,7 @@ import {MathPainter} from "src/MathPainter.js";
 import {Painter} from "src/Painter.js";
 import {Rect} from "src/base/Rect.js";
 import {Seq, seq} from "src/base/Seq.js";
-import {Edit, removeEdgeEdit, removeNodeEdit} from "src/edit.js";
+import {Edit, removeEdgeEdit, removeNodeEdit, maybeRemoveConnectingPathEdit} from "src/edit.js";
 
 /**
  * @returns {!string}
@@ -252,10 +252,22 @@ function drawFocus(ctx) {
     ctx.globalAlpha *= 0.5;
     let element = xyToGraphElement(mouseX, mouseY);
     if (element !== undefined) {
+        // Draw connecting path.
+        let drewPath = false;
+        if (curGraph.has(element)) {
+            let path = curGraph.extendedUnblockedPath(element);
+            for (let e of path) {
+                drewPath = true;
+                drawEdge(ctx, e, 7, 'gray', false);
+            }
+        }
+
         if (element instanceof ZxNode) {
             drawNode(ctx, element, curGraph.has(element) ? 12 : 7, 'gray', '#00000000');
         } else if (element instanceof ZxEdge) {
-            drawEdge(ctx, element, 7, 'gray', false);
+            if (!drewPath) {
+                drawEdge(ctx, element, 7, 'gray', false);
+            }
         }
     }
     ctx.globalAlpha *= 2;
@@ -498,6 +510,11 @@ function maybeContractEdgeEdit(edge) {
 function maybeDeleteElementEdit(element) {
     if (!curGraph.has(element)) {
         return undefined;
+    }
+
+    let edit = maybeRemoveConnectingPathEdit(curGraph, element);
+    if (edit !== undefined) {
+        return edit;
     }
 
     if (element instanceof ZxNode) {

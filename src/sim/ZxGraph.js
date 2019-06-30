@@ -1,4 +1,5 @@
 import {GeneralMap} from "src/base/GeneralMap.js";
+import {GeneralSet} from "src/base/GeneralSet.js";
 import {Seq, seq} from "src/base/Seq.js";
 
 
@@ -133,6 +134,9 @@ class ZxEdge {
         if (!(n2 instanceof ZxNode)) {
             throw new Error(`Not a ZxNode: ${n2}`);
         }
+        if (n1.orderVal() > n2.orderVal()) {
+            [n1, n2] = [n2, n1];
+        }
         this.n1 = n1;
         this.n2 = n2;
     }
@@ -246,6 +250,12 @@ class ZxPort {
      * @param {!ZxNode} node
      */
     constructor(edge, node) {
+        if (!(edge instanceof ZxEdge)) {
+            throw new Error(`Not a ZxNode: ${edge}`);
+        }
+        if (!(node instanceof ZxNode)) {
+            throw new Error(`Not a ZxNode: ${node}`);
+        }
         this.edge = edge;
         this.node = node;
     }
@@ -355,12 +365,14 @@ class ZxGraph {
             result.edges.set(e, k);
         }
 
-        let [nodeText, edgeText] = text.split(':');
-        if (nodeText.length > 0) {
-            nodeText.split(';').map(parseNode);
-        }
-        if (edgeText.length > 0) {
-            edgeText.split(';').map(parseEdge);
+        if (text.length > 0) {
+            let [nodeText, edgeText] = text.split(':');
+            if (nodeText.length > 0) {
+                nodeText.split(';').map(parseNode);
+            }
+            if (edgeText.length > 0) {
+                edgeText.split(';').map(parseEdge);
+            }
         }
 
         return result;
@@ -484,10 +496,14 @@ class ZxGraph {
         // Drop indentation and trailing spaces.
         let indent = Math.min(...lines.filter(e => e.trim() !== '').map(e => rtrim(e).length - e.trim().length));
         lines = lines.map(e => rtrim(e.substr(indent)));
+        if (lines.length === 0) {
+            return new ZxGraph();
+        }
 
         // Consistency checks.
         if (lines.length % 4 !== 1) {
-            throw new Error('Misaligned diagram. Number of non-empty lines must equal 1 mod 4.');
+            throw new Error(
+                `Misaligned diagram. Number of non-empty lines must equal 1 mod 4, but is ${lines.length}.`);
         }
         for (let line of lines) {
             if (line !== '' && line.length % 4 !== 1) {
@@ -619,9 +635,12 @@ class ZxGraph {
 
     /**
      * @param {!ZxNode} node
-     * @returns {!Array.<![!ZxNode, !ZxNode]>}
+     * @returns {!Array.<![!ZxPort, !ZxPort]>}
      */
     activeCrossingPortPairs(node) {
+        if (this.kind(node) !== '+') {
+            return [];
+        }
         let ports = this.activePortsOf(node);
         if (ports.length !== 2 && ports.length !== 4) {
             throw new Error('Crossing node must have even degree.');
@@ -830,6 +849,73 @@ class ZxGraph {
             lines.push(chars.join(''));
         }
         return lines.map(rtrim).join('\n')
+    }
+
+    /**
+     * @param {!ZxEdge|!ZxNode} element
+     * @param {!ZxEdge|!ZxNode} pivot
+     * @returns {undefined|!ZxEdge|!ZxNode}
+     */
+    unblockedOppositeOfAcross(element, pivot) {
+        if (pivot instanceof ZxEdge) {
+            if (!(element instanceof ZxNode)) {
+                throw new Error(`Pivot/element not opposite types: ${element}, ${pivot}`);
+            }
+            return pivot.opposite(element);
+        } else if (pivot instanceof ZxNode) {
+            if (!(element instanceof ZxEdge)) {
+                throw new Error(`Pivot/element not opposite types: ${element}, ${pivot}`);
+            }
+
+            for (let pair of this.activeCrossingPortPairs(pivot)) {
+                for (let i = 0; i < 2; i++) {
+                    if (element.isEqualTo(pair[i].edge)) {
+                        return pair[1-i].edge;
+                    }
+                }
+            }
+
+            return undefined;
+        } else {
+            throw new Error(`Unrecognized pivot type: ${pivot}`);
+        }
+    }
+
+    /**
+     * @param {!ZxEdge|!ZxNode} element
+     * @returns {!GeneralSet.<!ZxEdge>}
+     */
+    extendedUnblockedPath(element) {
+        if (!this.has(element)) {
+            throw new Error(`Element is not in the graph and so cannot be part of an unblocked path: ${element}`);
+        }
+
+        if (element instanceof ZxNode) {
+            if (this.kind(element) !== '+') {
+                return new GeneralSet();
+            }
+            let pairs = this.activeCrossingPortPairs(element);
+            for (let pair of pairs) {
+            }
+            if (pairs.length !== 1) {
+                return new GeneralSet();
+            }
+            element = pairs[0][0].edge;
+        }
+
+        let result = new GeneralSet(element);
+        let queue = element.ports();
+        while (queue.length > 0) {
+            let curPort = queue.shift();
+            let nextEdge = this.unblockedOppositeOfAcross(curPort.edge, curPort.node);
+            if (nextEdge === undefined || result.has(nextEdge)) {
+                continue;
+            }
+            result.add(nextEdge);
+            let nextNode = nextEdge.opposite(curPort.node);
+            queue.push(new ZxPort(nextEdge, nextNode));
+        }
+        return result;
     }
 }
 

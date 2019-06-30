@@ -86,6 +86,49 @@ function removeEdgeEdit(edge) {
 }
 
 /**
+ * Removes an edge from the graph, along with its leaf nodes.
+ * @param {!ZxGraph} graphAtFocusTime
+ * @param {!ZxEdge} elementOnPath
+ * @returns {undefined|!Edit}
+ */
+function maybeRemoveConnectingPathEdit(graphAtFocusTime, elementOnPath) {
+    let path = graphAtFocusTime.extendedUnblockedPath(elementOnPath);
+    if (path.size === 0) {
+        return undefined;
+    }
+
+    return new Edit(
+        () => `delete connecting path touching ${elementOnPath}`,
+        graph => {
+            for (let e of path) {
+                graph.edges.delete(e);
+            }
+            for (let e of path) {
+                for (let n of e.nodes()) {
+                    if (graph.has(n) && graph.activeUnitEdgesOf(n).length === 0) {
+                        graph.nodes.delete(n);
+                    }
+                }
+            }
+        },
+        (graph, ctx) => {
+            for (let edge of path) {
+                let [n1, n2] = edge.nodes();
+                let [x1, y1] = nodeToXy(n1);
+                let [x2, y2] = nodeToXy(n2);
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.globalAlpha *= 0.5;
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 3;
+                ctx.globalAlpha *= 2;
+                ctx.stroke();
+            }
+        });
+}
+
+/**
  * Removes a node from the graph, along with its edges.
  * @param {!ZxNode} node
  * @returns {!Edit}
@@ -123,4 +166,4 @@ function removeNodeEdit(node) {
 }
 
 
-export {Edit, removeEdgeEdit, removeNodeEdit};
+export {Edit, removeEdgeEdit, removeNodeEdit, maybeRemoveConnectingPathEdit};

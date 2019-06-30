@@ -15,6 +15,7 @@
 import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
 import {ZxGraph, ZxNode, ZxEdge, ZxPort} from "src/sim/ZxGraph.js"
 import {GeneralMap} from "src/base/GeneralMap.js"
+import {GeneralSet} from "src/base/GeneralSet.js"
 
 let suite = new Suite("ZxGraph");
 
@@ -177,4 +178,111 @@ O-------O-------------------O-----------O-------?
 
 suite.test("emptyGraph", () => {
     assertThat(ZxGraph.fromDiagram('')).isEqualTo(new ZxGraph());
+    assertThat(ZxGraph.deserialize(':')).isEqualTo(new ZxGraph());
+    assertThat(ZxGraph.deserialize('')).isEqualTo(new ZxGraph());
+});
+
+suite.test("opposite", () => {
+    let graph = ZxGraph.fromDiagram(`
+@---@---+
+        |
+        |
+        |
+O---+---+---O
+        |
+        |
+        |
+        +
+        |
+        |
+        |
+O---O---@---@
+    `);
+
+    let z = new ZxNode(0, 0);
+    let a = new ZxNode(1, 0);
+    let b = new ZxNode(2, 0);
+    let c = new ZxNode(2, 1);
+    let d = new ZxNode(2, 2);
+    let e = new ZxNode(1, 1);
+    let f = new ZxNode(3, 1);
+    let za = new ZxEdge(z, a);
+    let ab = new ZxEdge(a, b);
+    let bc = new ZxEdge(b, c);
+    let cd = new ZxEdge(c, d);
+    let ce = new ZxEdge(c, e);
+    let cf = new ZxEdge(c, f);
+
+    // Across an edge.
+    assertThat(graph.unblockedOppositeOfAcross(b, ab)).isEqualTo(a);
+    assertThat(graph.unblockedOppositeOfAcross(a, ab)).isEqualTo(b);
+    assertThat(graph.unblockedOppositeOfAcross(b, bc)).isEqualTo(c);
+    assertThat(graph.unblockedOppositeOfAcross(c, bc)).isEqualTo(b);
+
+    // Around the corner.
+    assertThat(graph.unblockedOppositeOfAcross(ab, b)).isEqualTo(bc);
+    assertThat(graph.unblockedOppositeOfAcross(bc, b)).isEqualTo(ab);
+
+    // Through the crossing.
+    assertThat(graph.unblockedOppositeOfAcross(bc, c)).isEqualTo(cd);
+    assertThat(graph.unblockedOppositeOfAcross(cd, c)).isEqualTo(bc);
+    assertThat(graph.unblockedOppositeOfAcross(ce, c)).isEqualTo(cf);
+    assertThat(graph.unblockedOppositeOfAcross(cf, c)).isEqualTo(ce);
+
+    // Blocked by the node along a line.
+    assertThat(graph.unblockedOppositeOfAcross(za, a)).isEqualTo(undefined);
+    assertThat(graph.unblockedOppositeOfAcross(ab, a)).isEqualTo(undefined);
+});
+
+suite.test("extendedUnblockedPath", () => {
+    let graph = ZxGraph.fromDiagram(`
+@---@---+
+        |
+        |
+        |
+O---+---+---O
+        |
+        |
+        |
+        +
+        |
+        |
+        |
+O---O---@---@
+    `);
+
+    // Ambiguous or blocked.
+    assertThat(graph.extendedUnblockedPath(new ZxNode(0, 1))).isEqualTo(new GeneralSet());
+    assertThat(graph.extendedUnblockedPath(new ZxNode(0, 2))).isEqualTo(new GeneralSet());
+    assertThat(graph.extendedUnblockedPath(new ZxNode(2, 1))).isEqualTo(new GeneralSet());
+
+    let path1 = new GeneralSet(...ZxGraph.fromDiagram(`
+@   @---+
+        |
+        |
+        |
+        +
+        |
+        |
+        |
+        +
+        |
+        |
+        |
+        @
+    `).edges.keys());
+    assertThat(graph.extendedUnblockedPath(new ZxEdge(new ZxNode(1, 0), new ZxNode(2, 0)))).isEqualTo(path1);
+    assertThat(graph.extendedUnblockedPath(new ZxEdge(new ZxNode(2, 1), new ZxNode(2, 0)))).isEqualTo(path1);
+    assertThat(graph.extendedUnblockedPath(new ZxNode(2, 0))).isEqualTo(path1);
+    assertThat(graph.extendedUnblockedPath(new ZxNode(2, 2))).isEqualTo(path1);
+
+    let path2 = new GeneralSet(...ZxGraph.fromDiagram(`
+@
+
+
+
+O---+---+---O
+    `).edges.keys());
+    assertThat(graph.extendedUnblockedPath(new ZxEdge(new ZxNode(0, 1), new ZxNode(1, 1)))).isEqualTo(path2);
+    assertThat(graph.extendedUnblockedPath(new ZxNode(1, 1))).isEqualTo(path2);
 });
