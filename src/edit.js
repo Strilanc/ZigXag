@@ -176,7 +176,11 @@ function maybeContractNodeEdit(graphAtFocusTime, node) {
     return new Edit(
         () => `contract ${node} to a crossing.`,
         graph => {
-            graph.nodes.set(node, '+');
+            if (degree === 0) {
+                graph.nodes.delete(node);
+            } else {
+                graph.nodes.set(node, '+');
+            }
         },
         (graph, ctx) => {
             ctx.beginPath();
