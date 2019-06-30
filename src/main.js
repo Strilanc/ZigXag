@@ -31,7 +31,8 @@ import {
     removeEdgeEdit,
     removeNodeEdit,
     maybeRemoveConnectingPathEdit,
-    maybeContractNodeEdit
+    maybeContractNodeEdit,
+    maybeRemoveEdgeModifier,
 } from "src/edit.js";
 
 /**
@@ -206,15 +207,29 @@ function drawEdge(ctx, edge, thickness=1, color='black', showKind=true) {
             ctx.strokeRect(...r)
         } else if (kind === 'z' || kind === 'x' || kind === 's' || kind === 'f') {
             let b = kind === 'x' || kind === 'f';
+            let b2 = kind === 's' || kind === 'f';
             ctx.fillStyle = b ? 'white' : 'black';
             ctx.strokeStyle = 'black';
             ctx.beginPath();
             ctx.arc(cx, cy, 7, 0, 2*Math.PI);
             ctx.stroke();
             ctx.fill();
-            ctx.fillStyle = b ? 'black' : 'white';
-            ctx.font = '12px monospace';
-            ctx.fillText(kind, cx-3, cy+3);
+
+            if (b2) {
+                ctx.fillStyle = b ? 'black' : 'white';
+                ctx.font = '10px monospace';
+                ctx.fillText('π', cx-3, cy-1);
+                ctx.fillText('2', cx-3, cy+7);
+                ctx.beginPath();
+                ctx.moveTo(cx-4, cy);
+                ctx.lineTo(cx+4, cy);
+                ctx.strokeStyle = ctx.fillStyle;
+                ctx.stroke();
+            } else {
+                ctx.fillStyle = b ? 'black' : 'white';
+                ctx.font = '12px monospace';
+                ctx.fillText('π', cx-3, cy+3);
+            }
         } else if (kind !== '-') {
             ctx.fillStyle = 'red';
             ctx.strokeStyle = 'black';
@@ -518,15 +533,16 @@ function maybeDeleteElementEdit(element) {
         return undefined;
     }
 
-    let edit = maybeRemoveConnectingPathEdit(curGraph, element);
-    if (edit !== undefined) {
-        return edit;
-    }
-
     if (element instanceof ZxNode) {
-        return maybeContractNodeEdit(curGraph, element) || maybeRetractNodeEdit(element) || removeNodeEdit(element);
+        return (maybeRemoveConnectingPathEdit(curGraph, element) ||
+            maybeContractNodeEdit(curGraph, element) ||
+            maybeRetractNodeEdit(element) ||
+            removeNodeEdit(element));
     } else if (element instanceof ZxEdge) {
-        return maybeContractEdgeEdit(element) || removeEdgeEdit(element);
+        return (maybeRemoveEdgeModifier(curGraph, element) ||
+            maybeRemoveConnectingPathEdit(curGraph, element) ||
+            maybeContractEdgeEdit(element) ||
+            removeEdgeEdit(element));
     }
 }
 
