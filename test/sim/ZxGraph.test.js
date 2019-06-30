@@ -129,7 +129,8 @@ suite.test('fromDiagram', () => {
 |
 |
 @-X-@
-    `)).isEqualTo(new ZxGraph(new GeneralMap(
+    `)).isEqualTo(new ZxGraph(
+        new GeneralMap(
             [new ZxNode(0, 0), '@'],
             [new ZxNode(1, 0), '@'],
             [new ZxNode(0, 1), '@'],
@@ -149,4 +150,31 @@ suite.test('fromDiagram', () => {
 |
 @---@
     `)).isNotEqualTo(undefined);
+});
+
+suite.test("diagramCrossingCharacters", () => {
+    let diagramText = `
+O-f-----------------O-------O-----------O-------O
+                    |       |           |
+                    |       |           |
+                    |       |           |
+O-f-O-----------O---+-------+---O-------+-------O
+    |           |   |       |   |       |
+    |           |   |       |   |       |
+    |           |   |       |   |       |
+    @---@-f-O   @---@-f-O   @---@-f-O   @---@-f-O
+    |   |       |           |           |   |
+    |   |       |           |           |   |
+    |   |       |           |           |   |
+O-f-O---+-------O-----------+-----------+---O---O
+        |                   |           |
+        |                   |           |
+        |                   |           |
+O-------O-------------------O-----------O-------?
+    `;
+    assertThat(ZxGraph.fromDiagram(diagramText).toString().trim()).isEqualTo(diagramText.trim())
+});
+
+suite.test("emptyGraph", () => {
+    assertThat(ZxGraph.fromDiagram('')).isEqualTo(new ZxGraph());
 });

@@ -354,3 +354,49 @@ suite.test('evalZxGraphGroundTruth_disjoint', () => {
         [0, 0, 1, 0],
     ]))
 });
+
+suite.test("crossing", () => {
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !---+
+            |
+            |
+            |
+        !---+---?
+            |
+            |
+            |
+            +---?
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0, 0, 0],
+        [0, 0, 1, 0],
+        [0, 1, 0, 0],
+        [0, 0, 0, 1],
+    ]));
+});
+
+suite.test('s_state_distillation', () => {
+    let g = ZxGraph.fromDiagram(`
+        O-f-----------------O-------O-----------O-------O
+                            |       |           |
+                            |       |           |
+                            |       |           |
+        O-f-O-----------O---+-------+---O-------+-------O
+            |           |   |       |   |       |
+            |           |   |       |   |       |
+            |           |   |       |   |       |
+            @---@-f-O   @---@-f-O   @---@-f-O   @---@-f-O
+            |   |       |           |           |   |
+            |   |       |           |           |   |
+            |   |       |           |           |   |
+        O-f-O---+-------O-----------+-----------+---O---O
+                |                   |           |
+                |                   |           |
+                |                   |           |
+        O-------O-------------------O-----------O-------?
+    `);
+
+    let w = evalZxGraphGroundTruth(g);
+    assertThat(w.width()).isEqualTo(1);
+    assertThat(w.height()).isEqualTo(2);
+    assertThat(w.cell(0, 1)).isEqualTo(w.cell(0, 0).times(Complex.I));
+});

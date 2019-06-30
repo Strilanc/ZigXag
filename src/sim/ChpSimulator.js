@@ -178,6 +178,22 @@ class ChpSimulator extends SimulatorSpec {
         return id;
     }
 
+    /**
+     * Measures a qubit.
+     * @param {!int} q The handle of the qubit to measure.
+     * @param {!number|undefined=} bias When a measurement result is non-deterministic, this determines the probability of True.
+     * @returns {!boolean} The measurement result.
+     */
+    measure(q, bias=undefined) {
+        if (bias === undefined) {
+            bias = 0.5;
+        }
+        let randomResult = Math.random() < bias;
+        let a = this._slotFor(q);
+        let m = measure(this._state, a, 0, randomResult);
+        return (m & 1) !== 0;
+    }
+
     free(q) {
         // Decohere the qubit.
         if (this.measure(q)) {
@@ -220,7 +236,7 @@ class ChpSimulator extends SimulatorSpec {
      */
     _slotFor(q) {
         if (!this._qubitToSlotMap.has(q)) {
-            throw new DetailedError('Invalid qubit handle.', {q});
+            throw new Error(`Invalid qubit handle: ${q}`);
         }
         return this._qubitToSlotMap.get(q);
     }

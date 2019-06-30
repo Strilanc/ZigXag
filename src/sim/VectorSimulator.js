@@ -89,7 +89,7 @@ class VectorSimulator extends SimulatorSpec {
      */
     _slotFor(q) {
         if (!this._qubitToSlotMap.has(q)) {
-            throw new DetailedError('Invalid qubit handle.', {q});
+            throw new Error(`Invalid qubit handle: ${q}`);
         }
         return this._qubitToSlotMap.get(q);
     }

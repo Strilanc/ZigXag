@@ -382,3 +382,61 @@ suite.test("evalZxGraph_xPhaseGate", () => {
         [Complex.I.neg(), 1],
     ]).times(0.5));
 });
+
+suite.test("evalZxGraph_crossing", () => {
+    let g = ZxGraph.fromDiagram(`
+        !---+
+            |
+            |
+            |
+        !---+---?
+            |
+            |
+            |
+            +---?
+    `);
+
+    let r = evalZxGraph(g);
+    assertThat(r.stabilizers).isEqualTo([
+        "+X..X",
+        "+Z..Z",
+        "+.XX.",
+        "+.ZZ.",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.square(
+        0.5, 0, 0, 0,
+        0, 0, 0.5, 0,
+        0, 0.5, 0, 0,
+        0, 0, 0, 0.5,
+    ));
+});
+
+suite.test('evalZxGraph_s_state_distillation', () => {
+    let g = ZxGraph.fromDiagram(`
+        O-f-----------------O-------O-----------O-------O
+                            |       |           |
+                            |       |           |
+                            |       |           |
+        O-f-O-----------O---+-------+---O-------+-------O
+            |           |   |       |   |       |
+            |           |   |       |   |       |
+            |           |   |       |   |       |
+            @---@-f-O   @---@-f-O   @---@-f-O   @---@-f-O
+            |   |       |           |           |   |
+            |   |       |           |           |   |
+            |   |       |           |           |   |
+        O-f-O---+-------O-----------+-----------+---O---O
+                |                   |           |
+                |                   |           |
+                |                   |           |
+        O-------O-------------------O-----------O-------?
+    `);
+
+    let r = evalZxGraph(g);
+    assertThat(r.stabilizers).isEqualTo([
+        "+Y",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.col(
+        1, Complex.I,
+    ).times(Math.sqrt(0.5)));
+});

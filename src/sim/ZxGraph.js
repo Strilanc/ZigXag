@@ -53,6 +53,34 @@ class ZxNode {
     }
 
     /**
+     * @returns {!ZxPort}
+     */
+    rightPort() {
+        return new ZxPort(this.rightUnitEdge(), this);
+    }
+
+    /**
+     * @returns {!ZxPort}
+     */
+    leftPort() {
+        return new ZxPort(this.leftUnitEdge(), this);
+    }
+
+    /**
+     * @returns {!ZxPort}
+     */
+    downPort() {
+        return new ZxPort(this.downUnitEdge(), this);
+    }
+
+    /**
+     * @returns {!ZxPort}
+     */
+    upPort() {
+        return new ZxPort(this.upUnitEdge(), this);
+    }
+
+    /**
      * @returns {!ZxEdge}
      */
     upUnitEdge() {
@@ -328,8 +356,12 @@ class ZxGraph {
         }
 
         let [nodeText, edgeText] = text.split(':');
-        nodeText.split(';').map(parseNode);
-        edgeText.split(';').map(parseEdge);
+        if (nodeText.length > 0) {
+            nodeText.split(';').map(parseNode);
+        }
+        if (edgeText.length > 0) {
+            edgeText.split(';').map(parseEdge);
+        }
 
         return result;
     }
@@ -373,6 +405,20 @@ class ZxGraph {
                 result.push({node, axis: true});
             } else if (kind === '@') {
                 result.push({node, axis: false});
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @returns {!Array.<!ZxNode>}
+     */
+    crossingNodes() {
+        let result = [];
+        for (let node of this.sortedNodes()) {
+            let kind = this.nodes.get(node);
+            if (kind === '+') {
+                result.push(node);
             }
         }
         return result;
@@ -508,6 +554,9 @@ class ZxGraph {
             'O': 'O',
             '!': 'in',
             '?': 'out',
+            '+': '+',
+            '-': '+',
+            '|': '+',
         };
 
         // Nodes.
@@ -568,6 +617,24 @@ class ZxGraph {
         return graph;
     }
 
+    /**
+     * @param {!ZxNode} node
+     * @returns {!Array.<![!ZxNode, !ZxNode]>}
+     */
+    activeCrossingPortPairs(node) {
+        let ports = this.activePortsOf(node);
+        if (ports.length !== 2 && ports.length !== 4) {
+            throw new Error('Crossing node must have even degree.');
+        }
+        let pairs = [];
+        if (ports.length === 2) {
+            pairs.push(ports);
+        } else {
+            pairs.push([node.leftPort(), node.rightPort()]);
+            pairs.push([node.upPort(), node.downPort()]);
+        }
+        return pairs;
+    }
     /**
      * @param {!ZxNode} n
      * @returns {!Array.<!ZxEdge>}
@@ -745,6 +812,19 @@ class ZxGraph {
 
                 }
                 let c = this.nodes.get(p) || '';
+                if (c === '+') {
+                    // Specialized crossing characters.
+                    if (this.activeEdgesOf(p).length === 2) {
+                        if (this.has(p.upUnitEdge()) && this.has(p.downUnitEdge())) {
+                            chars.push('|');
+                            continue;
+                        }
+                        if (this.has(p.leftUnitEdge()) && this.has(p.rightUnitEdge())) {
+                            chars.push('-');
+                            continue;
+                        }
+                    }
+                }
                 chars.push(node_reps[c] || c);
             }
             lines.push(chars.join(''));

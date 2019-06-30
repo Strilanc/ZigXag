@@ -44,6 +44,18 @@ function _nodeStabilizers(graph, node, qubit_map) {
         return result;
     }
 
+    if (kind === '+') {
+        let result = [];
+        for (let portPair of graph.activeCrossingPortPairs(node)) {
+            let qs = portPair.map(p => qubit_map.get(p));
+            result.push(
+                PauliProduct.fromSparseByType(qubit_map.size, {X: qs}),
+                PauliProduct.fromSparseByType(qubit_map.size, {Z: qs}));
+        }
+        return result;
+    }
+
+
     throw new Error(`Unrecognized node kind ${kind}.`);
 }
 
@@ -134,7 +146,7 @@ function stabilizerTableOfGraph(graph, qubit_map) {
 function graphStabilizersToMeasurementFixupActions(stabilizers, measuredAxes, numIn, numOut) {
     stabilizers = PauliProduct.gaussianEliminate(stabilizers);
 
-    let m = stabilizers[0].paulis.length;
+    let m = stabilizers.length === 0 ? 0 : stabilizers[0].paulis.length;
     let parityNodeCount = m - numIn - numOut;
     let out = /** @type {!GeneralMap<!QubitAxis, !Array.<!int>>} */ new GeneralMap();
     for (let i = parityNodeCount; i < m; i++) {
@@ -208,7 +220,8 @@ function generatePortToQubitMap(graph) {
     let inputNodes = graph.inputNodes();
     let outputNodes = graph.outputNodes();
     let measurementNodes = graph.spiderMeasurementNodes();
-    if (inputNodes.length + outputNodes.length + measurementNodes.length !== graph.nodes.size) {
+    let crossingNodes = graph.crossingNodes();
+    if (inputNodes.length + outputNodes.length + measurementNodes.length + crossingNodes.length !== graph.nodes.size) {
         throw new Error('Unrecognized node(s).');
     }
 
@@ -216,7 +229,12 @@ function generatePortToQubitMap(graph) {
     // Earlier qubits are isolated by Gaussian eliminations, expressing them in terms of later qubits.
     // Therefore it is important that qubits for nodes we want to eliminate to have qubits that come first.
 
-    // Measurement nodes go first.
+    // Internal nodes go first.
+    for (let node of crossingNodes) {
+        for (let p of graph.activePortsOf(node)) {
+            portToQubitMap.set(p, portToQubitMap.size);
+        }
+    }
     for (let {node} of measurementNodes) {
         for (let p of graph.activePortsOf(node)) {
             portToQubitMap.set(p, portToQubitMap.size);
@@ -341,6 +359,16 @@ function _zxEval_performSpiderMeasurements(graph, state, portToQubitMap) {
         state.cnot(head, tail, !axis, axis);
         (axis ? zMeasured : xMeasured).push(head);
         (axis ? xMeasured : zMeasured).push(...tail);
+    }
+
+    // Perform Bell measurements on crossing lines.
+    for (let node of graph.crossingNodes()) {
+        for (let pair of graph.activeCrossingPortPairs(node)) {
+            let [a, b] = pair.map(p => portToQubitMap.get(p));
+            state.cnot(a, b);
+            xMeasured.push(a);
+            zMeasured.push(b);
+        }
     }
 
     // Perform single-qubit operations and measure.

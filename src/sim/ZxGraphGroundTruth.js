@@ -287,6 +287,14 @@ function evalZxGraphGroundTruth(graph) {
             data = zBasisEqualityMatrix(0, degree);
         } else if (kind === 'O') {
             data = xBasisEqualityMatrix(0, degree);
+        } else if (kind === '+') {
+            for (let pair of graph.activeCrossingPortPairs(node)) {
+                let tensor = new Tensor(zBasisEqualityMatrix(0, 2), pair);
+                for (let port of pair) {
+                    portToTensorMap.set(port, tensor);
+                }
+            }
+            continue;
         } else {
             throw new Error(`Unrecognized node kind ${kind}`);
         }

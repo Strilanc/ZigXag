@@ -290,7 +290,7 @@ function drawPossibleEdit(ctx) {
  * @param {!CanvasRenderingContext2D} ctx
  */
 function drawResults(ctx) {
-    let results = evalZxGraph(curGraph.copy().inlineSimplify());
+    let results = evalZxGraph(curGraph);
     let numIn = curGraph.inputNodes().length;
     function descStabilizer(s) {
         let r = s.toString();
@@ -317,13 +317,15 @@ function drawGraph(ctx) {
         drawEdge(ctx, edge);
     }
     for (let node of curGraph.nodes.keys()) {
-        drawNode(ctx, node);
+        if (curGraph.kind(node) !== '+') {
+            drawNode(ctx, node);
+        }
     }
 }
 
 function draw() {
     canvas.width = canvasDiv.clientWidth;
-    canvas.height = 300;
+    canvas.height = 600;
 
     let ctx = /** @type {!CanvasRenderingContext2D} */ canvas.getContext('2d');
     ctx.clearRect(0, 0, 10000, 10000);
@@ -515,12 +517,16 @@ function changeNodeKindEdit(node) {
     return new Edit(
         () => `cycle ${node}`,
         graph => {
-            let cycle = ['O', '@', 'in', 'out'];
+            let cycle = ['O', '@', '+', 'in', 'out'];
             let kind = graph.nodes.get(node);
             let i = cycle.indexOf(kind);
             i++;
             i %= cycle.length;
-            if (i >= 2 && graph.activeUnitEdgesOf(node).length !== 1) {
+            let degree = graph.activeUnitEdgesOf(node).length;
+            if (i === 2 && degree !== 2 && degree !== 4) {
+                i++;
+            }
+            if (i >= 3 && degree !== 1) {
                 i = 0;
             }
             graph.nodes.set(node, cycle[i]);
