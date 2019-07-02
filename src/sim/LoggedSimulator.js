@@ -28,23 +28,28 @@ class LoggedSimulation {
 
     /**
      * Classically controlled Pauli operations.
-     * @param {!int|!Array.<!int>} parityControls
-     * @param {undefined|!boolean|!Array.<undefined|!boolean>} parityMeasurementResults
+     * @param {!Array.<!int>} parityControls
+     * @param {!Set.<!int>} activeMeasurements
      * @param {!QubitAxis} pauli
      */
-    feedback(parityControls, parityMeasurementResults, pauli) {
+    feedback(parityControls, activeMeasurements, pauli) {
         if (parityControls.length === 0) {
             return;
         }
-        this._sim_feedback(parityControls, parityMeasurementResults, pauli);
+        this._sim_feedback(parityControls, activeMeasurements, pauli);
         this.qasm_logger.feedback(parityControls, pauli);
         this.quirk_logger.cnot(pauli.qubit, parityControls, !pauli.axis, true);
     }
 
-    _sim_feedback(parityControls, parityMeasurementResults, pauli) {
+    /**
+     * @param {!Array.<!int>} parityControls
+     * @param {!Set.<!int>} activeMeasurements
+     * @param {!QubitAxis} pauli
+     */
+    _sim_feedback(parityControls, activeMeasurements, pauli) {
         let parity = 0;
         for (let c of parityControls) {
-            if (parityMeasurementResults[c]) {
+            if (activeMeasurements.has(c)) {
                 parity ^= 1;
             }
         }

@@ -401,8 +401,25 @@ suite.test('s_state_distillation', () => {
     assertThat(w.cell(0, 1)).isEqualTo(w.cell(0, 0).times(Complex.I));
 });
 
-suite.test('evalZxGraph_singleton', () => {
+suite.test('singleton', () => {
     let g = ZxGraph.fromDiagram('@');
     let r = evalZxGraphGroundTruth(g);
     assertThat(r).isApproximatelyEqualTo(Matrix.col(1));
+});
+
+suite.test('observedFailure1', () => {
+    let g = ZxGraph.fromDiagram(`
+            !
+            |
+            |
+            |
+        ?---O---@
+            |
+            |
+            |
+        @---@
+    `);
+
+    let r = evalZxGraphGroundTruth(g);
+    assertThat(r).isApproximatelyEqualTo(Matrix.square(1, 1, 1, 1));
 });

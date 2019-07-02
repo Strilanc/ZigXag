@@ -10,6 +10,51 @@ import {PauliProduct} from "src/sim/PauliProduct.js"
 let suite = new Suite("ZxGraphEval");
 
 
+suite.test('evalZxGraph_identity', () => {
+    let identities = [
+        '!---?',
+        '!---+---?',
+        '!---@---?',
+        '!---O---?',
+        '!---@---O---+---?',
+        `
+            !---@   ?
+                |   |
+                |   |
+                |   |
+                +---O
+       `,
+        `
+            !---@   ?
+                |   |
+                |   |
+                |   |
+                O---O---O
+       `,
+        `
+            ?---@   !
+                |   |
+                |   |
+                |   |
+                O---O---O
+                |   |
+                |   |
+                |   |
+                O---O
+       `,
+    ];
+    for (let identity of identities) {
+        let g = ZxGraph.fromDiagram(identity);
+
+        let r = evalZxGraph(g);
+        assertThat(r.stabilizers).isEqualTo([
+            "+XX",
+            "+ZZ",
+        ].map(PauliProduct.fromString));
+        assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.identity(2).times(Math.sqrt(0.5)));
+    }
+});
+
 suite.test("evalZxGraph_cnot", () => {
     let g = ZxGraph.fromDiagram(`
         !---@---?
@@ -446,4 +491,28 @@ suite.test('evalZxGraph_singleton', () => {
     let r = evalZxGraph(g);
     assertThat(r.stabilizers).isEqualTo([]);
     assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.col(1));
+});
+
+suite.test('evalZxGraph_observedFailure1', () => {
+    let g = ZxGraph.fromDiagram(`
+            !
+            |
+            |
+            |
+        ?---O---@
+            |
+            |
+            |
+        @---@
+    `);
+
+    let r = evalZxGraph(g);
+    assertThat(r.stabilizers).isEqualTo([
+        "+X.",
+        "+.X",
+    ].map(PauliProduct.fromString));
+    assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.square(
+        0.5, 0.5,
+        0.5, 0.5,
+    ));
 });

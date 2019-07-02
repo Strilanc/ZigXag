@@ -135,77 +135,72 @@ function stabilizerTableOfGraph(graph, qubit_map) {
     return stabilizers;
 }
 
+/**
+ * @param {!Array.<!PauliProduct>} stabilizers
+ * @param {!int} numInOut
+ * @returns {!GeneralMap<!QubitAxis, !Array.<!QubitAxis>>}
+ * @private
+ */
+function _controlMap(stabilizers, numInOut) {
+    let reduced = PauliProduct.gaussianEliminate(stabilizers);
+
+    let width = reduced.length === 0 ? 0 : reduced[0].paulis.length;
+    let spiderRegionSize = width - numInOut;
+    let controlMap = /** @type {!GeneralMap<!QubitAxis, !Array.<!QubitAxis>>} */ new GeneralMap();
+
+    for (let stabilizer of reduced) {
+        let spiderRegion = stabilizer.slice(0, spiderRegionSize);
+        if (spiderRegion.xzBitWeight() === 0) {
+            continue;
+        }
+
+        // Note how the spider region axis interacts with the in/out region.
+        let [head, ...implied] = spiderRegion.activeQubitAxes();
+        if (controlMap.has(head)) {
+            throw new Error('Redundant control.')
+        }
+        for (let t of implied) {
+            if (controlMap.get(t, undefined) !== undefined) {
+                throw new Error('Inconsistent implied control.')
+            }
+            controlMap.set(t, undefined);
+        }
+        let updates = stabilizer.activeQubitAxes().filter(e => e.qubit >= spiderRegionSize);
+        controlMap.set(head, updates);
+    }
+
+    return controlMap;
+}
 
 /**
  * @param {!Array.<!PauliProduct>} stabilizers
- * @param {!PauliProduct} measuredAxes
+ * @param {!Array.<StabilizingMeasurement>} spiderMeasurements
  * @param {!int} numIn
  * @param {!int} numOut
- * @returns {!GeneralMap<!QubitAxis, !Array.<!int>>} Remaining qubit axis to measured parity control qubit.
+ * @returns {!GeneralMap<!QubitAxis, !Array.<!int>>} Map from in/out axis to measurement qubits that flip it.
  */
-function graphStabilizersToMeasurementFixupActions(stabilizers, measuredAxes, numIn, numOut) {
-    stabilizers = PauliProduct.gaussianEliminate(stabilizers);
-
-    let m = stabilizers.length === 0 ? 0 : stabilizers[0].paulis.length;
-    let parityNodeCount = m - numIn - numOut;
-    let out = /** @type {!GeneralMap<!QubitAxis, !Array.<!int>>} */ new GeneralMap();
-    for (let i = parityNodeCount; i < m; i++) {
-        out.set(new QubitAxis(i, false), []);
-        out.set(new QubitAxis(i, true), []);
+function graphStabilizersToMeasurementFixupActions(stabilizers, spiderMeasurements, numIn, numOut) {
+    let controlMap = _controlMap(stabilizers, numIn + numOut);
+    let width = stabilizers.length === 0 ? 0 : stabilizers[0].paulis.length;
+    let spiderRegionSize = width - numIn - numOut;
+    let out = new GeneralMap();
+    for (let i = spiderRegionSize; i < width; i++) {
+        out.set(QubitAxis.x(i), []);
+        out.set(QubitAxis.z(i), []);
     }
 
-    for (let stabilizer of stabilizers) {
-        let weight = stabilizer.xzBitWeight();
-        let outputWeight = stabilizer.slice(m - numOut).xzBitWeight();
-        let parityRegion = stabilizer.slice(0, parityNodeCount);
-        let parityWeight = parityRegion.xzBitWeight();
-
-        // Does it involve measurements we didn't even do?
-        let parityRegionAbs = parityRegion.abs();
-        if (!parityRegionAbs.bitwiseAnd(measuredAxes).isEqualTo(parityRegionAbs)) {
-            // Can't care.
-            continue;
+    for (let spider of spiderMeasurements) {
+        if (!controlMap.has(spider.currentAxis)) {
+            throw new Error('Uncontrollable measurement.');
         }
-
-        // Is it a redundant row?
-        if (weight === 0) {
-            // Don't care.
-            continue;
-        }
-
-        // Is it an assertion about what measurement results are possible?
-        if (parityWeight === weight) {
-            // Don't care.
-            continue;
-        }
-
-        // Is it a derived input/output relationship?
-        if (parityWeight === 0) {
-            // Don't care.
-            continue;
-        }
-
-        // Is it a measurement?
-        if (outputWeight === weight) {
-            console.warn("SKIPPING MEASUREMENT");
-            continue;
-        }
-
-        // Is it parity interaction between the measurements and the output?
-        if (parityWeight > 0) {
-            // NOTE: When multiple measurement bits are in the stabilizer, it seems like any one of the measurement
-            // bits can be used. It seems to indicate those two bits will be set (or not set) simultaneously. Which is
-            // surprising... why is it not that *all* of them have to be used?
-            let m = parityRegion.firstActiveQubitAxis();
-            for (let flip of stabilizer.slice(parityNodeCount).activeQubitAxes()) {
-                flip.qubit += parityNodeCount;
-                out.get(flip).push(m.qubit);
+        let flips = controlMap.get(spider.currentAxis);
+        if (flips !== undefined) {
+            for (let flip of flips) {
+                out.get(flip).push(spider.currentAxis.qubit);
             }
-            continue;
         }
-
-        throw new Error(`Unhandled graphStabilizersToMeasurementFixupActions case: ${stabilizer}`);
     }
+
     return out;
 }
 
@@ -265,18 +260,18 @@ function generatePortToQubitMap(graph) {
 /**
  * @param {!LoggedSimulation} state
  * @param {!Array.<!PauliProduct>} graphStabilizers
- * @param {!PauliProduct} basis
- * @param {!Array.<!boolean>} results
+ * @param {!Array.<!StabilizingMeasurement>} spiderMeasurements
  * @param {!int} numIn
  * @param {!int} numOut
  */
-function _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, numIn, numOut) {
+function _zxEval_updatePauliFrame(state, graphStabilizers, spiderMeasurements, numIn, numOut) {
     state.qasm_logger.lines.push('');
     state.qasm_logger.lines.push('// Adjust Pauli frame based on measurements.');
 
-    let actions = graphStabilizersToMeasurementFixupActions(graphStabilizers, basis, numIn, numOut);
+    let actions = graphStabilizersToMeasurementFixupActions(graphStabilizers, spiderMeasurements, numIn, numOut);
+    let activeMeasurements = new Set(spiderMeasurements.filter(e => e.result).map(e => e.currentAxis.qubit));
     for (let [target, parityControls] of actions.entries()) {
-        state.feedback(parityControls, results, target);
+        state.feedback(parityControls, activeMeasurements, target);
     }
 }
 
@@ -295,12 +290,49 @@ function evalZxGraph(graph) {
 
     // Perform operations congruent to the ZX graph.
     _zxEval_initEprPairs(graph, state, portToQubitMap);
-    let {basis, results} = _zxEval_performSpiderMeasurements(graph, state, portToQubitMap);
+    let spiderMeasurements = _zxEval_performSpiderMeasurements(graph, state, portToQubitMap);
     let graphStabilizers = stabilizerTableOfGraph(graph, portToQubitMap);
-    _zxEval_updatePauliFrame(state, graphStabilizers, basis, results, num_in, num_out);
+    _zxEval_updatePauliFrame(state, graphStabilizers, spiderMeasurements, num_in, num_out);
 
     // Derive wavefunction and etc for caller.
     return _zxEval_packageOutput(state, portToQubitMap, num_in, num_out);
+}
+
+class StabilizingMeasurement {
+    /**
+     * @param {!PauliProduct} originalStabilizer
+     * @param {!QubitAxis} postselectionControlAxis
+     * @param {!QubitAxis} currentAxis
+     * @param {undefined|!boolean} result
+     */
+    constructor(originalStabilizer, currentAxis, postselectionControlAxis, result=undefined) {
+        this.originalStabilizer = originalStabilizer;
+        this.currentAxis = currentAxis;
+        this.postselectionControlAxis = postselectionControlAxis;
+        this.result = result;
+    }
+
+    /**
+     * @param {*} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return (other instanceof StabilizingMeasurement &&
+            this.currentAxis.isEqualTo(other.currentAxis) &&
+            this.originalStabilizer.isEqualTo(other.originalStabilizer) &&
+            this.postselectionControlAxis.isEqualTo(other.postselectionControlAxis) &&
+            this.result === other.result);
+    }
+
+    /**
+     * @returns {!string}
+     */
+    toString() {
+        return `originalStabilizer: ${this.originalStabilizer}
+postselectionControlAxis: ${this.postselectionControlAxis}
+currentAxis: ${this.currentAxis}
+result: ${this.result}`;
+    }
 }
 
 /**
@@ -337,63 +369,88 @@ function _zxEval_initEprPairs(graph, state, portToQubitMap) {
 }
 
 /**
+ * @param {!int} n
+ * @param {!LoggedSimulation} state
+ * @param {!Array.<!int>} qubitIds
+ * @param {!boolean} axis
+ * @returns {!Array.<!StabilizingMeasurement>}
+ * @private
+ */
+function _prepSpiderMeasurement(n, state, qubitIds, axis) {
+    if (qubitIds.length === 0) {
+        return [];
+    }
+    let [head, ...tail] = qubitIds;
+    state.cnot(head, tail, !axis, axis);
+    let result = [];
+    result.push(new StabilizingMeasurement(
+        PauliProduct.fromXzParity(n, axis, qubitIds),
+        new QubitAxis(head, axis),
+        new QubitAxis(head, !axis)));
+    for (let t of tail) {
+        result.push(new StabilizingMeasurement(
+            PauliProduct.fromXzParity(n, !axis, [head, t]),
+            new QubitAxis(t, !axis),
+            new QubitAxis(t, axis)));
+    }
+    return result;
+}
+
+/**
+ * @param {!LoggedSimulation} state
+ * @param {!Array.<!StabilizingMeasurement>} stabilizingMeasurements
+ * @private
+ */
+function _fillStabilizerMeasurementResults(state, stabilizingMeasurements) {
+    // Group.
+    let xMeasured = stabilizingMeasurements.filter(e => !e.currentAxis.axis).map(e => e.currentAxis.qubit);
+    let allMeasured = stabilizingMeasurements.map(e => e.currentAxis.qubit);
+    allMeasured.sort((a, b) => a - b);
+
+    // Act.
+    state.hadamard(xMeasured);
+    let measurementResults = state.measure(allMeasured);
+
+    // Scatter.
+    let qubitToResultMap = {};
+    for (let i = 0; i < allMeasured.length; i++) {
+        qubitToResultMap[allMeasured[i]] = measurementResults[i];
+    }
+    for (let e of stabilizingMeasurements) {
+        e.result = qubitToResultMap[e.currentAxis.qubit];
+    }
+}
+
+/**
  * @param {!ZxGraph} graph
  * @param {!LoggedSimulation} state
  * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
- * @returns {!{basis: !PauliProduct, results: !Array.<!boolean|undefined>}}
- *      The basis is a product of Paulis that were (effectively) measured.
- *      The results array is a parallel array to the basis, with the corresponding measurement results.
- *      The results array will have a false or true at indices corresponding to a Pauli in the basis, and undefined
- *      in other locations.
+ * @returns {!Array.<!StabilizingMeasurement>}
  * @private
  */
 function _zxEval_performSpiderMeasurements(graph, state, portToQubitMap) {
     state.qasm_logger.lines.push('');
     state.qasm_logger.lines.push('// Perform per-node spider measurements.');
+    let n = portToQubitMap.size;
 
     // Perform 2-qubit operations and determine what to measure.
-    let xMeasured = [];
-    let zMeasured = [];
+    let stabilizingMeasurements = /** @type {!Array.<StabilizingMeasurement>} */ [];
     for (let {node, axis} of graph.spiderMeasurementNodes()) {
         let qubits = graph.activePortsOf(node).map(p => portToQubitMap.get(p));
-        if (qubits.length === 0) {
-            continue;
-        }
-        let [head, ...tail] = qubits;
-        state.cnot(head, tail, !axis, axis);
-        (axis ? zMeasured : xMeasured).push(head);
-        (axis ? xMeasured : zMeasured).push(...tail);
+        stabilizingMeasurements.push(..._prepSpiderMeasurement(n, state, qubits, axis));
     }
 
     // Perform Bell measurements on crossing lines.
     for (let node of graph.crossingNodes()) {
         for (let pair of graph.activeCrossingPortPairs(node)) {
-            let [a, b] = pair.map(p => portToQubitMap.get(p));
-            state.cnot(a, b);
-            xMeasured.push(a);
-            zMeasured.push(b);
+            let qubits = pair.map(p => portToQubitMap.get(p));
+            stabilizingMeasurements.push(..._prepSpiderMeasurement(n, state, qubits, false));
         }
     }
 
-    // Perform single-qubit operations and measure.
-    let allMeasured = [...xMeasured, ...zMeasured];
-    allMeasured.sort((a, b) => a - b);
-    state.hadamard(xMeasured);
-    let measurementResults = state.measure(allMeasured);
-    let basis = PauliProduct.fromSparseByType(portToQubitMap.size, {X: xMeasured, Z: zMeasured});
+    _fillStabilizerMeasurementResults(state, stabilizingMeasurements);
 
-    // Make the measurement results line up with the basis.
-    let expandedResults = [];
-    let k = 0;
-    for (let q of basis.activeQubitAxes()) {
-        while (expandedResults.length < q.qubit) {
-            expandedResults.push(undefined);
-        }
-        expandedResults.push(measurementResults[k]);
-        k++;
-    }
-
-    return {basis, results: expandedResults};
+    return stabilizingMeasurements;
 }
 
 /**
