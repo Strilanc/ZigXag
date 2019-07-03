@@ -833,34 +833,40 @@ class ZxGraph {
             'out': '?',
         };
         let horizontal_edge_reps = {
+            'h': 'H',
+            's': 'S',
+            'x': 'X',
+            'z': 'Z',
+            'f': 'F',
         };
-        let vertical_edge_reps_out = {
+        let vertical_edge_reps = {
             '': ' ',
             '-': '|',
-        };
-        let vertical_edge_reps_in = {
-            '': ' ',
-            '-': '|',
+            'h': 'H',
+            's': 'S',
+            'x': 'X',
+            'z': 'Z',
+            'f': 'F',
         };
 
         for (let row = 0; row < h; row++) {
             if (row > 0) {
-                let in_chars = [];
-                let out_chars = [];
+                let vertical_modifiers = [];
+                let vertical_connectors = [];
                 for (let col = 0; col < w; col++) {
                     if (col > 0) {
-                        out_chars.push('   ');
-                        in_chars.push('   ');
+                        vertical_connectors.push('   ');
+                        vertical_modifiers.push('   ');
                     }
                     let e = new ZxNode(col, row).upUnitEdge();
                     let c = this.edges.get(e) || '';
-                    out_chars.push(vertical_edge_reps_out[c] || c);
-                    in_chars.push(vertical_edge_reps_in[c] || c);
+                    vertical_connectors.push(c === '' ? ' ' : '|');
+                    vertical_modifiers.push(vertical_edge_reps[c] || c);
                 }
 
-                lines.push(out_chars.join(''));
-                lines.push(in_chars.join(''));
-                lines.push(out_chars.join(''));
+                lines.push(vertical_connectors.join(''));
+                lines.push(vertical_modifiers.join(''));
+                lines.push(vertical_connectors.join(''));
             }
             let chars = [];
             for (let col = 0; col < w; col++) {

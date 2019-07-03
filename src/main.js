@@ -321,6 +321,17 @@ function drawPossibleEdit(ctx) {
 }
 
 /**
+ * @param {*} object
+ * @param {!string} key
+ * @param {*} value
+ */
+function setIfDiffers(object, key, value) {
+    if (object[key] !== value) {
+        object[key] = value;
+    }
+}
+
+/**
  * @param {!CanvasRenderingContext2D} ctx
  */
 function drawResults(ctx) {
@@ -330,10 +341,24 @@ function drawResults(ctx) {
         let r = s.toString();
         return `${r.slice(0, 1)}${r.slice(1, numIn+1)}→${r.slice(numIn+1)}`;
     }
-    stabilizersDiv.innerText = results.stabilizers.map(descStabilizer).join('\n');
-    quirkAnchor.href = results.quirk_url;
-    qasmPre.innerText = results.qasm;
-    textDiagramPre.innerText = curGraph.toString(true);
+
+    setIfDiffers(
+        stabilizersDiv,
+        'innerText',
+        results.stabilizers.map(descStabilizer).join('\n'));
+    setIfDiffers(
+        quirkAnchor,
+        'href',
+        results.quirk_url);
+    setIfDiffers(
+        qasmPre,
+        'innerText',
+        results.qasm);
+    setIfDiffers(
+        textDiagramPre,
+        'innerText',
+        curGraph.toString(true));
+
     let s = new Rect(canvas.clientWidth - 300, 0, 300, 300);
     let painter = new Painter(ctx);
     MathPainter.paintMatrix(painter, results.wavefunction, s);
