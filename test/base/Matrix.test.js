@@ -1237,6 +1237,20 @@ suite.test('afterQubitSwap', () => {
     ]));
 });
 
+suite.test('isZero', () => {
+    assertTrue(Matrix.fromRows([[0]]).isZero());
+    assertFalse(Matrix.fromRows([[1]]).isZero());
+    assertFalse(Matrix.fromRows([[1e-8]]).isZero());
+    assertFalse(Matrix.fromRows([[1e-8]]).isZero(1e-10));
+    assertTrue(Matrix.fromRows([[0]]).isZero(1e-4));
+
+    assertFalse(Matrix.fromRows([[0, 1, 0], [0, 0, 0]]).isZero());
+    assertFalse(Matrix.fromRows([[0, 0, 0], [0, 1, 0]]).isZero());
+    assertFalse(Matrix.fromRows([[4, 5, 6], [3, 1, 2]]).isZero());
+    assertTrue(Matrix.fromRows([[0, 0, 0], [0, 0, 0]]).isZero());
+    assertTrue(Matrix.fromRows([[1e-8, 5e-9, 5e-9], [1e-8, 1e-8, 1e-8]]).isZero(2e-8));
+});
+
 suite.test('phaseMatchedTo', () => {
     assertThat(Matrix.solo(Complex.I).phaseMatchedTo(Matrix.solo(-2))).isEqualTo(Matrix.solo(-1));
     assertThat(Matrix.col(1, 2, 3).phaseMatchedTo(Matrix.col(0.5, Complex.I, -0.5))).isEqualTo(

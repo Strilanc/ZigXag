@@ -303,6 +303,19 @@ class Matrix {
     }
 
     /**
+     * @param {!number} atol
+     * @returns {!boolean}
+     */
+    isZero(atol=0.0) {
+        for (let r of this._buffer) {
+            if (Math.abs(r) > atol) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Determines if the matrix is approximately unitary or not.
      * @param {!number} epsilon Distance away from unitary the matrix is allowed to be. Defaults to 0.
      * @returns {!boolean}

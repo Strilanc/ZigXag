@@ -299,6 +299,9 @@ function evalZxGraphGroundTruth(graph) {
             throw new Error(`Unrecognized node kind ${kind}`);
         }
 
+        if (ports.length === 0) {
+            globalScalar = globalScalar.times(data.cell(0, 0));
+        }
         let tensor = new Tensor(data, ports);
         for (let port of ports) {
             portToTensorMap.set(port, tensor);

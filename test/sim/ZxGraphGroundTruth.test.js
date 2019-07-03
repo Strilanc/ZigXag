@@ -168,6 +168,26 @@ suite.test('evalZxGraphGroundTruth_identity', () => {
     `))).isApproximatelyEqualTo(
         Matrix.identity(2)
     );
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        ?   ?
+        |   |
+        |   |
+        |   |
+        +---+
+    `))).isApproximatelyEqualTo(
+        Matrix.col(1, 0, 0, 1)
+    );
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        +---+
+        |   |
+        |   |
+        |   |
+        !   !
+    `))).isApproximatelyEqualTo(
+        Matrix.row(1, 0, 0, 1)
+    );
 });
 
 suite.test('evalZxGraphGroundTruth_cnot', () => {
@@ -263,6 +283,22 @@ suite.test('evalZxGraphGroundTruth_x_measure', () => {
         [1, 1],
         [1, 1],
     ]).times(Math.sqrt(0.5)));
+});
+
+suite.test('evalZxGraphGroundTruth_leaves', () => {
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        @---?
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [1],
+        [1],
+    ]));
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        O---?
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [Math.sqrt(2)],
+        [0],
+    ]));
 });
 
 suite.test('evalZxGraphGroundTruth_z_measure', () => {
@@ -402,9 +438,18 @@ suite.test('s_state_distillation', () => {
 });
 
 suite.test('singleton', () => {
-    let g = ZxGraph.fromDiagram('@');
-    let r = evalZxGraphGroundTruth(g);
-    assertThat(r).isApproximatelyEqualTo(Matrix.col(1));
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        O
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [2],
+    ]));
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        @
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [2],
+    ]));
+
 });
 
 suite.test('observedFailure1', () => {
@@ -422,4 +467,36 @@ suite.test('observedFailure1', () => {
 
     let r = evalZxGraphGroundTruth(g);
     assertThat(r).isApproximatelyEqualTo(Matrix.square(1, 1, 1, 1));
+});
+
+suite.test('evalZxGraphGroundTruth_swap', () => {
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !-------+   +---?
+                |   |
+                |   |
+                |   |
+            +---+---+
+            |   |
+            |   |
+            |   |
+        !---+   +-------?
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0, 0, 0],
+        [0, 0, 1, 0],
+        [0, 1, 0, 0],
+        [0, 0, 0, 1],
+    ]));
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        !---@---O---@---?
+            |   |   |
+            |   |   |
+            |   |   |
+        !---O---@---O---?
+    `))).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0, 0, 0],
+        [0, 0, 1, 0],
+        [0, 1, 0, 0],
+        [0, 0, 0, 1],
+    ]).times(Math.sqrt(1/8)));
 });

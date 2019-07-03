@@ -100,6 +100,9 @@ class PauliProduct {
         let paulis = new Uint8Array(n);
         for (let k of Object.keys(typeToIndexMap)) {
             let p = _PAULI_NAMES.indexOf(k);
+            if (p === -1) {
+                throw new Error(`Unrecognized Pauli: ${k}`);
+            }
             let indices = typeToIndexMap[k];
             if (!Array.isArray(indices)) {
                 indices = [indices];
