@@ -72,6 +72,24 @@ suite.test("toString", () => {
     |
 !---O---?
     `.trim());
+
+    assertThat(cnotGraph().shifted(2, 1).toString()).isEqualTo(`
+
+
+
+        !---@---?
+            |
+            |
+            |
+        !---O---?`);
+
+    assertThat(cnotGraph().shifted(2, 1).toString(true)).isEqualTo(`
+!---@---?
+    |
+    |
+    |
+!---O---?
+    `.trim());
 });
 
 suite.test("serialize", () => {

@@ -770,10 +770,55 @@ class ZxGraph {
     }
 
     /**
+     * @returns {!{x: !int, y: !int, w: !int, h: !int}}
+     */
+    boundingBox() {
+        let nodes = [...this.nodes.keys()];
+        if (nodes.length === 0) {
+            return {x: 0, y: 0, w: 0, h: 0};
+        }
+        let xs = nodes.map(n => n.x);
+        let ys = nodes.map(n => n.y);
+        let x = Math.min(...xs);
+        let y = Math.min(...ys);
+        return {
+            x,
+            y,
+            w: Math.max(...xs) - x + 1,
+            h: Math.max(...ys) - y + 1
+        }
+    }
+
+    /**
+     * @param {!int} dx
+     * @param {!int} dy
+     * @returns {!ZxGraph}
+     */
+    shifted(dx, dy) {
+        /**
+         * @param {!ZxNode} n
+         * @returns {!ZxNode}
+         */
+        function shiftedNode(n) {
+            return new ZxNode(n.x + dx, n.y + dy);
+        }
+
+        return new ZxGraph(
+            this.nodes.mapKeys(shiftedNode),
+            this.edges.mapKeys(e => new ZxEdge(shiftedNode(e.n1), shiftedNode(e.n2))))
+    }
+
+    /**
      * Produces a text diagram of the graph.
+     * @param {!boolean} topLeftAsOrigin
      * @returns {!string}
      */
-    toString() {
+    toString(topLeftAsOrigin=false) {
+        if (topLeftAsOrigin) {
+            let {x, y} = this.boundingBox();
+            return this.shifted(-x, -y).toString();
+        }
+
         let xs = this.sortedNodes().map(n => n.x);
         let ys = this.sortedNodes().map(n => n.y);
         let w = Math.max(...xs) + 1;

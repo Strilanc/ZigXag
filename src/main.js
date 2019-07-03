@@ -56,7 +56,8 @@ const canvas = /** @type {!HTMLCanvasElement} */ document.getElementById('main-c
 const canvasDiv = /** @type {!HTMLDivElement} */ document.getElementById('main-canvas-div');
 const stabilizersDiv = /** @type {!HTMLDivElement} */ document.getElementById('stabilizers-div');
 const quirkAnchor = /** @type {!HTMLDivElement} */ document.getElementById('quirk-link-anchor');
-const qasmDiv = /** @type {!HTMLDivElement} */ document.getElementById('qasm-div');
+const qasmPre = /** @type {!HTMLPreElement} */ document.getElementById('qasm-pre');
+const textDiagramPre = /** @type {!HTMLPreElement} */ document.getElementById('text-diagram-pre');
 let mouseX = undefined;
 let mouseY = undefined;
 let curCtrlKey = undefined;
@@ -65,7 +66,7 @@ let mouseDownX = undefined;
 let mouseDownY = undefined;
 
 
-let curGraph = undefined;
+let curGraph = /** @type {undefined|!ZxGraph} */ undefined;
 let revision = new Revision([initialCommit()], 0, false);
 
 
@@ -331,11 +332,12 @@ function drawResults(ctx) {
     }
     stabilizersDiv.innerText = results.stabilizers.map(descStabilizer).join('\n');
     quirkAnchor.href = results.quirk_url;
-    qasmDiv.innerText = results.qasm;
+    qasmPre.innerText = results.qasm;
+    textDiagramPre.innerText = curGraph.toString(true);
     let s = new Rect(canvas.clientWidth - 300, 0, 300, 300);
     let painter = new Painter(ctx);
     MathPainter.paintMatrix(painter, results.wavefunction, s);
-    let groundTruth = evalZxGraphGroundTruth(curGraph).times(Math.sqrt(0.5));
+    let groundTruth = evalZxGraphGroundTruth(curGraph);
     groundTruth = groundTruth.phaseMatchedTo(results.wavefunction);
     ctx.globalAlpha *= 0.5;
     MathPainter.paintMatrix(painter, groundTruth, s, 'yellow', 'black', '#00000000', '#00000000');

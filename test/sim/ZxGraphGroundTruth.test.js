@@ -500,3 +500,81 @@ suite.test('evalZxGraphGroundTruth_swap', () => {
         [0, 0, 0, 1],
     ]).times(Math.sqrt(1/8)));
 });
+
+suite.test('rewriteRule_B1', () => {
+    // From https://arxiv.org/abs/1602.04744
+    let graph1 = ZxGraph.fromDiagram(`
+        @   @
+        |   |
+        |   |
+        |   |
+        ?   ?
+    `);
+    let graph2 = ZxGraph.fromDiagram(`
+        @       @
+        |       |
+        |       |
+        |       |
+        O   +---O---+
+            |       |
+            |       |
+            |       |
+            ?       ?
+    `);
+    let matrix1 = evalZxGraphGroundTruth(graph1);
+    let matrix2 = evalZxGraphGroundTruth(graph2);
+    assertThat(matrix1).isApproximatelyEqualTo(matrix2);
+    assertThat(matrix2).isApproximatelyEqualTo(Matrix.fromRows([
+        [1],
+        [1],
+        [1],
+        [1]
+    ]));
+});
+
+suite.test('rewriteRule_B2', () => {
+    // From https://arxiv.org/abs/1602.04744
+    let graph1 = ZxGraph.fromDiagram(`
+                !       !
+                |       |
+                |       |
+                |       |
+        O       @---+   |
+        |       |   |   |
+        |       |   |   |
+        |       |   |   |
+        @       O---+---@
+                |   |   |
+                |   |   |
+                |   |   |
+                |   +---O
+                |       |
+                |       |
+                |       |
+                ?       ?
+    `);
+    let graph2 = ZxGraph.fromDiagram(`
+        !       !
+        |       |
+        |       |
+        |       |
+        +---O---+
+            |
+            |
+            |
+        +---@---+
+        |       |
+        |       |
+        |       |
+        ?       ?
+    `);
+    let matrix1 = evalZxGraphGroundTruth(graph1);
+    let matrix2 = evalZxGraphGroundTruth(graph2);
+    assertThat(matrix1).isApproximatelyEqualTo(matrix2);
+    assertThat(matrix2).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0, 0, 1],
+        [0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [0, 1, 1, 0],
+    ]).times(Math.sqrt(0.5)));
+});
