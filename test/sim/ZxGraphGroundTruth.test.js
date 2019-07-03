@@ -615,3 +615,119 @@ Z       S
         [1, -1]
     ]).times(Math.sqrt(2)));
 });
+
+suite.test('rewriteRule_ZO', () => {
+    // From https://arxiv.org/abs/1602.04744
+    let graph1 = ZxGraph.fromDiagram(`
+        @   !
+        |   |
+        Z   |
+        |   |
+        @   ?
+    `);
+    let graph2 = ZxGraph.fromDiagram(`
+            !
+            |
+            |
+            |
+        @   @
+        |
+        Z
+        |
+        @   O
+            |
+            |
+            |
+            ?
+    `);
+    let matrix1 = evalZxGraphGroundTruth(graph1);
+    let matrix2 = evalZxGraphGroundTruth(graph2);
+    assertThat(matrix1).isApproximatelyEqualTo(matrix2);
+    assertThat(matrix2).isApproximatelyEqualTo(Matrix.fromRows([
+        [0, 0],
+        [0, 0]
+    ]));
+});
+
+suite.test('rewriteRule_K1', () => {
+    // From https://arxiv.org/abs/1602.04744
+    let graph1 = ZxGraph.fromDiagram(`
+            !
+            |
+            Z
+            |
+        +---O---+
+        |       |
+        |       |
+        |       |
+        ?       ?
+    `);
+    let graph2 = ZxGraph.fromDiagram(`
+            !
+            |
+            |
+            |
+        +-Z-O-Z-+
+        |       |
+        |       |
+        |       |
+        ?       ?
+    `);
+    let matrix1 = evalZxGraphGroundTruth(graph1);
+    let matrix2 = evalZxGraphGroundTruth(graph2);
+    assertThat(matrix1).isApproximatelyEqualTo(matrix2);
+    assertThat(matrix2).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 0],
+        [0, -1],
+        [0, -1],
+        [1, 0],
+    ]).times(Math.sqrt(0.5)));
+});
+
+suite.test('rewriteRule_IV_prime', () => {
+    // From https://arxiv.org/abs/1602.04744
+    let graph1 = ZxGraph.fromDiagram(`
+        @   +---O---+   +---O---+
+            |   |   |   |   |   |
+            |   |   |   |   |   |
+            |   |   |   |   |   |
+            +---@---+   +---@---+
+    `);
+    let graph2 = ZxGraph.fromDiagram(`
+    `);
+    let matrix1 = evalZxGraphGroundTruth(graph1);
+    let matrix2 = evalZxGraphGroundTruth(graph2);
+    assertThat(matrix1).isApproximatelyEqualTo(matrix2);
+    assertThat(matrix2).isApproximatelyEqualTo(Matrix.fromRows([
+        [1],
+    ]));
+});
+
+suite.test('rewriteRule_EU_prime', () => {
+    // From https://arxiv.org/abs/1602.04744
+    let graph1 = ZxGraph.fromDiagram(`
+        !
+        |
+        S
+        |
+        O-Z---S-@
+        |
+        S
+        |
+        ?
+    `);
+    let graph2 = ZxGraph.fromDiagram(`
+        !
+        |
+        H
+        |
+        ?
+    `);
+    let matrix1 = evalZxGraphGroundTruth(graph1);
+    let matrix2 = evalZxGraphGroundTruth(graph2);
+    assertThat(matrix1).isApproximatelyEqualTo(matrix2);
+    assertThat(matrix2).isApproximatelyEqualTo(Matrix.fromRows([
+        [1, 1],
+        [1, -1]
+    ]).times(Math.sqrt(0.5)));
+});
