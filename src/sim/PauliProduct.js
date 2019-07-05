@@ -40,6 +40,12 @@ class QubitAxis {
     }
 
     /**
+     * @returns {!number}
+     */
+    orderVal() {
+        return this.qubit + (this.axis ? 0.5 : 0);
+    }
+    /**
      * @returns {!string}
      */
     toString() {

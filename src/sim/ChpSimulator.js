@@ -141,8 +141,9 @@ import {
 class ChpSimulator extends SimulatorSpec {
     /**
      * @param {!int} maxQubitCount
+     * @param {!number} defaultBias
      */
-    constructor(maxQubitCount=10) {
+    constructor(maxQubitCount=10, defaultBias=0.5) {
         super();
         this._state = new QState();
         init_state(this._state, maxQubitCount);
@@ -150,6 +151,7 @@ class ChpSimulator extends SimulatorSpec {
         this._nextQubitId = 0;
         this._qubitToSlotMap = new Map();
         this._qubitSlots = [];
+        this._defaultBias = defaultBias;
     }
 
     /**
@@ -186,7 +188,7 @@ class ChpSimulator extends SimulatorSpec {
      */
     measure(q, bias=undefined) {
         if (bias === undefined) {
-            bias = 0.5;
+            bias = this._defaultBias;
         }
         let randomResult = Math.random() < bias;
         let a = this._slotFor(q);

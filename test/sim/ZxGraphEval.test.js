@@ -1,10 +1,12 @@
 import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
 import {ZxGraph, ZxNode, ZxEdge, ZxPort} from "src/sim/ZxGraph.js"
-import {evalZxGraph, stabilizerStateToWavefunction} from "src/sim/ZxGraphEval.js"
+import {evalZxGraph, generatePortToQubitMap, fixedPointsOfGraph} from "src/sim/ZxGraphEval.js"
+import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js"
 import {Matrix} from "src/base/Matrix.js"
 import {Complex} from "src/base/Complex.js"
 import {GeneralMap} from "src/base/GeneralMap.js"
 import {PauliProduct} from "src/sim/PauliProduct.js"
+import {seq} from "src/base/Seq.js";
 
 
 let suite = new Suite("ZxGraphEval");
@@ -90,10 +92,10 @@ https://algassert.com/quirk#circuit={
         [1,1,1,"⊖","Z","Z"],
         ["H",1,1,1,"H","H"],
         ["Measure","Measure","Measure","Measure","Measure","Measure"],
-        ["Z",1,1,1,"Z",1,1,1,"•"],
         [1,"Z",1,1,1,1,1,1,"⊖"],
-        [1,1,1,1,"Z","Z",1,1,1,"•"],
+        ["Z",1,1,1,"Z",1,1,1,"•"],
         [1,1,"Z","Z",1,1,1,1,1,"⊖"],
+        [1,1,1,1,"Z","Z",1,1,1,"•"],
         [1,1,1,1,1,1,"Amps4"]
     ],
     "init":["+","+","+",0,"+","+"]
@@ -103,8 +105,8 @@ https://algassert.com/quirk#circuit={
     assertThat(r.qasm).isEqualTo(`
 OPENQASM 2.0;
 include "qelib1.inc";
-qreg q[10]
-creg m[6]
+qreg q[10];
+creg m[6];
 
 // Init per-edge EPR pairs.
 h q[0];
@@ -126,25 +128,25 @@ cx q[5], q[3];
 h q[0];
 h q[4];
 h q[5];
-measure q[0] -> c[0]
-measure q[1] -> c[1]
-measure q[2] -> c[2]
-measure q[3] -> c[3]
-measure q[4] -> c[4]
-measure q[5] -> c[5]
+measure q[0] -> m[0];
+measure q[1] -> m[1];
+measure q[2] -> m[2];
+measure q[3] -> m[3];
+measure q[4] -> m[4];
+measure q[5] -> m[5];
 
 // Adjust Pauli frame based on measurements.
-if (m[0] ^ m[4]) {
-    z q[8];
-}
 if (m[1]) {
     x q[8];
 }
-if (m[4] ^ m[5]) {
-    z q[9];
+if (m[0] ^ m[4]) {
+    z q[8];
 }
 if (m[2] ^ m[3]) {
     x q[9];
+}
+if (m[4] ^ m[5]) {
+    z q[9];
 }
     `.trim());
 });
@@ -533,3 +535,217 @@ suite.test('evalZxGraph_observedFailure1', () => {
         0.5, 0.5,
     ));
 });
+
+function testSatisfiable(diagram) {
+    suite.test('testConsistent', () => {
+        let graph = ZxGraph.fromDiagram(diagram);
+        assertThat(evalZxGraphGroundTruth(graph).isZero(1.0e-8)).withInfo({diagram}).isEqualTo(false);
+
+        let consistent = evalZxGraph(graph).satisfiable;
+        assertThat(consistent).withInfo({diagram}).isEqualTo(true);
+    });
+}
+
+function testUnsatisfiable(diagram) {
+    suite.test('testInconsistent', () => {
+        let graph = ZxGraph.fromDiagram(diagram);
+        assertThat(evalZxGraphGroundTruth(graph).isZero(1.0e-8)).withInfo({diagram}).isEqualTo(true);
+
+        let consistent = evalZxGraph(graph).satisfiable;
+        assertThat(consistent).withInfo({diagram}).isEqualTo(false);
+    });
+}
+
+testSatisfiable(`
+    !---O---+
+        |   |
+        |   |
+        |   |
+    ?---O---+
+`);
+
+testSatisfiable(`
+    !---O-Z-+
+        |   |
+        X   X
+        |   |
+    ?---O-Z-+
+`);
+
+testSatisfiable(`
+    !---@---+
+        |   |
+        |   |
+        |   |
+    ?---@---+
+`);
+
+testSatisfiable(`
+    !---O---+
+        |   |
+        |   X
+        |   |
+    ?---O---+
+`);
+
+testSatisfiable(`
+    !---@---+
+        |   |
+        |   Z
+        |   |
+    ?---@---+
+`);
+
+testSatisfiable(`
+    !---O---+
+        |   |
+        |   X
+        |   |
+    ?---O-X-+
+`);
+
+testSatisfiable(`
+    !---O-X-+
+        |   |
+        |   Z
+        |   |
+    ?---O-Z-+
+`);
+
+testSatisfiable(`
+    !---O-f-+
+        |   |
+        |   f
+        |   |
+    ?---O-X-+
+`);
+
+testSatisfiable(`
+    +---+
+    |   |
+    |   X
+    |   |
+    +-X-+
+`);
+
+testSatisfiable(`
+    +---+
+    |   |
+    Z   |
+    |   |
+    +-Z-+
+`);
+
+testSatisfiable(`
+    +-f-+
+    |   |
+    |   f
+    |   |
+    +-X-+
+`);
+
+testSatisfiable(`
+    +---+
+    |   |
+    s   s
+    |   |
+    +-Z-+
+`);
+
+
+testSatisfiable(`
+    +---+
+    |   |
+    f   f
+    |   |
+    +-X-+
+`);
+
+
+testUnsatisfiable(`
+    !---O---+
+        |   |
+        |   Z
+        |   |
+    ?---O---+
+`);
+
+testUnsatisfiable(`
+    !---O-Z-+
+        |   |
+        |   Z
+        |   |
+    ?---O-Z-+
+`);
+
+testUnsatisfiable(`
+    !---O---+
+        |   |
+        |   s
+        |   |
+    ?---O-s-+
+`);
+
+testUnsatisfiable(`
+    !---@---+
+        |   |
+        |   f
+        |   |
+    ?---@-f-+
+`);
+
+testUnsatisfiable(`
+    !---@---+
+        |   |
+        |   X
+        |   |
+    ?---@---+
+`);
+
+testUnsatisfiable(`
+    !---O-H-+
+        |   |
+        |   X
+        |   |
+    ?---O-H-+
+`);
+
+testUnsatisfiable(`
+    +---+
+    |   |
+    |   |
+    |   |
+    +-X-+
+`);
+
+testUnsatisfiable(`
+    +---+
+    |   |
+    |   |
+    |   |
+    +-Z-+
+`);
+
+testUnsatisfiable(`
+    +---+
+    |   |
+    |   X
+    |   |
+    +-Z-+
+`);
+
+testUnsatisfiable(`
+    +-s-+
+    |   |
+    |   |
+    |   |
+    +-s-+
+`);
+
+testUnsatisfiable(`
+    +---+
+    |   |
+    |   |
+    |   |
+    +-H-+
+`);

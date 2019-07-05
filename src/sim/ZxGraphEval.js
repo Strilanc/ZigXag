@@ -9,10 +9,44 @@ import {Matrix} from "src/base/Matrix.js"
 import {ZxPort, ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js"
 import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
-import {LoggedSimulation} from "src/sim/LoggedSimulator.js";
 import {popcnt} from "src/base/Util.js";
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
+import {
+    QuantumProgram,
+    Comment,
+    HeaderAlloc,
+    MeasurementsWithPauliFeedback,
+    SingleQubitGates,
+    InitEprPairs,
+    MultiCnot,
+    AmpsDisplay,
+} from "src/sim/QuantumProgram.js"
 
+/**
+ * Determines products of Paulis that can be applied after EPR pairs are made, but before spider measurements
+ * are performed, without changing the state produced by the graph (up to global phase). This includes both products
+ * that are no-ops because they are stabilizers of the EPR pairs as well as products that are no-ops because they
+ * exactly match a measurement that is about to be performed.
+ *
+ * @param {!ZxGraph} graph
+ * @param {!GeneralMap.<!ZxPort, !int>} qubitMap
+ * @returns {!Array.<!PauliProduct>}
+ */
+function fixedPointsOfGraph(graph, qubitMap) {
+    let fixedPoints = [];
+
+    // Pauli products that are about to be measured are fixed points.
+    for (let node of graph.nodes.keys()) {
+        fixedPoints.push(..._nodeSpiderFixedPoints(graph, node, qubitMap));
+    }
+
+    // Stabilizers of the input state are fixed points.
+    for (let edge of graph.edges.keys()) {
+        fixedPoints.push(..._edgeEprFixedPoints(graph, edge, qubitMap));
+    }
+
+    return fixedPoints;
+}
 
 /**
  * @param {!ZxGraph} graph
@@ -20,7 +54,7 @@ import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
  * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
  * @private
  */
-function _nodeStabilizers(graph, node, qubit_map) {
+function _nodeSpiderFixedPoints(graph, node, qubit_map) {
     let ports = graph.activePortsOf(node);
     let kind = graph.kind(node);
 
@@ -37,9 +71,9 @@ function _nodeStabilizers(graph, node, qubit_map) {
         let qs = ports.map(p => qubit_map.get(p));
 
         let result = [];
-        result.push(PauliProduct.fromXzParity(qubit_map.size, axis, qs));
+        result.push(PauliProduct.fromXzParity(qubit_map.size, !axis, qs));
         for (let i = 1; i < qs.length; i++) {
-            result.push(PauliProduct.fromXzParity(qubit_map.size, !axis, [qs[0], qs[i]]));
+            result.push(PauliProduct.fromXzParity(qubit_map.size, axis, [qs[0], qs[i]]));
         }
         return result;
     }
@@ -65,142 +99,95 @@ function _nodeStabilizers(graph, node, qubit_map) {
  * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
  * @private
  */
-function _edgeStabilizers(graph, edge, qubit_map) {
-    let [p1, p2] = edge.ports();
+function _edgeEprFixedPoints(graph, edge, qubit_map) {
+    let [a, b] = edge.ports().map(p => qubit_map.get(p));
     let kind = graph.kind(edge);
-    let q1 = qubit_map.get(p1);
-    let q2 = qubit_map.get(p2);
+    let f = v => PauliProduct.fromSparseByType(qubit_map.size, v);
 
-    if (kind === '-') {
-        return [
-            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}),
-            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}),
-        ];
+    if (kind === '-' || kind === 'x' || kind === 'z') {
+        return [f({X: [a, b]}), f({Z: [a, b]})];
     }
 
     if (kind === 'h') {
-        return [
-            PauliProduct.fromSparseByType(qubit_map.size, {X: q1, Z: q2}),
-            PauliProduct.fromSparseByType(qubit_map.size, {Z: q1, X: q2}),
-        ];
-    }
-
-    if (kind === 'x') {
-        return [
-            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}),
-            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}).times(-1),
-        ];
-    }
-
-    if (kind === 'z') {
-        return [
-            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}).times(-1),
-            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}),
-        ];
-    }
-
-    if (kind === 's') {
-        return [
-            PauliProduct.fromSparseByType(qubit_map.size, {X: [q1, q2]}),
-            PauliProduct.fromSparseByType(qubit_map.size, {Y: q1, Z: q2}),
-        ];
+        return [f({X: a, Z: b}), f({Z: a, X: b})];
     }
 
     if (kind === 'f') {
-        return [
-            PauliProduct.fromSparseByType(qubit_map.size, {X: q1, Y: q2}).times(-1),
-            PauliProduct.fromSparseByType(qubit_map.size, {Z: [q1, q2]}),
-        ];
+        return [f({X: [a, b]}), f({Y: a, Z: b})];
+    }
+
+    if (kind === 's') {
+        return [f({X: a, Y: b}), f({Z: [a, b]})];
     }
 
     throw new Error(`Unrecognized edge kind ${kind}.`);
 }
 
 /**
- * @param {!ZxGraph} graph
- * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
- * @returns {!Array.<!PauliProduct>}
- */
-function stabilizerTableOfGraph(graph, qubit_map) {
-    let stabilizers = [];
-
-    for (let node of graph.nodes.keys()) {
-        stabilizers.push(..._nodeStabilizers(graph, node, qubit_map));
-    }
-
-    for (let edge of graph.edges.keys()) {
-        stabilizers.push(..._edgeStabilizers(graph, edge, qubit_map));
-    }
-
-    return stabilizers;
-}
-
-/**
- * @param {!Array.<!PauliProduct>} stabilizers
- * @param {!int} numInOut
+ * Rewrites the set of fixed points internal to the graph into rules for which external elements can be toggled
+ * in order to have the same effect as toggling an internal element.
+ *
+ * In some cases an individual internal toggle will not correspond to any set of external toggles, but a pairing of
+ * such internal toggles will. In this case exactly one of the involved internal toggles will be mapped to the external
+ * toggle of the pairing, whereas the others are mapped to an 'undefined' rule to indicate the redundancy. This works
+ * because this case occurs only when all of the paired internal toggles will be needed at the same time.
+ *
+ * @param {!Array.<!PauliProduct>} fixedPoints
+ * @param {!int} externalWidth The columns of the fixed point table first go over the internal degrees of freedom, then
+ *      the external ones. This indicates how many external degrees of freedom there are, allowing us to tell which
+ *      columns correspond to what. In other words, this is the number of input edges plus the number of output edges.
  * @returns {!GeneralMap<!QubitAxis, !Array.<!QubitAxis>>}
  * @private
  */
-function _controlMap(stabilizers, numInOut) {
-    let reduced = PauliProduct.gaussianEliminate(stabilizers);
+function _internalToExternalMapFromFixedPoints(fixedPoints, externalWidth) {
+    let reducedFixedPoints = PauliProduct.gaussianEliminate(fixedPoints).map(e => e.abs());
 
-    let width = reduced.length === 0 ? 0 : reduced[0].paulis.length;
-    let spiderRegionSize = width - numInOut;
-    let controlMap = /** @type {!GeneralMap<!QubitAxis, !Array.<!QubitAxis>>} */ new GeneralMap();
+    let width = fixedPoints.length === 0 ? 0 : fixedPoints[0].paulis.length;
+    let internalWidth = width - externalWidth;
+    let fixupMap = /** @type {!GeneralMap<!QubitAxis, !Array.<!QubitAxis>>} */ new GeneralMap();
 
-    for (let stabilizer of reduced) {
-        let spiderRegion = stabilizer.slice(0, spiderRegionSize);
-        if (spiderRegion.xzBitWeight() === 0) {
+    for (let fixedPoint of reducedFixedPoints) {
+        let internal = fixedPoint.slice(0, internalWidth);
+        if (internal.xzBitWeight() === 0) {
             continue;
         }
 
-        // Note how the spider region axis interacts with the in/out region.
-        let [head, ...implied] = spiderRegion.activeQubitAxes();
-        if (controlMap.has(head)) {
-            throw new Error('Redundant control.')
+        let [control, ...redundantControls] = internal.activeQubitAxes();
+        if (fixupMap.has(control)) {
+            throw new Error('Control was used twice.')
         }
-        for (let t of implied) {
-            if (controlMap.get(t, undefined) !== undefined) {
+        for (let pauli of redundantControls) {
+            if (fixupMap.get(pauli, undefined) !== undefined) {
                 throw new Error('Inconsistent implied control.')
             }
-            controlMap.set(t, undefined);
+            fixupMap.set(pauli, undefined);
         }
-        let updates = stabilizer.activeQubitAxes().filter(e => e.qubit >= spiderRegionSize);
-        controlMap.set(head, updates);
+        let externalFlips = fixedPoint.activeQubitAxes().filter(e => e.qubit >= internalWidth);
+        fixupMap.set(control, externalFlips);
     }
 
-    return controlMap;
+    return fixupMap;
 }
 
 /**
- * @param {!Array.<!PauliProduct>} stabilizers
- * @param {!Array.<StabilizingMeasurement>} spiderMeasurements
+ * @param {!ZxGraph} graph
+ * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
+ * @param {!Array.<TransformedMeasurement>} spiderMeasurements
  * @param {!int} numIn
  * @param {!int} numOut
- * @returns {!GeneralMap<!QubitAxis, !Array.<!int>>} Map from in/out axis to measurement qubits that flip it.
+ * @returns {!GeneralMap<!int, !Array.<!QubitAxis>>} Map from in/out axis to measurement qubits that flip it.
  */
-function graphStabilizersToMeasurementFixupActions(stabilizers, spiderMeasurements, numIn, numOut) {
-    let controlMap = _controlMap(stabilizers, numIn + numOut);
-    let width = stabilizers.length === 0 ? 0 : stabilizers[0].paulis.length;
-    let spiderRegionSize = width - numIn - numOut;
+function _spiderMeasurementToFeedbackMap(graph, portToQubitMap, spiderMeasurements, numIn, numOut) {
+    let fixedPoints = fixedPointsOfGraph(graph, portToQubitMap);
+    let externalMap = _internalToExternalMapFromFixedPoints(fixedPoints, numIn + numOut);
     let out = new GeneralMap();
-    for (let i = spiderRegionSize; i < width; i++) {
-        out.set(QubitAxis.x(i), []);
-        out.set(QubitAxis.z(i), []);
-    }
-
     for (let spider of spiderMeasurements) {
-        if (!controlMap.has(spider.currentAxis)) {
+        if (!externalMap.has(spider.postselectionControlAxis)) {
             throw new Error('Uncontrollable measurement.');
         }
-        let flips = controlMap.get(spider.currentAxis);
-        if (flips !== undefined) {
-            for (let flip of flips) {
-                out.get(flip).push(spider.currentAxis.qubit);
-            }
-        }
+        let externalFlips = externalMap.get(spider.postselectionControlAxis) || [];
+        out.set(spider.measurementAxis.qubit, externalFlips);
     }
-
     return out;
 }
 
@@ -258,58 +245,41 @@ function generatePortToQubitMap(graph) {
 }
 
 /**
- * @param {!LoggedSimulation} state
- * @param {!Array.<!PauliProduct>} graphStabilizers
- * @param {!Array.<!StabilizingMeasurement>} spiderMeasurements
- * @param {!int} numIn
- * @param {!int} numOut
- */
-function _zxEval_updatePauliFrame(state, graphStabilizers, spiderMeasurements, numIn, numOut) {
-    state.qasm_logger.lines.push('');
-    state.qasm_logger.lines.push('// Adjust Pauli frame based on measurements.');
-
-    let actions = graphStabilizersToMeasurementFixupActions(graphStabilizers, spiderMeasurements, numIn, numOut);
-    let activeMeasurements = new Set(spiderMeasurements.filter(e => e.result).map(e => e.currentAxis.qubit));
-    for (let [target, parityControls] of actions.entries()) {
-        state.feedback(parityControls, activeMeasurements, target);
-    }
-}
-
-/**
  * @param {!ZxGraph} graph
- * @returns {!{wavefunction: !Matrix, stabilizers: !Array.<!PauliProduct>, qasm: !string, quirk_url: !string}}
+ * @returns {!{
+ *      stabilizers: !Array.<!PauliProduct>,
+ *      wavefunction: !Matrix,
+ *      qasm: !string,
+ *      quirk_url: !string,
+ *      satisfiable: !boolean
+ * }}
  */
 function evalZxGraph(graph) {
     // Prepare simulator.
-    let {portToQubitMap, num_inputs: num_in, num_outputs: num_out} = generatePortToQubitMap(graph);
-    let raw_sim = new ChpSimulator(portToQubitMap.size);
-    let state = new LoggedSimulation(raw_sim);
-    for (let k = 0; k < portToQubitMap.size; k++) {
-        state.sim.qalloc();
-    }
+    let {portToQubitMap, num_inputs: numIn, num_outputs: numOut} = generatePortToQubitMap(graph);
+    let outProgram = new QuantumProgram();
+    let numInternal = portToQubitMap.size - numIn - numOut;
+    outProgram.statements.push(new HeaderAlloc(portToQubitMap.size, numInternal));
 
     // Perform operations congruent to the ZX graph.
-    _zxEval_initEprPairs(graph, state, portToQubitMap);
-    let spiderMeasurements = _zxEval_performSpiderMeasurements(graph, state, portToQubitMap);
-    let graphStabilizers = stabilizerTableOfGraph(graph, portToQubitMap);
-    _zxEval_updatePauliFrame(state, graphStabilizers, spiderMeasurements, num_in, num_out);
+    _zxEval_initEprPairs(outProgram, graph, portToQubitMap);
+    _zxEval_performSpiderMeasurements(outProgram, graph, portToQubitMap, numIn, numOut);
+    outProgram.statements.push(new AmpsDisplay(numInternal, numIn + numOut));
 
     // Derive wavefunction and etc for caller.
-    return _zxEval_packageOutput(state, portToQubitMap, num_in, num_out);
+    return _analyzeProgram(outProgram, portToQubitMap.size, numIn, numOut);
 }
 
-class StabilizingMeasurement {
+class TransformedMeasurement {
     /**
      * @param {!PauliProduct} originalStabilizer
      * @param {!QubitAxis} postselectionControlAxis
-     * @param {!QubitAxis} currentAxis
-     * @param {undefined|!boolean} result
+     * @param {!QubitAxis} measurementAxis
      */
-    constructor(originalStabilizer, currentAxis, postselectionControlAxis, result=undefined) {
+    constructor(originalStabilizer, measurementAxis, postselectionControlAxis) {
         this.originalStabilizer = originalStabilizer;
-        this.currentAxis = currentAxis;
+        this.measurementAxis = measurementAxis;
         this.postselectionControlAxis = postselectionControlAxis;
-        this.result = result;
     }
 
     /**
@@ -317,11 +287,10 @@ class StabilizingMeasurement {
      * @returns {!boolean}
      */
     isEqualTo(other) {
-        return (other instanceof StabilizingMeasurement &&
-            this.currentAxis.isEqualTo(other.currentAxis) &&
+        return (other instanceof TransformedMeasurement &&
+            this.measurementAxis.isEqualTo(other.measurementAxis) &&
             this.originalStabilizer.isEqualTo(other.originalStabilizer) &&
-            this.postselectionControlAxis.isEqualTo(other.postselectionControlAxis) &&
-            this.result === other.result);
+            this.postselectionControlAxis.isEqualTo(other.postselectionControlAxis));
     }
 
     /**
@@ -330,65 +299,62 @@ class StabilizingMeasurement {
     toString() {
         return `originalStabilizer: ${this.originalStabilizer}
 postselectionControlAxis: ${this.postselectionControlAxis}
-currentAxis: ${this.currentAxis}
-result: ${this.result}`;
+measurementAxis: ${this.measurementAxis}`;
     }
 }
 
 /**
+ * @param {!QuantumProgram} outProgram
  * @param {!ZxGraph} graph
- * @param {!LoggedSimulation} state
  * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
  * @private
  */
-function _zxEval_initEprPairs(graph, state, portToQubitMap) {
-    state.qasm_logger.lines.push('');
-    state.qasm_logger.lines.push('// Init per-edge EPR pairs.');
+function _zxEval_initEprPairs(outProgram, graph, portToQubitMap) {
+    outProgram.statements.push(new Comment('', 'Init per-edge EPR pairs.'));
 
     // Identify edge qubit pairs.
     let pairs = [...graph.edges.entries()].map(ek => {
         let [e, kind] = ek;
         let qs = e.ports().map(p => portToQubitMap.get(p));
         qs.sort((a, b) => a - b);
-        return [qs, kind];
+        return {qs, kind};
     });
-    pairs.sort((a, b) => (a[0][0] - b[0][0])*10000 + (a[0][1] - b[0][1]));
+    pairs.sort((a, b) => (a.qs[0] - b.qs[0])*10000 + (a.qs[1] - b.qs[1]));
 
-    // Make + states.
-    let heads = pairs.map(e => e[0][0]);
-    state.initPlus(heads);
+    // Make the EPR pairs.
+    outProgram.statements.push(new InitEprPairs(...pairs.map(e => e.qs)));
 
-    // Expand + states into EPR pairs.
-    for (let [[q0, q1], _] of pairs) {
-        state.cnot(q0, q1);
-    }
-
+    // Apply any basis changes.
     let knownBasisChanges = ['h', 'x', 'z', 's', 'f'];
-    let basisChanges = pairs.filter(e => knownBasisChanges.indexOf(e[1]) !== -1).map(e => [e[0][1], e[1]]);
-    state.basisChange(basisChanges);
+    let basisChanges = new GeneralMap(...pairs.
+        filter(e => knownBasisChanges.indexOf(e.kind) !== -1).
+        map(e => [e.qs[1], e.kind]));
+    if (basisChanges.size > 0) {
+        outProgram.statements.push(new SingleQubitGates(basisChanges));
+    }
 }
 
 /**
+ * @param {!QuantumProgram} outProgram
  * @param {!int} n
- * @param {!LoggedSimulation} state
  * @param {!Array.<!int>} qubitIds
  * @param {!boolean} axis
- * @returns {!Array.<!StabilizingMeasurement>}
+ * @returns {!Array.<!TransformedMeasurement>}
  * @private
  */
-function _prepSpiderMeasurement(n, state, qubitIds, axis) {
+function _transformedSpiderMeasurement(outProgram, n, qubitIds, axis) {
     if (qubitIds.length === 0) {
         return [];
     }
     let [head, ...tail] = qubitIds;
-    state.cnot(head, tail, !axis, axis);
+    outProgram.statements.push(new MultiCnot(head, tail, !axis));
     let result = [];
-    result.push(new StabilizingMeasurement(
+    result.push(new TransformedMeasurement(
         PauliProduct.fromXzParity(n, axis, qubitIds),
         new QubitAxis(head, axis),
         new QubitAxis(head, !axis)));
     for (let t of tail) {
-        result.push(new StabilizingMeasurement(
+        result.push(new TransformedMeasurement(
             PauliProduct.fromXzParity(n, !axis, [head, t]),
             new QubitAxis(t, !axis),
             new QubitAxis(t, axis)));
@@ -397,94 +363,92 @@ function _prepSpiderMeasurement(n, state, qubitIds, axis) {
 }
 
 /**
- * @param {!LoggedSimulation} state
- * @param {!Array.<!StabilizingMeasurement>} stabilizingMeasurements
- * @private
- */
-function _fillStabilizerMeasurementResults(state, stabilizingMeasurements) {
-    // Group.
-    let xMeasured = stabilizingMeasurements.filter(e => !e.currentAxis.axis).map(e => e.currentAxis.qubit);
-    let allMeasured = stabilizingMeasurements.map(e => e.currentAxis.qubit);
-    allMeasured.sort((a, b) => a - b);
-
-    // Act.
-    state.hadamard(xMeasured);
-    let measurementResults = state.measure(allMeasured);
-
-    // Scatter.
-    let qubitToResultMap = {};
-    for (let i = 0; i < allMeasured.length; i++) {
-        qubitToResultMap[allMeasured[i]] = measurementResults[i];
-    }
-    for (let e of stabilizingMeasurements) {
-        e.result = qubitToResultMap[e.currentAxis.qubit];
-    }
-}
-
-/**
+ * @param {!QuantumProgram} outProgram
  * @param {!ZxGraph} graph
- * @param {!LoggedSimulation} state
  * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
- * @returns {!Array.<!StabilizingMeasurement>}
+ * @param {!int} numIn
+ * @param {!int} numOut
  * @private
  */
-function _zxEval_performSpiderMeasurements(graph, state, portToQubitMap) {
-    state.qasm_logger.lines.push('');
-    state.qasm_logger.lines.push('// Perform per-node spider measurements.');
+function _zxEval_performSpiderMeasurements(outProgram, graph, portToQubitMap, numIn, numOut) {
+    outProgram.statements.push(new Comment('', 'Perform per-node spider measurements.'));
     let n = portToQubitMap.size;
 
     // Perform 2-qubit operations and determine what to measure.
-    let stabilizingMeasurements = /** @type {!Array.<StabilizingMeasurement>} */ [];
+    let spiderMeasurements = /** @type {!Array.<TransformedMeasurement>} */ [];
     for (let {node, axis} of graph.spiderMeasurementNodes()) {
         let qubits = graph.activePortsOf(node).map(p => portToQubitMap.get(p));
-        stabilizingMeasurements.push(..._prepSpiderMeasurement(n, state, qubits, axis));
+        spiderMeasurements.push(..._transformedSpiderMeasurement(outProgram, n, qubits, axis));
     }
 
     // Perform Bell measurements on crossing lines.
     for (let node of graph.crossingNodes()) {
         for (let pair of graph.activeCrossingPortPairs(node)) {
             let qubits = pair.map(p => portToQubitMap.get(p));
-            stabilizingMeasurements.push(..._prepSpiderMeasurement(n, state, qubits, false));
+            spiderMeasurements.push(..._transformedSpiderMeasurement(outProgram, n, qubits, false));
         }
     }
 
-    _fillStabilizerMeasurementResults(state, stabilizingMeasurements);
+    // Group.
+    let xMeasured = spiderMeasurements.filter(e => !e.measurementAxis.axis).map(e => e.measurementAxis.qubit);
+    let allMeasured = spiderMeasurements.map(e => e.measurementAxis.qubit);
+    allMeasured.sort((a, b) => a - b);
 
-    return stabilizingMeasurements;
+    // Act.
+    outProgram.statements.push(new SingleQubitGates(new Map(xMeasured.map(q => [q, 'h']))));
+
+    let measurementToFeedback = _spiderMeasurementToFeedbackMap(
+        graph, portToQubitMap, spiderMeasurements, numIn, numOut);
+    outProgram.statements.push(new MeasurementsWithPauliFeedback(measurementToFeedback));
 }
 
 /**
- * @param {!LoggedSimulation} state
- * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
+ * @param {!QuantumProgram} outProgram
+ * @param {!int} numQubits
  * @param {!int} numIn
  * @param {!int} numOut
- * @returns {{stabilizers: !Array.<!PauliProduct>, wavefunction: !Matrix, qasm: string, quirk_url: string}}
+ * @returns {!{
+ *      stabilizers: !Array.<!PauliProduct>,
+ *      wavefunction: !Matrix,
+ *      qasm: !string,
+ *      quirk_url: !string,
+ *      satisfiable: !boolean
+ * }}
  * @private
  */
-function _zxEval_packageOutput(state, portToQubitMap, numIn, numOut) {
+function _analyzeProgram(outProgram, numQubits, numIn, numOut) {
     let numKept = numIn + numOut;
 
-    let qasm = [
-        'OPENQASM 2.0;',
-        'include "qelib1.inc";',
-        `qreg q[${portToQubitMap.size}]`,
-        `creg m[${portToQubitMap.size - numKept}]`,
-        ...state.qasm_logger.lines,
-    ].join('\n');
+    let qasm = outProgram.qasm();
+    let quirk_url = outProgram.quirkUrl();
 
-    state.quirk_logger.sparse([portToQubitMap.size - numKept, `Amps${numKept}`]);
-    let quirk_url = state.quirk_logger.url();
+    let wantZeroSim = new ChpSimulator(numQubits, 0);
+    let out = [];
+    try {
+        outProgram.interpret(wantZeroSim, out);
+    } finally {
+        wantZeroSim.destruct();
+    }
+    let satisfiable = out.every(e => e === false);
 
-    let simStateStabilizers = _extractRemainingStabilizers(state.sim, numKept);
+    let sim = new ChpSimulator(numQubits);
+    let stabilizers;
+    try {
+        outProgram.interpret(sim, []);
+        stabilizers = _extractRemainingStabilizers(sim, numKept);
+    } finally {
+        sim.destruct();
+    }
 
-    let wavefunction = stabilizerStateToWavefunction(simStateStabilizers);
+    let wavefunction = stabilizerStateToWavefunction(stabilizers);
     wavefunction = new Matrix(1 << numIn, 1 << numOut, wavefunction.rawBuffer());
 
     return {
-        stabilizers: simStateStabilizers,
-        wavefunction: wavefunction,
-        qasm: qasm,
-        quirk_url: quirk_url,
+        stabilizers,
+        wavefunction,
+        qasm,
+        quirk_url,
+        satisfiable,
     };
 }
 
@@ -509,4 +473,4 @@ function _extractRemainingStabilizers(stabilizerSim, numKept) {
     return PauliProduct.gaussianEliminate(paulis);
 }
 
-export {evalZxGraph}
+export {evalZxGraph, generatePortToQubitMap, fixedPointsOfGraph}

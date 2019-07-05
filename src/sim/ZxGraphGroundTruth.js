@@ -10,7 +10,6 @@ import {Matrix} from "src/base/Matrix.js"
 import {ZxPort, ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js"
 import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
-import {LoggedSimulation} from "src/sim/LoggedSimulator.js";
 import {popcnt} from "src/base/Util.js";
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 import {Controls} from "src/sim/Controls.js";

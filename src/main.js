@@ -57,6 +57,7 @@ const canvasDiv = /** @type {!HTMLDivElement} */ document.getElementById('main-c
 const stabilizersDiv = /** @type {!HTMLDivElement} */ document.getElementById('stabilizers-div');
 const quirkAnchor = /** @type {!HTMLDivElement} */ document.getElementById('quirk-link-anchor');
 const qasmPre = /** @type {!HTMLPreElement} */ document.getElementById('qasm-pre');
+const satisfiablePre = /** @type {!HTMLPreElement} */ document.getElementById('satisfiable-pre');
 const textDiagramPre = /** @type {!HTMLPreElement} */ document.getElementById('text-diagram-pre');
 let mouseX = undefined;
 let mouseY = undefined;
@@ -358,10 +359,20 @@ function drawResults(ctx) {
         textDiagramPre,
         'innerText',
         curGraph.toString(true));
+    setIfDiffers(
+        satisfiablePre,
+        'innerText',
+        results.satisfiable ? 'yes' : 'NOT SATISFIABLE');
 
     let s = new Rect(canvas.clientWidth - 300, 0, 300, 300);
     let painter = new Painter(ctx);
-    MathPainter.paintMatrix(painter, results.wavefunction, s);
+    MathPainter.paintMatrix(
+        painter,
+        results.wavefunction,
+        s,
+        undefined,
+        undefined,
+        results.satisfiable ? undefined : 'red');
     let groundTruth = evalZxGraphGroundTruth(curGraph);
     groundTruth = groundTruth.phaseMatchedTo(results.wavefunction);
     ctx.globalAlpha *= 0.5;
