@@ -106,7 +106,12 @@ https://algassert.com/quirk#circuit={
 OPENQASM 2.0;
 include "qelib1.inc";
 qreg q[10];
-creg m[6];
+creg m_0[1];
+creg m_1[1];
+creg m_2[1];
+creg m_3[1];
+creg m_4[1];
+creg m_5[1];
 
 // Init per-edge EPR pairs.
 h q[0];
@@ -128,26 +133,21 @@ cx q[5], q[3];
 h q[0];
 h q[4];
 h q[5];
-measure q[0] -> m[0];
-measure q[1] -> m[1];
-measure q[2] -> m[2];
-measure q[3] -> m[3];
-measure q[4] -> m[4];
-measure q[5] -> m[5];
+measure q[0] -> m_0;
+measure q[1] -> m_1;
+measure q[2] -> m_2;
+measure q[3] -> m_3;
+measure q[4] -> m_4;
+measure q[5] -> m_5;
 
 // Adjust Pauli frame based on measurements.
-if (m[1]) {
-    x q[8];
-}
-if (m[0] ^ m[4]) {
-    z q[8];
-}
-if (m[2] ^ m[3]) {
-    x q[9];
-}
-if (m[4] ^ m[5]) {
-    z q[9];
-}
+if (m_0 == 1) z q[8];
+if (m_1 == 1) x q[8];
+if (m_2 == 1) x q[9];
+if (m_3 == 1) x q[9];
+if (m_4 == 1) z q[8];
+if (m_4 == 1) z q[9];
+if (m_5 == 1) z q[9];
     `.trim());
 });
 

@@ -142,6 +142,28 @@ class ZxEdge {
     }
 
     /**
+     * @param {!ZxEdge|!ZxNode} element
+     * @returns {undefined|!ZxNode|!ZxEdge}
+     */
+    intersection(element) {
+        if (element instanceof ZxNode) {
+            if (this.n1.isEqualTo(element) || this.n2.isEqualTo(element)) {
+                return element;
+            }
+            return undefined;
+        }
+
+        if (element instanceof ZxEdge) {
+            if (this.isEqualTo(element)) {
+                return element;
+            }
+            return this.intersection(element.n1) || this.intersection(element.n2);
+        }
+
+        throw new Error(`Unrecognized graph element: ${element}`);
+    }
+
+    /**
      * @param {!int} x
      * @param {!int} y
      * @param {!boolean} horizontal
