@@ -333,7 +333,8 @@ class HeaderAlloc extends QuantumStatement {
             'OPENQASM 2.0;',
             'include "qelib1.inc";',
             `qreg q[${this.numQubits}];`,
-            `creg m[${this.numMeasured}];`);
+            ...Seq.range(this.numMeasured).map(i => `creg m_${i}[1];`)
+        );
     }
 
     writeQuirk(init, cols) {
@@ -398,17 +399,28 @@ class MeasurementsWithPauliFeedback extends QuantumStatement {
 
     writeQasm(statements) {
         for (let q of this.measurementToEffectMap.keys()) {
-            statements.push(`measure q[${q}] -> m[${q}];`);
+            statements.push(`measure q[${q}] -> m_${q};`);
         }
 
         statements.push('');
         statements.push('// Adjust Pauli frame based on measurements.');
-        for (let effect of this._orderedEffects) {
-            let controls = this._effectToControlsMap.get(effect);
-            let condition = controls.map(e => `m[${e}]`).join(' ^ ');
-            let op = `${effect.axis ? 'z' : 'x'} q[${effect.qubit}]`;
-            statements.push(`if (${condition}) {\n    ${op};\n}`);
+        let qubits = [...this.measurementToEffectMap.keys()];
+        qubits.sort((a, b) => a - b);
+        for (let qubit of qubits) {
+            let effects = this.measurementToEffectMap.get(qubit);
+            for (let effect of effects) {
+                let op = `${effect.axis ? 'z' : 'x'} q[${effect.qubit}]`;
+                statements.push(`if (m_${qubit} == 1) ${op};`);
+            }
         }
+
+        // BLOCKED TODO: use this cleaner output when QASM supports more general conditions.
+        // for (let effect of this._orderedEffects) {
+        //     let controls = this._effectToControlsMap.get(effect);
+        //     let condition = controls.map(e => `m[${e}]`).join(' ^ ');
+        //     let op = `${effect.axis ? 'z' : 'x'} q[${effect.qubit}]`;
+        //     statements.push(`if (${condition}) {\n    ${op};\n}`);
+        // }
     }
 
     writeQuirk(inits, cols) {
