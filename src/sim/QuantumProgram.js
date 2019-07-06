@@ -62,9 +62,12 @@ class QuantumStatement {
 
     /**
      * @param {!SimulatorSpec} sim
-     * @param {!Array.<!boolean>} measurementsOut
+     * @param {!{
+     *     measurements: !Array.<[!int, !boolean]>,
+     *     successProbability: !number,
+     * }} out
      */
-    interpret(sim, measurementsOut) { }
+    interpret(sim, out) { }
 }
 
 class QuantumProgram extends QuantumStatement {
@@ -104,9 +107,9 @@ class QuantumProgram extends QuantumStatement {
         }
     }
 
-    interpret(sim, measurementsOut) {
+    interpret(sim, out) {
         for (let statement of this.statements) {
-            statement.interpret(sim, measurementsOut);
+            statement.interpret(sim, out);
         }
     }
 }
@@ -153,7 +156,7 @@ class InitEprPairs extends QuantumStatement {
         }
     }
 
-    interpret(sim, measurementsOut) {
+    interpret(sim, out) {
         for (let [q, _] of this.qubitPairs) {
             sim.hadamard(q);
         }
@@ -215,7 +218,7 @@ class MultiCnot extends QuantumStatement {
         cols.push(col);
     }
 
-    interpret(sim, measurementsOut) {
+    interpret(sim, out) {
         for (let target of this.targets) {
             if (this.axis) {
                 sim.cnot(this.control, target);
@@ -282,7 +285,7 @@ class SingleQubitGates extends QuantumStatement {
         cols.push(col);
     }
 
-    interpret(sim, measurementsOut) {
+    interpret(sim, out) {
         for (let [qubit, gate] of this.changes.entries()) {
             if (gate === 'h') {
                 sim.hadamard(qubit);
@@ -309,13 +312,11 @@ class SingleQubitGates extends QuantumStatement {
 
 class HeaderAlloc extends QuantumStatement {
     /**
-     * @param {!int} numQubits
-     * @param {!int} numMeasured
+     * @param {!PortQubitMapping} portQubitMapping
      */
-    constructor(numQubits, numMeasured) {
+    constructor(portQubitMapping) {
         super();
-        this.numQubits = numQubits;
-        this.numMeasured = numMeasured;
+        this.portQubitMapping = portQubitMapping;
     }
 
     /**
@@ -324,25 +325,81 @@ class HeaderAlloc extends QuantumStatement {
      */
     isEqualTo(other) {
         return (other instanceof HeaderAlloc &&
-            this.numQubits === other.numQubits &&
-            this.numMeasured === other.numMeasured);
+            this.portQubitMapping.isEqualTo(other.portQubitMapping));
     }
 
     writeQasm(statements) {
         statements.push(
             'OPENQASM 2.0;',
             'include "qelib1.inc";',
-            `qreg q[${this.numQubits}];`,
-            ...Seq.range(this.numMeasured).map(i => `creg m_${i}[1];`)
+            `qreg q[${this.portQubitMapping.numQubits}];`,
+            ...Seq.range(this.portQubitMapping.numInternal).map(i => `creg m_${i}[1];`),
+            ...(this.portQubitMapping.numPost === 0 ? [] : [`creg post[${this.portQubitMapping.numPost}]`]),
         );
     }
 
     writeQuirk(init, cols) {
     }
 
-    interpret(sim, measurementsOut) {
-        for (let i = 0; i < this.numQubits; i++) {
+    interpret(sim, out) {
+        for (let i = 0; i < this.portQubitMapping.numQubits; i++) {
             sim.qalloc();
+        }
+    }
+}
+
+class PostSelection extends QuantumStatement {
+    /**
+     * @param {!GeneralMap.<!int, !boolean>} qubitAxes
+     */
+    constructor(qubitAxes) {
+        super();
+        this.qubitAxes = qubitAxes;
+    }
+
+    /**
+     * @param {*} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return (other instanceof PostSelection &&
+            equate(this.qubitAxes, other.qubitAxes));
+    }
+
+    writeQasm(statements) {
+        statements.push('');
+        statements.push('// Post-selected measurements that must return 0.');
+        statements.push(...seq(this.qubitAxes.entries()).
+            filter(e => !e[1]).
+            map(e => e[0]).
+            sorted().
+            map(q => `h q[${q}];`));
+        statements.push(...seq(this.qubitAxes.keys()).
+            sorted().
+            mapWithIndex((q, i) => `measure q[${q}] -> post[${i}];`));
+    }
+
+    writeQuirk(init, cols) {
+        let col = [];
+        for (let [qubit, axis] of this.qubitAxes.entries()) {
+            padSetTo(col, 1, qubit, axis ? '|0⟩⟨0|' : '|+⟩⟨+|');
+        }
+        cols.push(col);
+    }
+
+    interpret(sim, out) {
+        for (let [qubit, axis] of this.qubitAxes.entries()) {
+            if (!axis) {
+                sim.hadamard(qubit);
+            }
+            let measurement = sim.measure(qubit, 0.0);
+            out.measurements.push([qubit, measurement.result]);
+            if (measurement.random) {
+                out.successProbability *= 0.5;
+            }
+            if (measurement.result) {
+                out.successProbability = 0;
+            }
         }
     }
 }
@@ -371,7 +428,7 @@ class Comment extends QuantumStatement {
     writeQuirk(inits, cols) {
     }
 
-    interpret(sim, measurementsOut) {
+    interpret(sim, out) {
     }
 }
 
@@ -444,16 +501,18 @@ class MeasurementsWithPauliFeedback extends QuantumStatement {
         }
     }
 
-    interpret(sim, measurementsOut) {
+    interpret(sim, out) {
         let allEffects = new GeneralSet();
 
         let qubits = [...this.measurementToEffectMap.keys()];
         qubits.sort((a, b) => a - b);
         for (let qubit of qubits) {
             let effects = this.measurementToEffectMap.get(qubit);
-            let result = sim.measure(qubit);
-            measurementsOut.push(result);
-            if (result) {
+            let measurement = sim.measure(qubit);
+
+            out.measurements.push([qubit, measurement.result]);
+
+            if (measurement.result) {
                 for (let effect of effects) {
                     if (allEffects.has(effect)) {
                         allEffects.delete(effect);
@@ -570,4 +629,5 @@ export {
     padSetTo,
     MultiCnot,
     AmpsDisplay,
+    PostSelection,
 }

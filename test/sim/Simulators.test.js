@@ -46,7 +46,7 @@ function sim_test(test_name, testFunc, maxQubitCount=10) {
 sim_test('zero', sim => {
     let q = sim.qalloc();
     assertThat(sim.blochVector(q)).isApproximatelyEqualTo({x: 0, y: 0, z: +1});
-    assertFalse(sim.measure(q));
+    assertFalse(sim.measure(q).result);
     assertThat(sim.blochVector(q)).isApproximatelyEqualTo({x: 0, y: 0, z: +1});
 });
 
@@ -117,7 +117,7 @@ sim_test('not', sim => {
     assertThat(sim.probability(q)).isApproximatelyEqualTo(0.0);
     sim.x(q);
     assertThat(sim.probability(q)).isApproximatelyEqualTo(1.0);
-    assertTrue(sim.measure(q));
+    assertTrue(sim.measure(q).result);
     assertThat(sim.probability(q)).isApproximatelyEqualTo(1.0);
     sim.x(q);
     assertThat(sim.probability(q)).isApproximatelyEqualTo(0.0);
@@ -210,7 +210,7 @@ sim_test('s_state_distillation_low_depth', sim => {
         }
         sim.hadamard(anc);
         assertThat(sim.probability(anc)).isApproximatelyEqualTo(0.5);
-        let v = sim.measure(anc);
+        let v = sim.measure(anc).result;
         if (v) {
             sim.hadamard(anc);
             sim.phase(anc);
@@ -224,7 +224,7 @@ sim_test('s_state_distillation_low_depth', sim => {
     for (let k = 0; k < 7; k++) {
         sim.phase(qs[k]);
         sim.hadamard(qs[k]);
-        qubit_measurements.push(sim.measure(k));
+        qubit_measurements.push(sim.measure(k).result);
     }
 
     let p = 0;
@@ -239,7 +239,7 @@ sim_test('s_state_distillation_low_depth', sim => {
     sim.phase(qs[7]);
     sim.hadamard(qs[7]);
     assertThat(sim.probability(qs[7])).isApproximatelyEqualTo(0);
-    let r = sim.measure(qs[7]);
+    let r = sim.measure(qs[7]).result;
     assertFalse(r);
 
     for (let c of checks) {
@@ -279,7 +279,7 @@ sim_test('s_state_distillation_low_space', sim => {
         sim.phase(anc);
         sim.hadamard(anc);
         assertThat(sim.probability(anc)).isApproximatelyEqualTo(0.5);
-        let v = sim.measure(anc);
+        let v = sim.measure(anc).result;
         if (v) {
             for (let k of [...phasor, anc]) {
                 sim.hadamard(qs[k]);
@@ -292,12 +292,12 @@ sim_test('s_state_distillation_low_space', sim => {
 
     for (let k = 0; k < 3; k++) {
         assertThat(sim.probability(k)).isApproximatelyEqualTo(0);
-        let v = sim.measure(qs[k]);
+        let v = sim.measure(qs[k]).result;
         assertFalse(v);
     }
     sim.phase(qs[3]);
     sim.hadamard(qs[3]);
     assertThat(sim.probability(qs[3])).isApproximatelyEqualTo(1);
-    let v = sim.measure(qs[3]);
+    let v = sim.measure(qs[3]).result;
     assertTrue(v);
 });

@@ -282,9 +282,9 @@ function evalZxGraphGroundTruth(graph) {
             (kind === 'in' ? inputPorts : outputPorts).push(outerPort);
             ports.push(outerPort);
             data = zBasisEqualityMatrix(0, 2);
-        } else if (kind === '@') {
+        } else if (kind === '@' || kind === '@!') {
             data = zBasisEqualityMatrix(0, degree);
-        } else if (kind === 'O') {
+        } else if (kind === 'O' || kind === 'O!') {
             data = xBasisEqualityMatrix(0, degree);
         } else if (kind === '+') {
             for (let pair of graph.activeCrossingPortPairs(node)) {

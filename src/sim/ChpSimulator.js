@@ -1,6 +1,7 @@
 import {DetailedError} from "src/base/DetailedError.js"
 import {SimulatorSpec} from "src/sim/SimulatorSpec.js";
 import {BitTable} from "src/sim/BitTable.js";
+import {Measurement} from "src/sim/Measurement.js";
 import {
     QState,
     init_state,
@@ -184,7 +185,7 @@ class ChpSimulator extends SimulatorSpec {
      * Measures a qubit.
      * @param {!int} q The handle of the qubit to measure.
      * @param {!number|undefined=} bias When a measurement result is non-deterministic, this determines the probability of True.
-     * @returns {!boolean} The measurement result.
+     * @returns {!Measurement} The measurement result.
      */
     measure(q, bias=undefined) {
         if (bias === undefined) {
@@ -193,12 +194,12 @@ class ChpSimulator extends SimulatorSpec {
         let randomResult = Math.random() < bias;
         let a = this._slotFor(q);
         let m = measure(this._state, a, 0, randomResult);
-        return (m & 1) !== 0;
+        return new Measurement((m & 1) !== 0, (m & 2) !== 0);
     }
 
     free(q) {
         // Decohere the qubit.
-        if (this.measure(q)) {
+        if (this.measure(q).result) {
             this.x(q);
         }
 

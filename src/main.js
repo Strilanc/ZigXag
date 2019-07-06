@@ -151,14 +151,22 @@ function xyToGraphElement(x, y) {
  * @param {!string=} fill
  * @param {!string=} stroke
  */
-function drawNode(ctx, node, radius=8, fill=undefined, stroke='black') {
+function drawNode(ctx, node, radius=8, fill=undefined, stroke=undefined) {
     let kind = curGraph.nodes.get(node);
     let text = '';
+    if (stroke !== undefined) {
+        ctx.strokeStyle = stroke;
+    } else if (kind === 'O!' || kind === '@!') {
+        ctx.strokeStyle = 'red';
+        ctx.lineWidth = 3;
+    } else {
+        ctx.strokeStyle = 'black';
+    }
     if (fill !== undefined) {
         ctx.fillStyle = fill;
-    } else if (kind === 'O') {
+    } else if (kind === 'O' || kind === 'O!') {
         ctx.fillStyle = 'white';
-    } else if (kind === '@') {
+    } else if (kind === '@' || kind === '@!') {
         ctx.fillStyle = 'black';
     } else if (kind === 'in' || kind === 'out') {
         ctx.fillStyle = 'yellow';
@@ -169,8 +177,8 @@ function drawNode(ctx, node, radius=8, fill=undefined, stroke='black') {
     ctx.beginPath();
     ctx.arc(...nodeToXy(node), radius, 0, 2*Math.PI);
     ctx.fill();
-    ctx.strokeStyle = stroke;
     ctx.stroke();
+    ctx.lineWidth = 1;
 
     if (text !== '') {
         let [x, y] = nodeToXy(node);
@@ -332,11 +340,18 @@ function setIfDiffers(object, key, value) {
     }
 }
 
+let prevGraph = undefined;
+let prevResults = undefined;
+
 /**
  * @param {!CanvasRenderingContext2D} ctx
  */
 function drawResults(ctx) {
-    let results = evalZxGraph(curGraph);
+    if (!curGraph.isEqualTo(prevGraph)) {
+        prevResults = evalZxGraph(curGraph);
+        prevGraph = curGraph;
+    }
+    let results = prevResults;
     let numIn = curGraph.inputNodes().length;
     function descStabilizer(s) {
         let r = s.toString();
@@ -350,7 +365,7 @@ function drawResults(ctx) {
     setIfDiffers(
         quirkAnchor,
         'href',
-        results.quirk_url);
+        results.quirkUrl);
     setIfDiffers(
         qasmPre,
         'innerText',
@@ -362,7 +377,10 @@ function drawResults(ctx) {
     setIfDiffers(
         satisfiablePre,
         'innerText',
-        results.satisfiable ? 'yes' : 'NOT SATISFIABLE');
+        [
+            results.satisfiable ? 'Graph is satisfiable' : 'GRAPH IS NOT SATISFIABLE',
+            `Chance of post-selection succeeding: ${results.successProbability * 100}%`
+        ].join('\n'));
 
     let s = new Rect(canvas.clientWidth - 300, 0, 300, 300);
     let painter = new Painter(ctx);
@@ -594,7 +612,7 @@ function changeNodeKindEdit(node) {
     return new Edit(
         () => `cycle ${node}`,
         graph => {
-            let cycle = ['O', '@', '+', 'in', 'out'];
+            let cycle = ['O', '@', '+', 'in', 'out', 'O!', '@!'];
             let kind = graph.nodes.get(node);
             let i = cycle.indexOf(kind);
             i++;

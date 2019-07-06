@@ -807,6 +807,7 @@ suite.test("sorted", () => {
     assertThat(seq([1, 2, 3]).sorted()).isEqualTo([1, 2, 3]);
     assertThat(seq([3, 1, 2]).sorted()).isEqualTo([1, 2, 3]);
     assertThat(seq([3, 2, 1]).sorted()).isEqualTo([1, 2, 3]);
+    assertThat(seq([10, 2, 1, 20]).sorted()).isEqualTo([1, 2, 10, 20]);
     assertThat(seq([-Infinity, Infinity, 3, 2, 1]).sorted()).isEqualTo([-Infinity, 1, 2, 3, Infinity]);
     assertThat(seq(["d", "a", "c", "b"]).sorted()).isEqualTo(["a", "b", "c", "d"]);
     assertThat(seq(["one", "two", "three"]).sorted()).isEqualTo(["one", "three", "two"]);

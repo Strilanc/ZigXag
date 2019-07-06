@@ -185,6 +185,31 @@ suite.test('fromDiagram', () => {
     `)).isNotEqualTo(undefined);
 });
 
+suite.test('fromDiagram_modifierCharacters', () => {
+    let g = ZxGraph.fromDiagram(`
+        @---@!--O!--o!--O!
+            |
+            |
+            |
+            @!
+            |
+            |
+            |
+            o---O
+    `);
+    assertThat(g.toString()).isEqualTo(`
+@---@!--O!--O!--O!
+    |
+    |
+    |
+    @!
+    |
+    |
+    |
+    O---O
+    `.trim());
+});
+
 suite.test("diagramCrossingCharacters", () => {
     let diagramText = `
 O-F-----------------O-------O-----------O-------O

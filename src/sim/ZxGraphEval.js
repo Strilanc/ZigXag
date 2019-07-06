@@ -20,6 +20,7 @@ import {
     InitEprPairs,
     MultiCnot,
     AmpsDisplay,
+    PostSelection,
 } from "src/sim/QuantumProgram.js"
 
 /**
@@ -58,7 +59,7 @@ function _nodeSpiderFixedPoints(graph, node, qubit_map) {
     let ports = graph.activePortsOf(node);
     let kind = graph.kind(node);
 
-    if (kind === 'in' || kind === 'out') {
+    if (kind === 'in' || kind === 'out' || kind === 'O!' || kind === '@!') {
         return [];
     }
 
@@ -133,17 +134,14 @@ function _edgeEprFixedPoints(graph, edge, qubit_map) {
  * because this case occurs only when all of the paired internal toggles will be needed at the same time.
  *
  * @param {!Array.<!PauliProduct>} fixedPoints
- * @param {!int} externalWidth The columns of the fixed point table first go over the internal degrees of freedom, then
- *      the external ones. This indicates how many external degrees of freedom there are, allowing us to tell which
- *      columns correspond to what. In other words, this is the number of input edges plus the number of output edges.
+ * @param {!int} internalWidth The columns of the fixed point table first go over the internal degrees of freedom, then
+ *      the external ones. This indicates where the split is located.
  * @returns {!GeneralMap<!QubitAxis, !Array.<!QubitAxis>>}
  * @private
  */
-function _internalToExternalMapFromFixedPoints(fixedPoints, externalWidth) {
+function _internalToExternalMapFromFixedPoints(fixedPoints, internalWidth) {
     let reducedFixedPoints = PauliProduct.gaussianEliminate(fixedPoints).map(e => e.abs());
 
-    let width = fixedPoints.length === 0 ? 0 : fixedPoints[0].paulis.length;
-    let internalWidth = width - externalWidth;
     let fixupMap = /** @type {!GeneralMap<!QubitAxis, !Array.<!QubitAxis>>} */ new GeneralMap();
 
     for (let fixedPoint of reducedFixedPoints) {
@@ -171,15 +169,13 @@ function _internalToExternalMapFromFixedPoints(fixedPoints, externalWidth) {
 
 /**
  * @param {!ZxGraph} graph
- * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
+ * @param {!PortQubitMapping} portQubitMapping
  * @param {!Array.<TransformedMeasurement>} spiderMeasurements
- * @param {!int} numIn
- * @param {!int} numOut
  * @returns {!GeneralMap<!int, !Array.<!QubitAxis>>} Map from in/out axis to measurement qubits that flip it.
  */
-function _spiderMeasurementToFeedbackMap(graph, portToQubitMap, spiderMeasurements, numIn, numOut) {
-    let fixedPoints = fixedPointsOfGraph(graph, portToQubitMap);
-    let externalMap = _internalToExternalMapFromFixedPoints(fixedPoints, numIn + numOut);
+function _spiderMeasurementToFeedbackMap(graph, portQubitMapping, spiderMeasurements) {
+    let fixedPoints = fixedPointsOfGraph(graph, portQubitMapping.map);
+    let externalMap = _internalToExternalMapFromFixedPoints(fixedPoints, portQubitMapping.numInternal);
     let out = new GeneralMap();
     for (let spider of spiderMeasurements) {
         if (!externalMap.has(spider.postselectionControlAxis)) {
@@ -193,17 +189,22 @@ function _spiderMeasurementToFeedbackMap(graph, portToQubitMap, spiderMeasuremen
 
 /**
  * @param {!ZxGraph} graph
- * @returns {!{portToQubitMap: !GeneralMap<!ZxPort, !int>, num_inputs: !int, num_outputs: !int}}
+ * @returns {!PortQubitMapping}
  */
-function generatePortToQubitMap(graph) {
+function graphToPortQubitMapping(graph) {
     let portToQubitMap = /** @type {!GeneralMap<!ZxPort, !int>} */ new GeneralMap();
 
     // Sort and classify nodes.
     let inputNodes = graph.inputNodes();
     let outputNodes = graph.outputNodes();
-    let measurementNodes = graph.spiderMeasurementNodes();
+    let postNodes = graph.postselectionNodesWithAxis();
+    let measurementNodes = graph.spiderMeasurementNodesWithAxis();
     let crossingNodes = graph.crossingNodes();
-    if (inputNodes.length + outputNodes.length + measurementNodes.length + crossingNodes.length !== graph.nodes.size) {
+    if (inputNodes.length +
+            outputNodes.length +
+            measurementNodes.length +
+            crossingNodes.length +
+            postNodes.length !== graph.nodes.size) {
         throw new Error('Unrecognized node(s).');
     }
 
@@ -232,7 +233,7 @@ function generatePortToQubitMap(graph) {
         portToQubitMap.set(ports[0], portToQubitMap.size);
     }
 
-    // And lastly output nodes.
+    // Then output nodes.
     for (let node of outputNodes) {
         let ports = graph.activePortsOf(node);
         if (ports.length !== 1) {
@@ -241,7 +242,20 @@ function generatePortToQubitMap(graph) {
         portToQubitMap.set(ports[0], portToQubitMap.size);
     }
 
-    return {portToQubitMap, num_inputs: inputNodes.length, num_outputs: outputNodes.length};
+    // And lastly post-selection.
+    for (let {node} of postNodes) {
+        let ports = graph.activePortsOf(node);
+        if (ports.length !== 1) {
+            throw new Error('ports.length !== 1')
+        }
+        portToQubitMap.set(ports[0], portToQubitMap.size);
+    }
+
+    return new PortQubitMapping(
+        portToQubitMap,
+        inputNodes.length,
+        outputNodes.length,
+        postNodes.length);
 }
 
 /**
@@ -250,24 +264,26 @@ function generatePortToQubitMap(graph) {
  *      stabilizers: !Array.<!PauliProduct>,
  *      wavefunction: !Matrix,
  *      qasm: !string,
- *      quirk_url: !string,
- *      satisfiable: !boolean
+ *      quirkUrl: !string,
+ *      satisfiable: !boolean,
+ *      successProbability: !number,
  * }}
  */
 function evalZxGraph(graph) {
     // Prepare simulator.
-    let {portToQubitMap, num_inputs: numIn, num_outputs: numOut} = generatePortToQubitMap(graph);
+    let portQubitMapping = graphToPortQubitMapping(graph);
     let outProgram = new QuantumProgram();
-    let numInternal = portToQubitMap.size - numIn - numOut;
-    outProgram.statements.push(new HeaderAlloc(portToQubitMap.size, numInternal));
+    outProgram.statements.push(new HeaderAlloc(portQubitMapping));
 
     // Perform operations congruent to the ZX graph.
-    _zxEval_initEprPairs(outProgram, graph, portToQubitMap);
-    _zxEval_performSpiderMeasurements(outProgram, graph, portToQubitMap, numIn, numOut);
-    outProgram.statements.push(new AmpsDisplay(numInternal, numIn + numOut));
+    _zxEval_initEprPairs(outProgram, graph, portQubitMapping.map);
+    _zxEval_performSpiderMeasurements(outProgram, graph, portQubitMapping);
+    outProgram.statements.push(new AmpsDisplay(
+        portQubitMapping.numInternal,
+        portQubitMapping.numIn + portQubitMapping.numOut));
 
     // Derive wavefunction and etc for caller.
-    return _analyzeProgram(outProgram, portToQubitMap.size, numIn, numOut);
+    return _analyzeProgram(outProgram, portQubitMapping);
 }
 
 class TransformedMeasurement {
@@ -336,13 +352,13 @@ function _zxEval_initEprPairs(outProgram, graph, portToQubitMap) {
 
 /**
  * @param {!QuantumProgram} outProgram
- * @param {!int} n
+ * @param {!int} totalQubits
  * @param {!Array.<!int>} qubitIds
  * @param {!boolean} axis
  * @returns {!Array.<!TransformedMeasurement>}
  * @private
  */
-function _transformedSpiderMeasurement(outProgram, n, qubitIds, axis) {
+function _transformedSpiderMeasurement(outProgram, totalQubits, qubitIds, axis) {
     if (qubitIds.length === 0) {
         return [];
     }
@@ -350,42 +366,80 @@ function _transformedSpiderMeasurement(outProgram, n, qubitIds, axis) {
     outProgram.statements.push(new MultiCnot(head, tail, !axis));
     let result = [];
     result.push(new TransformedMeasurement(
-        PauliProduct.fromXzParity(n, axis, qubitIds),
+        PauliProduct.fromXzParity(totalQubits, axis, qubitIds),
         new QubitAxis(head, axis),
         new QubitAxis(head, !axis)));
     for (let t of tail) {
         result.push(new TransformedMeasurement(
-            PauliProduct.fromXzParity(n, !axis, [head, t]),
+            PauliProduct.fromXzParity(totalQubits, !axis, [head, t]),
             new QubitAxis(t, !axis),
             new QubitAxis(t, axis)));
     }
     return result;
 }
 
+class PortQubitMapping {
+    /**
+     * @param {!GeneralMap.<!ZxPort, !int>} map
+     * @param {!int} numIn
+     * @param {!int} numOut
+     * @param {!int} numPost
+     */
+    constructor(map, numIn, numOut, numPost) {
+        this.map = map;
+        this.numIn = numIn;
+        this.numOut = numOut;
+        this.numPost = numPost;
+    }
+
+    /**
+     * @param {*} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return (other instanceof PortQubitMapping &&
+            this.map.isEqualTo(other.map) &&
+            this.numIn === other.numIn &&
+            this.numOut === other.numOut &&
+            this.numPost === other.numPost);
+    }
+
+    get numQubits() {
+        return this.map.size;
+    }
+
+    get numExternal() {
+        return this.numIn + this.numOut + this.numPost;
+    }
+
+    get numInternal() {
+        return this.numQubits - this.numExternal;
+    }
+}
+
 /**
  * @param {!QuantumProgram} outProgram
  * @param {!ZxGraph} graph
- * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
- * @param {!int} numIn
- * @param {!int} numOut
+ * @param {!PortQubitMapping} portQubitMapping
  * @private
  */
-function _zxEval_performSpiderMeasurements(outProgram, graph, portToQubitMap, numIn, numOut) {
+function _zxEval_performSpiderMeasurements(outProgram, graph, portQubitMapping) {
     outProgram.statements.push(new Comment('', 'Perform per-node spider measurements.'));
-    let n = portToQubitMap.size;
 
     // Perform 2-qubit operations and determine what to measure.
     let spiderMeasurements = /** @type {!Array.<TransformedMeasurement>} */ [];
-    for (let {node, axis} of graph.spiderMeasurementNodes()) {
-        let qubits = graph.activePortsOf(node).map(p => portToQubitMap.get(p));
-        spiderMeasurements.push(..._transformedSpiderMeasurement(outProgram, n, qubits, axis));
+    for (let {node, axis} of graph.spiderMeasurementNodesWithAxis()) {
+        let qubits = graph.activePortsOf(node).map(p => portQubitMapping.map.get(p));
+        spiderMeasurements.push(
+            ..._transformedSpiderMeasurement(outProgram, portQubitMapping.numQubits, qubits, axis));
     }
 
     // Perform Bell measurements on crossing lines.
     for (let node of graph.crossingNodes()) {
         for (let pair of graph.activeCrossingPortPairs(node)) {
-            let qubits = pair.map(p => portToQubitMap.get(p));
-            spiderMeasurements.push(..._transformedSpiderMeasurement(outProgram, n, qubits, false));
+            let qubits = pair.map(p => portQubitMapping.map.get(p));
+            spiderMeasurements.push(
+                ..._transformedSpiderMeasurement(outProgram, portQubitMapping.numQubits, qubits, false));
         }
     }
 
@@ -398,67 +452,89 @@ function _zxEval_performSpiderMeasurements(outProgram, graph, portToQubitMap, nu
     outProgram.statements.push(new SingleQubitGates(new Map(xMeasured.map(q => [q, 'h']))));
 
     let measurementToFeedback = _spiderMeasurementToFeedbackMap(
-        graph, portToQubitMap, spiderMeasurements, numIn, numOut);
+        graph, portQubitMapping, spiderMeasurements);
     outProgram.statements.push(new MeasurementsWithPauliFeedback(measurementToFeedback));
+
+    let postSelections = new GeneralMap();
+    for (let {node, axis} of graph.postselectionNodesWithAxis()) {
+        let ports = graph.activePortsOf(node);
+        if (ports.length !== 1) {
+            throw new Error('Postselection node must have degree 1.');
+        }
+        let qubit = portQubitMapping.map.get(ports[0]);
+        postSelections.set(qubit, axis);
+    }
+    if (postSelections.size > 0) {
+        outProgram.statements.push(new PostSelection(postSelections));
+    }
 }
 
 /**
  * @param {!QuantumProgram} outProgram
- * @param {!int} numQubits
- * @param {!int} numIn
- * @param {!int} numOut
+ * @param {!PortQubitMapping} portQubitMapping
  * @returns {!{
  *      stabilizers: !Array.<!PauliProduct>,
  *      wavefunction: !Matrix,
  *      qasm: !string,
- *      quirk_url: !string,
- *      satisfiable: !boolean
+ *      quirkUrl: !string,
+ *      satisfiable: !boolean,
+ *      successProbability: !number,
  * }}
  * @private
  */
-function _analyzeProgram(outProgram, numQubits, numIn, numOut) {
-    let numKept = numIn + numOut;
-
+function _analyzeProgram(outProgram, portQubitMapping) {
     let qasm = outProgram.qasm();
-    let quirk_url = outProgram.quirkUrl();
+    let quirkUrl = outProgram.quirkUrl();
 
-    let wantZeroSim = new ChpSimulator(numQubits, 0);
-    let out = [];
+    let wantZeroSim = new ChpSimulator(portQubitMapping.numQubits, 0);
+    let wantZeroOut = {
+        measurements: [],
+        successProbability: 1.0,
+    };
     try {
-        outProgram.interpret(wantZeroSim, out);
+        outProgram.interpret(wantZeroSim, wantZeroOut);
     } finally {
         wantZeroSim.destruct();
     }
-    let satisfiable = out.every(e => e === false);
+    let satisfiable = wantZeroOut.measurements.every(e => !e[1]);
 
-    let sim = new ChpSimulator(numQubits);
+    let sim = new ChpSimulator(portQubitMapping.numQubits);
+    let out = {
+        measurements: [],
+        successProbability: 1.0,
+    };
     let stabilizers;
     try {
-        outProgram.interpret(sim, []);
-        stabilizers = _extractRemainingStabilizers(sim, numKept);
+        outProgram.interpret(sim, out);
+        stabilizers = _extractRemainingStabilizers(
+            sim,
+            portQubitMapping.numInternal,
+            portQubitMapping.numIn + portQubitMapping.numOut);
     } finally {
         sim.destruct();
     }
 
     let wavefunction = stabilizerStateToWavefunction(stabilizers);
-    wavefunction = new Matrix(1 << numIn, 1 << numOut, wavefunction.rawBuffer());
+    wavefunction = new Matrix(1 << portQubitMapping.numIn, 1 << portQubitMapping.numOut, wavefunction.rawBuffer());
 
     return {
         stabilizers,
         wavefunction,
         qasm,
-        quirk_url,
+        quirkUrl,
         satisfiable,
+        successProbability: out.successProbability
     };
 }
 
 /**
  * @param {!ChpSimulator} stabilizerSim
- * @param {!int} numKept
+ * @param {!int} offset
+ * @param {!int} len
  * @returns {!Array.<!PauliProduct>}
  * @private
  */
-function _extractRemainingStabilizers(stabilizerSim, numKept) {
+function _extractRemainingStabilizers(stabilizerSim, offset, len) {
     // Extract and normalize stabilizers from simulator.
     let lines = stabilizerSim.toString().split('\n');
     lines = lines.slice(1 + (lines.length >> 1));
@@ -466,11 +542,11 @@ function _extractRemainingStabilizers(stabilizerSim, numKept) {
 
     // Only keep lower right of table (the unmeasured qubits).
     lines = paulis.map(e => e.toString());
-    lines = lines.slice(lines.length - numKept).map(e => e[0] + e.slice(e.length - numKept));
+    lines = lines.slice(offset, offset + len).map(e => e[0] + e.slice(1 + offset, 1 + offset + len));
     paulis = lines.map(PauliProduct.fromString);
 
     // Normalize
     return PauliProduct.gaussianEliminate(paulis);
 }
 
-export {evalZxGraph, generatePortToQubitMap, fixedPointsOfGraph}
+export {evalZxGraph, graphToPortQubitMapping, fixedPointsOfGraph}

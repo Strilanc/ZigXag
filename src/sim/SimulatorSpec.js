@@ -1,3 +1,5 @@
+import {Measurement} from "src/sim/Measurement.js"
+
 class SimulatorSpec {
     /**
      * Adds a new qubit to the system and returns a handle used to refer to it.
@@ -64,16 +66,19 @@ class SimulatorSpec {
      * Measures a qubit.
      * @param {!int} q The handle of the qubit to measure.
      * @param {!number|undefined=} bias When a measurement result is non-deterministic, this determines the probability of True.
-     * @returns {!boolean} The measurement result.
+     * @returns {!Measurement} The measurement result.
      */
     measure(q, bias=undefined) {
         let p = this.probability(q);
+        if (p === 0 || p === 1) {
+            return new Measurement(p === 1, false);
+        }
         if (Math.abs(p - 0.5) < 0.001 && bias !== undefined) {
             p = bias;
         }
         let outcome = Math.random() < p;
         this.collapse(q, outcome);
-        return outcome;
+        return new Measurement(outcome, true);
     }
 
     /**

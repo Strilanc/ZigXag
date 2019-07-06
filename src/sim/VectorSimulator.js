@@ -32,7 +32,7 @@ class VectorSimulator extends SimulatorSpec {
 
     free(q) {
         // Decohere the qubit.
-        if (this.measure(q)) {
+        if (this.measure(q).result) {
             this.x(q);
         }
 

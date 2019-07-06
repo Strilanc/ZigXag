@@ -326,6 +326,14 @@ class ZxGraph {
     }
 
     /**
+     * @param {!ZxNode} node
+     */
+    isExternalNodeKind(node) {
+        let kind = this.kind(node);
+        return ['out', 'in', 'O!', '@!'].indexOf(kind) !== -1;
+    }
+
+    /**
      * @param {!ZxNode|!ZxEdge} nodeOrEdge
      * @returns {!boolean}
      */
@@ -431,7 +439,23 @@ class ZxGraph {
     /**
      * @returns {!Array.<!{node: !ZxNode, axis: !boolean}>}
      */
-    spiderMeasurementNodes() {
+    postselectionNodesWithAxis() {
+        let result = [];
+        for (let node of this.sortedNodes()) {
+            let kind = this.nodes.get(node);
+            if (kind === 'O!') {
+                result.push({node, axis: true});
+            } else if (kind === '@!') {
+                result.push({node, axis: false});
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @returns {!Array.<!{node: !ZxNode, axis: !boolean}>}
+     */
+    spiderMeasurementNodesWithAxis() {
         let result = [];
         for (let node of this.sortedNodes()) {
             let kind = this.nodes.get(node);
@@ -483,7 +507,7 @@ class ZxGraph {
      * @returns {!ZxGraph} this
      */
     inlineSimplify() {
-        for (let {node} of this.spiderMeasurementNodes()) {
+        for (let {node} of this.spiderMeasurementNodesWithAxis()) {
             let edges = this.activeEdgesOf(node);
             if (edges.length === 2) {
                 let [e1, e2] = edges;
@@ -528,8 +552,8 @@ class ZxGraph {
                 `Misaligned diagram. Number of non-empty lines must equal 1 mod 4, but is ${lines.length}.`);
         }
         for (let line of lines) {
-            if (line !== '' && line.length % 4 !== 1) {
-                throw new Error(`Misaligned diagram. Length must equal 1 mod 4: "${line}".`);
+            if (line !== '' && line.length % 4 !== 1 && line.length % 4 !== 2) {
+                throw new Error(`Misaligned diagram. Length must equal 1 or 2 mod 4: "${line}".`);
             }
         }
         for (let row = 0; row < lines.length; row++) {
@@ -542,7 +566,9 @@ class ZxGraph {
                     throw new Error(`Must use pipe for v edge at row=${row} col=${col}.`);
                 }
                 if (line[col] !== '-' && line[col] !== ' ' && col % 2 === 1) {
-                    throw new Error(`Must use dash for h edge at row=${row} col=${col}.`);
+                    if (row % 4 !== 0 && col % 4 !== 1) {  // Allow modifier characters.
+                        throw new Error(`Must use dash for h edge at row=${row} col=${col}.`);
+                    }
                 }
             }
         }
@@ -588,8 +614,14 @@ class ZxGraph {
             'H': 'h',
         };
         let nodeKindMap = {
+            '@!': '@!',
             '@': '@',
+            'O!': 'O!',
+            '0!': 'O!',
+            'o!': 'O!',
             'O': 'O',
+            '0': 'O',
+            'o': 'O',
             '!': 'in',
             '?': 'out',
             '+': '+',
@@ -610,6 +642,10 @@ class ZxGraph {
                     continue;
                 }
 
+                let c2 = line[col + 1];
+                if (c2 !== undefined && c2 !== '-' && c2 !== ' ') {
+                    c += c2;
+                }
                 let kind = nodeKindMap[c];
                 if (kind === undefined) {
                     throw new Error(`Unrecognized node character: "${c}".`);
@@ -853,6 +889,8 @@ class ZxGraph {
             'O': 'O',
             'in': '!',
             'out': '?',
+            '@!': '@!',
+            'O!': 'O!',
         };
         let horizontal_edge_reps = {
             'h': 'H',
@@ -891,15 +929,16 @@ class ZxGraph {
                 lines.push(vertical_connectors.join(''));
             }
             let chars = [];
+            let cut = 0;
             for (let col = 0; col < w; col++) {
                 let p = new ZxNode(col, row);
 
                 if (col > 0) {
                     let c = this.edges.get(p.leftUnitEdge());
                     if (c === undefined) {
-                        chars.push('   ');
+                        chars.push('   '.slice(cut));
                     } else {
-                        chars.push('-' + (horizontal_edge_reps[c] || c) + '-');
+                        chars.push(`-${horizontal_edge_reps[c] || c}-`.slice(cut));
                     }
 
                 }
@@ -917,7 +956,9 @@ class ZxGraph {
                         }
                     }
                 }
-                chars.push(node_reps[c] || c);
+                let nodeShown = node_reps[c] || c;
+                chars.push(nodeShown);
+                cut = nodeShown.length - 1;
             }
             lines.push(chars.join(''));
         }

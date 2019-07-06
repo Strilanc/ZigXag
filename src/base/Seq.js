@@ -1004,7 +1004,7 @@ class Seq {
      * @template T
      */
     sorted() {
-        return seq(this.toArray().sort());
+        return this.sortedBy(e => e);
     }
 
     /**

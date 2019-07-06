@@ -1,6 +1,6 @@
 import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
 import {ZxGraph, ZxNode, ZxEdge, ZxPort} from "src/sim/ZxGraph.js"
-import {evalZxGraph, generatePortToQubitMap, fixedPointsOfGraph} from "src/sim/ZxGraphEval.js"
+import {evalZxGraph, graphToPortQubitMapping, fixedPointsOfGraph} from "src/sim/ZxGraphEval.js"
 import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js"
 import {Matrix} from "src/base/Matrix.js"
 import {Complex} from "src/base/Complex.js"
@@ -80,7 +80,7 @@ suite.test("evalZxGraph_cnot", () => {
         0, 0.5, 0, 0,
     ));
 
-    assertThat(r.quirk_url).isEqualTo(`
+    assertThat(r.quirkUrl).isEqualTo(`
 https://algassert.com/quirk#circuit={
     "cols":[
         ["•",1,1,1,1,1,"X"],
