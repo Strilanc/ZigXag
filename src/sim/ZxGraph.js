@@ -26,6 +26,26 @@ class ZxNode {
     }
 
     /**
+     * Returns the result of rotating this node 180 degrees around the given node.
+     * @param {!ZxNode} node
+     * @returns {!ZxNode}
+     */
+    reflectedThrough(node) {
+        let dx = this.x - node.x;
+        let dy = this.y - node.y;
+        return node.translate(-dx, -dy);
+    }
+
+    /**
+     * @param {!int} dx
+     * @param {!int} dy
+     * @returns {!ZxNode}
+     */
+    translate(dx, dy) {
+        return new ZxNode(this.x + dx, this.y + dy);
+    }
+
+    /**
      * @returns {!Array.<!ZxPort>}
      */
     unitPorts() {
@@ -139,6 +159,24 @@ class ZxEdge {
         }
         this.n1 = n1;
         this.n2 = n2;
+    }
+
+    /**
+     * Returns the result of rotating this edge 180 degrees around the given node.
+     * @param {!ZxNode} node
+     * @returns {!ZxEdge}
+     */
+    reflectedThrough(node) {
+        return new ZxEdge(this.n1.reflectedThrough(node), this.n2.reflectedThrough(node));
+    }
+
+    /**
+     * @param {!int} dx
+     * @param {!int} dy
+     * @returns {!ZxEdge}
+     */
+    translate(dx, dy) {
+        return new ZxEdge(this.n1.translate(dx, dy), this.n2.translate(dx, dy));
     }
 
     /**
@@ -280,6 +318,15 @@ class ZxPort {
         }
         this.edge = edge;
         this.node = node;
+    }
+
+    /**
+     * @param {!int} dx
+     * @param {!int} dy
+     * @returns {!ZxPort}
+     */
+    translate(dx, dy) {
+        return new ZxPort(this.edge.translate(dx, dy), this.node.translate(dx, dy));
     }
 
     /**
@@ -689,6 +736,84 @@ class ZxGraph {
         }
 
         return graph;
+    }
+
+    /**
+     * @param {!ZxPort} startPort
+     * @param {!ZxNode} endNode
+     * @returns {undefined|!Array.<!ZxEdge>}
+     */
+    tryFindFreePath(startPort, endNode) {
+        let prevMap = new GeneralMap();
+        prevMap.set(startPort.edge, undefined);
+        let queue = /** @type {!Array.<!ZxPort>} */ [startPort];
+
+        function trace(edge) {
+            let path = [];
+            while (edge !== undefined) {
+                path.push(edge);
+                edge = prevMap.get(edge);
+            }
+            return path;
+        }
+
+        let tryEnqueue = (prevEdge, oppNode, nextEdge) => {
+            if (!this.has(nextEdge) && !prevMap.has(nextEdge)) {
+                prevMap.set(nextEdge, prevEdge);
+                queue.push(new ZxPort(nextEdge, oppNode));
+            }
+        };
+
+        let box = this.boundingBox();
+        let minX = Math.min(box.x, endNode.x, startPort.node.x) - 4;
+        let maxX = Math.max(box.x + box.w - 4, endNode.x, startPort.node.x) + 4;
+        let minY = Math.min(box.y, endNode.y, startPort.node.y) - 4;
+        let maxY = Math.max(box.y + box.h - 4, endNode.y, startPort.node.y) + 4;
+
+        while (queue.length > 0) {
+            let prevPort = queue.shift();
+            let prevEdge = prevPort.edge;
+            let prevNode = prevPort.node;
+            let oppNode = prevEdge.opposite(prevNode);
+            if (oppNode.x < minX || oppNode.x > maxX || oppNode.y < minY || oppNode.y > maxY) {
+                continue;
+            }
+            if (oppNode.isEqualTo(endNode)) {
+                return trace(prevEdge);
+            }
+
+            let nodeKind = this.kind(oppNode);
+            if (nodeKind === undefined) {
+                let neighbors = [
+                    oppNode.upUnitEdge(), oppNode.downUnitEdge(), oppNode.leftUnitEdge(), oppNode.rightUnitEdge()
+                ];
+                for (let nextEdge of neighbors) {
+                    tryEnqueue(prevEdge, oppNode, nextEdge);
+                }
+            } else if (nodeKind === '+') {
+                let nextEdge = prevEdge.reflectedThrough(oppNode);
+                tryEnqueue(prevEdge, oppNode, nextEdge);
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * @param {!Iterable.<!ZxEdge>|!GeneralSet<!ZxEdge>} edgePath
+     */
+    deletePath(edgePath) {
+        for (let e of edgePath) {
+            this.edges.delete(e);
+        }
+
+        for (let e of edgePath) {
+            for (let n of e.nodes()) {
+                if (this.kind(n) === '+' && this.activeUnitEdgesOf(n).length === 0) {
+                    this.nodes.delete(n);
+                }
+            }
+        }
     }
 
     /**

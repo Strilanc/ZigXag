@@ -33,6 +33,7 @@ import {
     maybeRemoveConnectingPathEdit,
     maybeContractNodeEdit,
     maybeRemoveEdgeModifier,
+    maybeDragNodeEdit,
 } from "src/edit.js";
 
 /**
@@ -126,6 +127,20 @@ function xyDistanceToGraphElement(x, y, element) {
     let dx = x - cx;
     let dy = y - cy;
     return Math.sqrt(dx*dx + dy*dy);
+}
+
+/**
+ * @param {!number|undefined} x
+ * @param {!number|undefined} y
+ * @returns {undefined|!ZxNode|!ZxEdge}
+ */
+function xyToNode(x, y) {
+    if (x === undefined || y === undefined) {
+        return undefined;
+    }
+    let nx = Math.floor((x + 100) / 50 + 0.5);
+    let ny = Math.floor((y + 100) / 50 + 0.5);
+    return new ZxNode(nx, ny);
 }
 
 /**
@@ -708,11 +723,25 @@ function maybeIntroduceEdgeEdit(edge) {
  * @returns {undefined|!Edit}
  */
 function pickEdit(wantDelete, x, y) {
+    let oldElement = xyToGraphElement(mouseDownX, mouseDownY);
     let element = xyToGraphElement(x, y);
+    let nearestNode = xyToNode(x, y);
+
     if (element === undefined) {
         return undefined;
     }
-    if (curMouseButton !== 0 && curMouseButton !== undefined && !element.isEqualTo(xyToGraphElement(mouseDownX, mouseDownY))) {
+    if (!wantDelete &&
+            curMouseButton === 1 &&
+            oldElement instanceof ZxNode &&
+            nearestNode instanceof ZxNode &&
+            curGraph.has(oldElement)) {
+        let result = maybeDragNodeEdit(curGraph, oldElement, nearestNode);
+        if (result !== undefined) {
+            return result;
+        }
+    }
+
+    if (curMouseButton !== 0 && curMouseButton !== undefined && !element.isEqualTo(oldElement)) {
         return undefined;
     }
 

@@ -16,6 +16,7 @@ import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
 import {ZxGraph, ZxNode, ZxEdge, ZxPort} from "src/sim/ZxGraph.js"
 import {GeneralMap} from "src/base/GeneralMap.js"
 import {GeneralSet} from "src/base/GeneralSet.js"
+import {seq, Seq} from "src/base/Seq.js"
 
 let suite = new Suite("ZxGraph");
 
@@ -346,4 +347,65 @@ O---+---+---O
 
     // Ambiguous union.
     assertThat(graph.extendedUnblockedPath(new ZxNode(2, 1), false)).isEqualTo(new GeneralSet(...path1, ...path2));
+});
+
+suite.test("tryFindFreePath_crossing", () => {
+    let graph = ZxGraph.fromDiagram(`
+    @
+
+
+
+
+
+
+
+O---+---+---O
+    `);
+    let ns = Seq.range(9).map(i => new ZxNode(1, i)).toArray();
+    let es = Seq.range(8).map(i => new ZxEdge(ns[i], ns[i+1])).toArray();
+    let path = graph.tryFindFreePath(new ZxPort(es[0], ns[0]), ns[8]);
+    assertThat(path).isEqualTo(seq(es).reverse().toArray());
+});
+
+suite.test('reflectedThrough', () => {
+    let a = new ZxNode(2, 3);
+    let b = new ZxNode(5, 7);
+    let c = new ZxNode(11, 17);
+    assertThat(a.reflectedThrough(a)).isEqualTo(a);
+    assertThat(b.reflectedThrough(a)).isEqualTo(new ZxNode(-1, -1));
+    assertThat(a.reflectedThrough(b)).isEqualTo(new ZxNode(8, 11));
+    assertThat(c.reflectedThrough(a)).isEqualTo(new ZxNode(-7, -11));
+});
+
+suite.test("tryFindFreePath_doubleCrossing", () => {
+    let graph = ZxGraph.fromDiagram(`
+@---@---+
+        |
+        |
+        |
+O---+---+---O
+        |
+        |
+        |
+        +
+        |
+        |
+        |
+O---O---@---@
+    `);
+    let a = new ZxNode(1, 0);
+    let b = new ZxNode(1, 1);
+    let c = new ZxNode(1, 2);
+    let d = new ZxNode(2, 2);
+    let e = new ZxNode(3, 2);
+    let f = new ZxNode(4, 2);
+    let ab = new ZxEdge(a, b);
+    let path = graph.tryFindFreePath(new ZxPort(ab, a), f);
+    assertThat(path).isEqualTo([
+        new ZxEdge(f, e),
+        new ZxEdge(e, d),
+        new ZxEdge(d, c),
+        new ZxEdge(c, b),
+        ab,
+    ]);
 });
