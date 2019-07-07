@@ -35,6 +35,7 @@ import {
     maybeRemoveEdgeModifier,
     maybeDragNodeEdit,
 } from "src/edit.js";
+import {makeNodeRingMenu} from "src/ui/RingMenu.js"
 
 /**
  * @returns {!string}
@@ -62,10 +63,13 @@ const satisfiablePre = /** @type {!HTMLPreElement} */ document.getElementById('s
 const textDiagramPre = /** @type {!HTMLPreElement} */ document.getElementById('text-diagram-pre');
 let mouseX = undefined;
 let mouseY = undefined;
-let curCtrlKey = undefined;
+let curCtrlKey = false;
+let curAltKey = false;
+let curShiftKey = false;
 let curMouseButton = undefined;
 let mouseDownX = undefined;
 let mouseDownY = undefined;
+let menuNode = undefined;
 
 
 let curGraph = /** @type {undefined|!ZxGraph} */ undefined;
@@ -434,13 +438,38 @@ function draw() {
     let ctx = /** @type {!CanvasRenderingContext2D} */ canvas.getContext('2d');
     ctx.clearRect(0, 0, 10000, 10000);
 
-    drawFocus(ctx);
+    ctx.save();
     try {
-        drawResults(ctx);
-        drawFadedNearbyRegion(ctx);
+        if (menuNode === undefined) {
+            drawFocus(ctx);
+        }
+        try {
+            drawResults(ctx);
+            drawFadedNearbyRegion(ctx);
+        } finally {
+            drawGraph(ctx);
+            if (menuNode === undefined) {
+                drawPossibleEdit(ctx);
+            }
+        }
+
+        if (menuNode !== undefined) {
+            ctx.save();
+            let [x, y] = nodeToXy(menuNode);
+            x = Math.max(x, 125);
+            y = Math.max(y, 125);
+            ctx.globalAlpha *= 0.85;
+            ctx.beginPath();
+            ctx.arc(x, y, 1000, 0, 2*Math.PI);
+            ctx.lineWidth = 1950;
+            ctx.strokeStyle = 'white';
+            ctx.stroke();
+            ctx.restore();
+
+            makeNodeRingMenu().draw(ctx, x, y, curShiftKey, mouseX, mouseY);
+        }
     } finally {
-        drawGraph(ctx);
-        drawPossibleEdit(ctx);
+        ctx.restore();
     }
 }
 
@@ -780,6 +809,8 @@ canvasDiv.addEventListener('mousedown', ev => {
         return;
     }
     curCtrlKey = ev.ctrlKey;
+    curAltKey = ev.altKey;
+    curShiftKey = ev.shiftKey;
     curMouseButton = ev.which;
     ev.preventDefault();
     [mouseDownX, mouseDownY] = eventPosRelativeTo(ev, canvasDiv);
@@ -794,6 +825,17 @@ canvasDiv.addEventListener('mouseup', ev => {
     let [x, y] = eventPosRelativeTo(ev, canvasDiv);
 
     curCtrlKey = ev.ctrlKey;
+    curAltKey = ev.altKey;
+    curShiftKey = ev.shiftKey;
+
+    let startNode = xyToNode(mouseDownX, mouseDownY);
+    let endNode = xyToNode(mouseDownX, mouseDownY);
+    if (startNode !== undefined && startNode.isEqualTo(endNode) && ev.which === 1 && ev.altKey) {
+        menuNode = startNode;
+        draw();
+        return;
+    }
+
     let edit = pickEdit(curWantDeleteEdit(), x, y);
     if (edit !== undefined) {
         let g = curGraph.copy();
@@ -809,12 +851,16 @@ canvasDiv.addEventListener('mouseup', ev => {
 canvasDiv.addEventListener('mousemove', ev => {
     [mouseX, mouseY] = eventPosRelativeTo(ev, canvasDiv);
     curCtrlKey = ev.ctrlKey;
+    curAltKey = ev.altKey;
+    curShiftKey = ev.shiftKey;
     curMouseButton = ev.which;
     draw();
 });
 
 canvasDiv.addEventListener('mouseleave', ev => {
     curCtrlKey = ev.ctrlKey;
+    curAltKey = ev.altKey;
+    curShiftKey = ev.shiftKey;
     mouseX = undefined;
     mouseY = undefined;
     draw();
@@ -850,8 +896,14 @@ addKeyListener('Y', ev => {
     }
 });
 
+addKeyListener(27, ev => {
+    menuNode = undefined;
+});
+
 document.addEventListener('keydown', ev => {
     curCtrlKey = ev.ctrlKey;
+    curAltKey = ev.altKey;
+    curShiftKey = ev.shiftKey;
     let handlers = keyListeners.get(ev.keyCode);
     if (handlers !== undefined) {
         ev.preventDefault();
@@ -862,8 +914,19 @@ document.addEventListener('keydown', ev => {
     draw();
 });
 
+canvas.addEventListener('keydown', ev => {
+    ev.preventDefault();
+});
+
+canvas.addEventListener('keyup', ev => {
+    ev.preventDefault();
+});
+
 document.addEventListener('keyup', ev => {
+    console.log("KEYUP");
     curCtrlKey = ev.ctrlKey;
+    curAltKey = ev.altKey;
+    curShiftKey = ev.shiftKey;
     draw();
 });
 
