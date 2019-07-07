@@ -1,5 +1,10 @@
+import {Painter} from "src/Painter.js";
+import {Rect} from "src/base/Rect.js";
+import {Point} from "src/base/Point.js";
+
 class RingMenuEntry {
     /**
+     * @param {!string} description
      * @param {!function(ctx: !CanvasRenderingContext2D, x: !number, y: !number, r: !number)} contentDrawer
      * @param {!number} centerAngle
      * @param {!number} centerRadius
@@ -9,7 +14,8 @@ class RingMenuEntry {
      * @param {undefined|!boolean} shiftMask
      * @param {undefined|!string} mouseHotkey
      */
-    constructor(contentDrawer,
+    constructor(description,
+                contentDrawer,
                 centerAngle,
                 centerRadius,
                 angleSpan,
@@ -17,6 +23,7 @@ class RingMenuEntry {
                 hotkeys,
                 shiftMask,
                 mouseHotkey=undefined) {
+        this.description = description;
         this.contentDrawer = contentDrawer;
         this.centerAngle = centerAngle;
         this.centerRadius = centerRadius;
@@ -56,17 +63,19 @@ class RingMenuEntry {
         ctx.save();
         try {
             ctx.translate(cx, cy);
+            ctx.save();
+            ctx.fillStyle = 'black';
+            ctx.font = '20px monospace';
+            ctx.rotate(this.centerAngle);
             if (this.shiftMask !== true) {
-                ctx.save();
-                ctx.fillStyle = 'black';
-                ctx.font = '20px monospace';
-                ctx.rotate(this.centerAngle);
                 ctx.translate(r0 - 10, 0);
-                ctx.rotate(-this.centerAngle);
-                ctx.rotate(normalizedQuarterAngleOffset(this.centerAngle));
-                ctx.fillText(this.hotkeys[0], -this.hotkeys[0].length * 5, 6);
-                ctx.restore();
+            } else {
+                ctx.translate(r1 + 10, 0);
             }
+            ctx.rotate(-this.centerAngle);
+            ctx.rotate(normalizedQuarterAngleOffset(this.centerAngle));
+            ctx.fillText(this.hotkeys[0], -this.hotkeys[0].length * 5, 6);
+            ctx.restore();
 
             if (this.mouseHotkey !== undefined) {
                 ctx.lineWidth = 1;
@@ -266,6 +275,15 @@ class RingMenu {
             for (let entry of this.entries) {
                 if (entry.contains(mouseX - cx, mouseY - cy)) {
                     entry.draw(ctx, cx, cy, 2);
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(cx - 40, cy - 40, 80, 80);
+                    new Painter(ctx).printParagraph(
+                        entry.description,
+                        new Rect(cx - 75, cy - 75, 150, 150),
+                        new Point(0.5, 0.5),
+                        'black',
+                        12,
+                        'monospace');
                 }
             }
         }
@@ -290,42 +308,76 @@ function makeNodeRingMenu() {
             let startAngle = axis ? angleWidth * -6.5 : -angleWidth * 1.5;
             let step = Math.PI / 8 * (axis ? -1 : 1);
             let radius = baseRadius + (post ? radiusStep : 0);
+            let axisPostChar = axis ? '0' : '+';
+            let axisAntiPostChar = axis ? '1' : '-';
+            let spider = axis ? 'X' : 'Z';
+            let oppSpider = axis ? 'Z' : 'X';
+            let desc = (selected, modifier, sign, gate) => {
+                if (post) {
+                    return `postselect\n|${selected}⟩`;
+                }
+                return [
+                    `${spider} spider`,
+                    ...[modifier === '' ? [] : [`(${modifier})`]],
+                    '',
+                    'Selection:',
+                    `∀k: ${spider}0·${spider}k`,
+                    `${sign}Πk(${oppSpider}k)`,
+                    '',
+                    'Action:',
+                    gate
+                ].join('\n');
+            };
+
             result.entries.push(new RingMenuEntry(
+                desc(axisPostChar, '', '', 'Identity'),
                 nodeDraw,
                 startAngle,
                 radius,
                 angleWidth,
                 radiusStep,
-                axis ? ['o', '0'] : ['2', '@'],
+                post
+                    ? (axis ? ['O', '!'] : ['@'])
+                    : (axis ? ['o', '0'] : ['2']),
                 post));
             result.entries.push(new RingMenuEntry(
+                desc(axisAntiPostChar, 'Flipped', '-', spider),
                 _concatDrawers(nodeDraw, _piDrawer(textColor)),
                 startAngle + step,
                 radius,
                 angleWidth,
                 radiusStep,
-                axis ? ['x'] : ['z'],
+                post
+                    ? (axis ? ['X'] : ['Z'])
+                    : (axis ? ['x'] : ['z']),
                 post));
             result.entries.push(new RingMenuEntry(
+                desc(axis ? '-i' : 'i', 'Phased', `-i${spider}0·`, axis ? 'H·S·H' : 'S'),
                 _concatDrawers(nodeDraw, _halfPiDrawer(textColor)),
                 startAngle + 2 * step,
                 radius,
                 angleWidth,
                 radiusStep,
-                axis ? ['v'] : ['s'],
+                post
+                    ? (axis ? ['V'] : ['S'])
+                    : (axis ? ['v'] : ['s']),
                 post));
             result.entries.push(new RingMenuEntry(
+                desc(axis ? 'i' : '-i', 'Backphased', `i${spider}0·`, axis ? 'H·S†·H' : 'S†'),
                 _concatDrawers(nodeDraw, _negHalfPiDrawer(textColor)),
                 startAngle + 3 * step,
                 radius,
                 angleWidth,
                 radiusStep,
-                axis ? ['w'] : ['a'],
+                post
+                    ? (axis ? ['W'] : ['A'])
+                    : (axis ? ['w'] : ['a']),
                 post));
         }
     }
 
     result.entries.push(new RingMenuEntry(
+        'Delete node',
         (ctx, x, y) => {
             ctx.fillStyle = 'red';
             ctx.font = '20px monospace';
@@ -340,10 +392,11 @@ function makeNodeRingMenu() {
         'middle'));
 
     result.entries.push(new RingMenuEntry(
+        'Start edge',
         (ctx, x, y) => {
             ctx.fillStyle = 'black';
             ctx.font = '18px monospace';
-            ctx.fillText('edge', x - 18, y + 5);
+            ctx.fillText('edge', x - 20, y + 5);
         },
         Math.PI / 2 + Math.PI / 16 * 1.2,
         baseRadius + radiusStep / 2,
@@ -354,6 +407,7 @@ function makeNodeRingMenu() {
         'ctrl+left'));
 
     result.entries.push(new RingMenuEntry(
+        'Hadamard\n\nSelection:\nX0·Z1\nZ0·X1\n\nAction:\nH',
         (ctx, x, y) => {
             ctx.fillStyle = 'yellow';
             ctx.strokeStyle = 'black';
@@ -369,6 +423,7 @@ function makeNodeRingMenu() {
         undefined));
 
     result.entries.push(new RingMenuEntry(
+        'Input node',
         (ctx, x, y) => {
             _nodeDrawer('black', 'yellow')(ctx, x, y);
             ctx.fillStyle = 'black';
@@ -383,6 +438,7 @@ function makeNodeRingMenu() {
         undefined));
 
     result.entries.push(new RingMenuEntry(
+        'Output node',
         (ctx, x, y) => {
             _nodeDrawer('black', 'yellow')(ctx, x, y);
             ctx.fillStyle = 'black';
