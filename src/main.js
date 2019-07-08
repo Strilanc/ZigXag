@@ -625,7 +625,7 @@ function changeNodeKindEdit(node) {
     return new Edit(
         () => `cycle ${node}`,
         graph => {
-            let cycle = ['O', '@', '+', 'in', 'out', 'O!', '@!'];
+            let cycle = ['O', '@', '+', 'x', 'z', 'f', 's', 'w', 'a', 'in', 'out', 'O!', '@!'];
             let kind = graph.nodes.get(node);
             let i = cycle.indexOf(kind);
             i++;
@@ -634,7 +634,7 @@ function changeNodeKindEdit(node) {
             if (i === 2 && degree !== 2 && degree !== 4) {
                 i++;
             }
-            if (i >= 3 && degree !== 1) {
+            if (i >= 9 && degree !== 1) {
                 i = 0;
             }
             graph.nodes.set(node, cycle[i]);

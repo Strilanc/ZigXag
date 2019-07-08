@@ -503,13 +503,13 @@ class ZxGraph {
     /**
      * @returns {!Array.<!{node: !ZxNode, axis: !boolean}>}
      */
-    spiderMeasurementNodesWithAxis() {
+    spiderNodesWithAxis() {
         let result = [];
         for (let node of this.sortedNodes()) {
             let kind = this.nodes.get(node);
-            if (kind === 'O') {
+            if (kind === 'O' || kind === 'w' || kind === 'f' || kind === 'x') {
                 result.push({node, axis: true});
-            } else if (kind === '@') {
+            } else if (kind === '@' || kind === 's' || kind === 'a' || kind === 'z') {
                 result.push({node, axis: false});
             }
         }
@@ -555,7 +555,7 @@ class ZxGraph {
      * @returns {!ZxGraph} this
      */
     inlineSimplify() {
-        for (let {node} of this.spiderMeasurementNodesWithAxis()) {
+        for (let {node} of this.spiderNodesWithAxis()) {
             let edges = this.activeEdgesOf(node);
             if (edges.length === 2) {
                 let [e1, e2] = edges;

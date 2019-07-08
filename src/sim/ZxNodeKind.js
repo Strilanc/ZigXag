@@ -4,6 +4,53 @@ import {Seq, seq} from "src/base/Seq.js";
 import {PauliProduct} from "src/sim/PauliProduct.js";
 import {Matrix} from "src/base/Matrix.js";
 import {Complex} from "src/base/Complex.js";
+import {popcnt} from "src/base/Util.js";
+
+
+/**
+ * @param {!int} inDim
+ * @param {!int} outDim
+ * @param {!number=0} phase
+ * @returns {!Matrix}
+ */
+function zBasisEqualityMatrix(inDim, outDim, phase=0) {
+    let result = Matrix.zero(1 << inDim, 1 << outDim);
+    let buf = result.rawBuffer();
+    buf[0] = 1;
+    let c = Complex.polar(1, phase);
+    buf[buf.length - 2] += c.real;
+    buf[buf.length - 1] += c.imag;
+    return result;
+}
+
+/**
+ * @param {!int} inDim
+ * @param {!int} outDim
+ * @param {!number=0} phase
+ * @returns {!Matrix}
+ */
+function xBasisEqualityMatrix(inDim, outDim, phase=0) {
+    if (inDim + outDim === 0) {
+        return Matrix.solo(Complex.polar(1, phase).plus(1));
+    }
+
+    let m = Math.sqrt(4 / (1 << (inDim + outDim)));
+    let g = Complex.polar(m, phase / 2);
+    let even = g.times(Math.cos(phase / 2));
+    let odd = g.times(-Math.sin(phase / 2)).times(Complex.I);
+    let result = Matrix.zero(1 << inDim, 1 << outDim);
+    let buf = result.rawBuffer();
+    for (let k = 0; k < buf.length; k += 2) {
+        if (popcnt(k) % 2 === 0) {
+            buf[k] = even.real;
+            buf[k + 1] = even.imag;
+        } else {
+            buf[k] = odd.real;
+            buf[k + 1] = odd.imag;
+        }
+    }
+    return result;
+}
 
 
 class ZxNodeKind {
@@ -18,6 +65,7 @@ class ZxNodeKind {
      *     mouseHotkey: (undefined|!string),
      *     allowedDegrees: !Array.<!int>,
      *     fixedPoints: !function(degree: !int): !Array.<!PauliProduct>,
+     *     tensor: !function(dim: !int): !Matrix,
      *     edgeAction: !{
      *         quirkGate: null|!string,
      *         qasmGates: null|!Array.<!string>,
@@ -36,6 +84,7 @@ class ZxNodeKind {
         this.mouseHotkey = attributes.mouseHotkey;
         this.allowedDegrees = attributes.allowedDegrees;
         this.fixedPoints = attributes.fixedPoints;
+        this.tensor = attributes.tensor;
         this.edgeAction = attributes.edgeAction;
     }
 }
@@ -172,6 +221,11 @@ function* _iterNodeKinds() {
                 ].join('\n');
             };
 
+            let spiderTensor = phase => {
+                let method = axis ? zBasisEqualityMatrix : xBasisEqualityMatrix;
+                return dim => method(0, dim, phase);
+            };
+
             let spiderFixedPoints = rootY => {
                 if (post) {
                     return noFixedPoints;
@@ -210,6 +264,7 @@ function* _iterNodeKinds() {
                 mouseHotkey: undefined,
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(false),
+                tensor: spiderTensor(0),
                 edgeAction: noAction,
             });
 
@@ -225,6 +280,7 @@ function* _iterNodeKinds() {
                 mouseHotkey: undefined,
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(false),
+                tensor: spiderTensor(Math.PI),
                 edgeAction: post ? invalidAction : {
                     quirkGate: axis ? 'Z' : 'X',
                     qasmGates: axis ? ['z'] : ['x'],
@@ -255,6 +311,7 @@ function* _iterNodeKinds() {
                 mouseHotkey: undefined,
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(true),
+                tensor: spiderTensor(Math.PI / 2),
                 edgeAction: post ? invalidAction : {
                     quirkGate: axis ? 'Z^½' : 'X^½',
                     qasmGates: axis ? ['s'] : ['h', 's', 'h'],
@@ -285,6 +342,7 @@ function* _iterNodeKinds() {
                 mouseHotkey: undefined,
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(true),
+                tensor: spiderTensor(-Math.PI / 2),
                 edgeAction: post ? invalidAction : {
                     quirkGate: axis ? 'Z^-½' : 'X^-½',
                     qasmGates: axis ? ['z', 's'] : ['x', 'h', 's', 'h'],
@@ -337,6 +395,9 @@ function* _iterNodeKinds() {
 
             throw new Error('Invalid degree.');
         },
+        tensor: dim => {
+            throw new Error('Crossing node tensor must be handled specially.');
+        },
         edgeAction: noAction,
     });
 
@@ -369,6 +430,12 @@ function* _iterNodeKinds() {
             },
             matrix: Matrix.square(1, 1, 1, -1).times(Math.sqrt(0.5)),
         },
+        tensor: dim => {
+            if (dim !== 2) {
+                throw new Error(`Bad Hadamard dimension: ${dim}`);
+            }
+            return Matrix.square(1, 1, 1, -1).times(Math.sqrt(0.5));
+        },
     });
 
     yield new ZxNodeKind({
@@ -387,6 +454,12 @@ function* _iterNodeKinds() {
         allowedDegrees: [1],
         fixedPoints: noFixedPoints,
         edgeAction: invalidAction,
+        tensor: dim => {
+            if (dim !== 1) {
+                throw new Error(`Bad input dimension: ${dim}`);
+            }
+            return zBasisEqualityMatrix(0, 2);
+        },
     });
 
     yield new ZxNodeKind({
@@ -405,6 +478,12 @@ function* _iterNodeKinds() {
         allowedDegrees: [1],
         fixedPoints: noFixedPoints,
         edgeAction: invalidAction,
+        tensor: dim => {
+            if (dim !== 1) {
+                throw new Error(`Bad output dimension: ${dim}`);
+            }
+            return zBasisEqualityMatrix(0, 2);
+        },
     });
 }
 
@@ -423,4 +502,4 @@ const NODES = {
     h: map.get('h'),
 };
 
-export {ZxNodeKind, NODES}
+export {zBasisEqualityMatrix, xBasisEqualityMatrix, ZxNodeKind, NODES}

@@ -172,7 +172,7 @@ function graphToPortQubitMapping(graph) {
     let inputNodes = graph.inputNodes();
     let outputNodes = graph.outputNodes();
     let postNodes = graph.postselectionNodesWithAxis();
-    let measurementNodes = graph.spiderMeasurementNodesWithAxis();
+    let measurementNodes = graph.spiderNodesWithAxis();
     let crossingNodes = graph.crossingNodes();
     if (inputNodes.length +
             outputNodes.length +
@@ -314,16 +314,30 @@ function _zxEval_initEprPairs(outProgram, graph, portToQubitMap) {
     // Make the EPR pairs.
     outProgram.statements.push(new InitEprPairs(...pairs.map(e => e.qs)));
 
-    // Apply any basis changes.
-    let basisChanges = new GeneralMap();
+    // Apply any edge-based basis changes.
+    let edgeBasisChanges = new GeneralMap();
     for (let pair of pairs) {
         let nodeKind = NODES.map.get(pair.kind === '-' ? '@' : pair.kind);
         if (nodeKind.edgeAction.matrix !== 1) {
-            basisChanges.set(pair.qs[0], pair.kind);
+            edgeBasisChanges.set(pair.qs[0], pair.kind);
         }
     }
-    if (basisChanges.size > 0) {
-        outProgram.statements.push(new EdgeActions(basisChanges));
+    if (edgeBasisChanges.size > 0) {
+        outProgram.statements.push(new EdgeActions(edgeBasisChanges));
+    }
+
+    // Apply any spider-based basis changes.
+    let nodeBasisChanges = new GeneralMap();
+    for (let node of graph.nodes.keys()) {
+        let nodeKind = NODES.map.get(graph.kind(node));
+        let ports = graph.activePortsOf(node);
+        if (ports.length > 0 && nodeKind.edgeAction.matrix !== 1 && nodeKind.edgeAction.matrix !== null) {
+            nodeBasisChanges.set(portToQubitMap.get(ports[0]), nodeKind.id);
+        }
+    }
+    if (nodeBasisChanges.size > 0) {
+        outProgram.statements.push(new Comment('', 'Apply spider node transformations.'));
+        outProgram.statements.push(new EdgeActions(nodeBasisChanges));
     }
 }
 
@@ -405,7 +419,7 @@ function _zxEval_performSpiderMeasurements(outProgram, graph, portQubitMapping) 
 
     // Perform 2-qubit operations and determine what to measure.
     let spiderMeasurements = /** @type {!Array.<TransformedMeasurement>} */ [];
-    for (let {node, axis} of graph.spiderMeasurementNodesWithAxis()) {
+    for (let {node, axis} of graph.spiderNodesWithAxis()) {
         let qubits = graph.activePortsOf(node).map(p => portQubitMapping.map.get(p));
         spiderMeasurements.push(
             ..._transformedSpiderMeasurement(outProgram, portQubitMapping.numQubits, qubits, axis));

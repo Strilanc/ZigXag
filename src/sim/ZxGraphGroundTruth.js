@@ -14,42 +14,8 @@ import {popcnt} from "src/base/Util.js";
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 import {Controls} from "src/sim/Controls.js";
 import {Util} from "src/base/Util.js";
-import {NODES} from "src/sim/ZxNodeKind.js";
+import {zBasisEqualityMatrix, xBasisEqualityMatrix, NODES} from "src/sim/ZxNodeKind.js";
 
-
-/**
- * @param {!int} inDim
- * @param {!int} outDim
- * @returns {!Matrix}
- */
-function zBasisEqualityMatrix(inDim, outDim) {
-    let result = Matrix.zero(1 << inDim, 1 << outDim);
-    let buf = result.rawBuffer();
-    buf[0] = 1;
-    buf[buf.length - 2] += 1;
-    return result;
-}
-
-/**
- * @param {!int} inDim
- * @param {!int} outDim
- * @returns {!Matrix}
- */
-function xBasisEqualityMatrix(inDim, outDim) {
-    if (inDim + outDim === 0) {
-        return Matrix.solo(2);
-    }
-
-    let result = Matrix.zero(1 << inDim, 1 << outDim);
-    let buf = result.rawBuffer();
-    let s = Math.sqrt(4 / (1 << (inDim + outDim)));
-    for (let k = 0; k < buf.length; k += 2) {
-        if (popcnt(k) % 2 === 0) {
-            buf[k] = s;
-        }
-    }
-    return result;
-}
 
 class Tensor {
     /**
@@ -259,22 +225,8 @@ function evalZxGraphGroundTruth(graph) {
     let outputPorts = [];
     for (let node of graph.sortedNodes()) {
         let kind = graph.nodes.get(node);
-        let ports = graph.activePortsOf(node);
-        let degree = ports.length;
-        let data;
-        if (kind === 'in' || kind === 'out') {
-            if (degree !== 1) {
-                throw new Error('in/out degree !== 1');
-            }
-            let outerPort = new ZxPort(ports[0].edge, new ZxNode(100000, inputPorts.length + outputPorts.length));
-            (kind === 'in' ? inputPorts : outputPorts).push(outerPort);
-            ports.push(outerPort);
-            data = zBasisEqualityMatrix(0, 2);
-        } else if (kind === '@' || kind === '@!') {
-            data = zBasisEqualityMatrix(0, degree);
-        } else if (kind === 'O' || kind === 'O!') {
-            data = xBasisEqualityMatrix(0, degree);
-        } else if (kind === '+') {
+
+        if (kind === '+') {
             for (let pair of graph.activeCrossingPortPairs(node)) {
                 let tensor = new Tensor(zBasisEqualityMatrix(0, 2), pair);
                 for (let port of pair) {
@@ -282,8 +234,20 @@ function evalZxGraphGroundTruth(graph) {
                 }
             }
             continue;
-        } else {
+        }
+
+        let nodeKind = NODES.map.get(kind);
+        let ports = graph.activePortsOf(node);
+        let degree = ports.length;
+        if (nodeKind === undefined) {
             throw new Error(`Unrecognized node kind ${kind}`);
+        }
+        let data = nodeKind.tensor(degree);
+
+        if (kind === 'in' || kind === 'out') {
+            let outerPort = new ZxPort(ports[0].edge, new ZxNode(100000, inputPorts.length + outputPorts.length));
+            (kind === 'in' ? inputPorts : outputPorts).push(outerPort);
+            ports.push(outerPort);
         }
 
         if (ports.length === 0) {
@@ -328,4 +292,4 @@ function evalZxGraphGroundTruth(graph) {
     return new Matrix(1 << inputPorts.length, 1 << outputPorts.length, result.data.rawBuffer());
 }
 
-export {zBasisEqualityMatrix, xBasisEqualityMatrix, Tensor, evalZxGraphGroundTruth}
+export {Tensor, evalZxGraphGroundTruth}

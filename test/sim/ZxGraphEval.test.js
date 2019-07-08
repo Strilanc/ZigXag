@@ -48,16 +48,21 @@ suite.test('evalZxGraph_identity', () => {
         '?-S-+-A-!',
 
         '?-F-+-W-!',
+        '!---Z-Z-?',
+        '!---X-X-?',
+        '!---S-A-?',
+        '!---F-W-?'
     ];
     for (let identity of identities) {
         let g = ZxGraph.fromDiagram(identity);
 
         let r = evalZxGraph(g);
-        assertThat(r.stabilizers).isEqualTo([
+        assertThat(r.stabilizers).withInfo({identity}).isEqualTo([
             "+XX",
             "+ZZ",
         ].map(PauliProduct.fromString));
-        assertThat(r.wavefunction).isApproximatelyEqualTo(Matrix.identity(2).times(Math.sqrt(0.5)));
+        assertThat(r.wavefunction).withInfo({identity}).isApproximatelyEqualTo(
+            Matrix.identity(2).times(Math.sqrt(0.5)));
     }
 });
 
