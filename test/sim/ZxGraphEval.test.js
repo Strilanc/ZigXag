@@ -44,6 +44,10 @@ suite.test('evalZxGraph_identity', () => {
                 |   |
                 O---O
        `,
+
+        '?-S-+-A-!',
+
+        '?-F-+-W-!',
     ];
     for (let identity of identities) {
         let g = ZxGraph.fromDiagram(identity);

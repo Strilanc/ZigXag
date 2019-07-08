@@ -188,6 +188,18 @@ suite.test('evalZxGraphGroundTruth_identity', () => {
     `))).isApproximatelyEqualTo(
         Matrix.row(1, 0, 0, 1)
     );
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        ?-S-+-A-!
+    `))).isApproximatelyEqualTo(
+        Matrix.square(1, 0, 0, 1)
+    );
+
+    assertThat(evalZxGraphGroundTruth(ZxGraph.fromDiagram(`
+        ?-F-+-W-!
+    `))).isApproximatelyEqualTo(
+        Matrix.square(1, 0, 0, 1)
+    );
 });
 
 suite.test('evalZxGraphGroundTruth_cnot', () => {

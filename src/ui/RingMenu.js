@@ -318,9 +318,9 @@ function makeNodeRingMenu() {
                 }
                 return [
                     `${spider} spider`,
-                    ...[modifier === '' ? [] : [`(${modifier})`]],
+                    modifier === '' ? [] : [`(${modifier})`],
                     '',
-                    'Selection:',
+                    'Fixed measures:',
                     `∀k: ${spider}0·${spider}k`,
                     `${sign}Πk(${oppSpider}k)`,
                     '',

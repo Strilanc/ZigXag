@@ -14,6 +14,7 @@ import {popcnt} from "src/base/Util.js";
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 import {Controls} from "src/sim/Controls.js";
 import {Util} from "src/base/Util.js";
+import {NODES} from "src/sim/ZxNodeKind.js";
 
 
 /**
@@ -246,19 +247,6 @@ function dropBit(val, bit) {
     return low | (high << bit);
 }
 
-function basisChangeDict() {
-    let s = Math.sqrt(0.5);
-    let a = new Complex(0.5, 0.5);
-    return {
-        '-': 1,
-        'h': Matrix.square(s, s, s, -s),
-        'x': Matrix.square(0, 1, 1, 0),
-        'z': Matrix.square(1, 0, 0, -1),
-        's': Matrix.square(1, 0, 0, Complex.I),
-        'f': Matrix.square(a, a.conjugate(), a.conjugate(), a),
-    };
-}
-
 /**
  * @param {!ZxGraph} graph
  * @returns {!Matrix}
@@ -314,10 +302,7 @@ function evalZxGraphGroundTruth(graph) {
         let t2 = portToTensorMap.get(p2);
 
         // Perform a basis change if necessary.
-        let unitary = basisChangeDict()[kind];
-        if (unitary === undefined) {
-            throw new Error(`Unrecognized edge kind ${kind}`);
-        }
+        let unitary = NODES.map.get(kind === '-' ? '@' : kind).edgeAction.matrix;
         if (unitary !== 1) {
             t1.inline_applyMatrixToPort(unitary, p1);
         }

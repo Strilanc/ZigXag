@@ -13,6 +13,7 @@ import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
 import {popcnt} from "src/base/Util.js";
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
+import {NODES} from "src/sim/ZxNodeKind.js";
 
 
 /**
@@ -229,10 +230,9 @@ class MultiCnot extends QuantumStatement {
     }
 }
 
-class SingleQubitGates extends QuantumStatement {
+class EdgeActions extends QuantumStatement {
     /**
-     * @param {!GeneralMap.<!int, !string>|Map.<!int, !string>} changes Qubit to gate mapping.
-     *      Allowed gate strings are: h, x, z, s, f
+     * @param {!GeneralMap.<!int, !string>|!Map.<!int, !string>} changes Qubit to edge action kind.
      */
     constructor(changes) {
         super();
@@ -244,22 +244,12 @@ class SingleQubitGates extends QuantumStatement {
      * @returns {!boolean}
      */
     isEqualTo(other) {
-        return other instanceof SingleQubitGates && equate(this.changes, other.changes);
+        return other instanceof EdgeActions && equate(this.changes, other.changes);
     }
 
     writeQasm(statements) {
-        let rewrites = {
-            'h': ['h'],
-            'x': ['x'],
-            'z': ['z'],
-            's': ['s'],
-            'f': ['h', 's', 'h'],
-        };
-        for (let [qubit, gate] of this.changes.entries()) {
-            let ops = rewrites[gate];
-            if (ops === undefined) {
-                throw new Error(`Unrecognized gate: ${gate}`);
-            }
+        for (let [qubit, kind] of this.changes.entries()) {
+            let ops = NODES.map.get(kind).edgeAction.qasmGates;
             for (let op of ops) {
                 statements.push(`${op} q[${qubit}];`);
             }
@@ -267,45 +257,17 @@ class SingleQubitGates extends QuantumStatement {
     }
 
     writeQuirk(init, cols) {
-        let rewrites = {
-            'h': 'H',
-            'x': 'X',
-            'z': 'Z',
-            's': 'Z^½',
-            'f': 'X^½',
-        };
         let col = [];
-        for (let [qubit, gate] of this.changes.entries()) {
-            let quirkGate = rewrites[gate];
-            if (quirkGate === undefined) {
-                throw new Error(`Unrecognized gate: ${gate}`);
-            }
+        for (let [qubit, kind] of this.changes.entries()) {
+            let quirkGate = NODES.map.get(kind).edgeAction.quirkGate;
             padSetTo(col, 1, qubit, quirkGate);
         }
         cols.push(col);
     }
 
     interpret(sim, out) {
-        for (let [qubit, gate] of this.changes.entries()) {
-            if (gate === 'h') {
-                sim.hadamard(qubit);
-            } else if (gate === 'x') {
-                sim.hadamard(qubit);
-                sim.phase(qubit);
-                sim.phase(qubit);
-                sim.hadamard(qubit);
-            } else if (gate === 'z') {
-                sim.phase(qubit);
-                sim.phase(qubit);
-            } else if (gate === 's') {
-                sim.phase(qubit);
-            } else if (gate === 'f') {
-                sim.hadamard(qubit);
-                sim.phase(qubit);
-                sim.hadamard(qubit);
-            } else {
-                throw new Error(`Unrecognized gate: ${gate}`);
-            }
+        for (let [qubit, kind] of this.changes.entries()) {
+            NODES.map.get(kind).edgeAction.sim(sim, qubit);
         }
     }
 }
@@ -620,7 +582,7 @@ export {
     QuantumStatement,
     QuantumProgram,
     InitEprPairs,
-    SingleQubitGates,
+    EdgeActions,
     MeasurementsWithPauliFeedback,
     Comment,
     HeaderAlloc,

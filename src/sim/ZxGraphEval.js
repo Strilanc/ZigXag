@@ -16,12 +16,13 @@ import {
     Comment,
     HeaderAlloc,
     MeasurementsWithPauliFeedback,
-    SingleQubitGates,
+    EdgeActions,
     InitEprPairs,
     MultiCnot,
     AmpsDisplay,
     PostSelection,
 } from "src/sim/QuantumProgram.js"
+import {NODES} from "src/sim/ZxNodeKind.js";
 
 /**
  * Determines products of Paulis that can be applied after EPR pairs are made, but before spider measurements
@@ -50,6 +51,18 @@ function fixedPointsOfGraph(graph, qubitMap) {
 }
 
 /**
+ * @param {!PauliProduct} product
+ * @param {!int} n
+ * @param {!Array.<!int>} qubits
+ * @private
+ */
+function _remapProductQubits(product, n, qubits) {
+    return PauliProduct.fromSparseQubitAxes(
+        n,
+        product.activeQubitAxes().map(axis => new QubitAxis(qubits[axis.qubit], axis.axis)));
+}
+
+/**
  * @param {!ZxGraph} graph
  * @param {!ZxNode} node
  * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
@@ -59,39 +72,13 @@ function _nodeSpiderFixedPoints(graph, node, qubit_map) {
     let ports = graph.activePortsOf(node);
     let kind = graph.kind(node);
 
-    if (kind === 'in' || kind === 'out' || kind === 'O!' || kind === '@!') {
-        return [];
+    let nodeKind = NODES.map.get(kind);
+    if (nodeKind === undefined) {
+        throw new Error(`Unrecognized node kind ${kind} for fixed points.`);
     }
-
-    if (kind === 'O' || kind === '@') {
-        if (ports.length === 0) {
-            return [];
-        }
-
-        let axis = kind === '@';
-        let qs = ports.map(p => qubit_map.get(p));
-
-        let result = [];
-        result.push(PauliProduct.fromXzParity(qubit_map.size, !axis, qs));
-        for (let i = 1; i < qs.length; i++) {
-            result.push(PauliProduct.fromXzParity(qubit_map.size, axis, [qs[0], qs[i]]));
-        }
-        return result;
-    }
-
-    if (kind === '+') {
-        let result = [];
-        for (let portPair of graph.activeCrossingPortPairs(node)) {
-            let qs = portPair.map(p => qubit_map.get(p));
-            result.push(
-                PauliProduct.fromSparseByType(qubit_map.size, {X: qs}),
-                PauliProduct.fromSparseByType(qubit_map.size, {Z: qs}));
-        }
-        return result;
-    }
-
-
-    throw new Error(`Unrecognized node kind ${kind}.`);
+    let qs = ports.map(p => qubit_map.get(p));
+    let products = nodeKind.fixedPoints(qs.length);
+    return products.map(e => _remapProductQubits(e, qubit_map.size, qs));
 }
 
 /**
@@ -101,27 +88,14 @@ function _nodeSpiderFixedPoints(graph, node, qubit_map) {
  * @private
  */
 function _edgeEprFixedPoints(graph, edge, qubit_map) {
-    let [a, b] = edge.ports().map(p => qubit_map.get(p));
+    let qubits = edge.ports().map(p => qubit_map.get(p));
     let kind = graph.kind(edge);
-    let f = v => PauliProduct.fromSparseByType(qubit_map.size, v);
-
-    if (kind === '-' || kind === 'x' || kind === 'z') {
-        return [f({X: [a, b]}), f({Z: [a, b]})];
+    let nodeKind = NODES.map.get(kind === '-' ? '@' : kind);
+    if (nodeKind === undefined) {
+        throw new Error(`Unrecognized edge kind ${kind} for fixed points.`);
     }
-
-    if (kind === 'h') {
-        return [f({X: a, Z: b}), f({Z: a, X: b})];
-    }
-
-    if (kind === 'f') {
-        return [f({X: [a, b]}), f({Y: a, Z: b})];
-    }
-
-    if (kind === 's') {
-        return [f({X: a, Y: b}), f({Z: [a, b]})];
-    }
-
-    throw new Error(`Unrecognized edge kind ${kind}.`);
+    let products = nodeKind.fixedPoints(2);
+    return products.map(e => _remapProductQubits(e, qubit_map.size, qubits));
 }
 
 /**
@@ -341,12 +315,15 @@ function _zxEval_initEprPairs(outProgram, graph, portToQubitMap) {
     outProgram.statements.push(new InitEprPairs(...pairs.map(e => e.qs)));
 
     // Apply any basis changes.
-    let knownBasisChanges = ['h', 'x', 'z', 's', 'f'];
-    let basisChanges = new GeneralMap(...pairs.
-        filter(e => knownBasisChanges.indexOf(e.kind) !== -1).
-        map(e => [e.qs[1], e.kind]));
+    let basisChanges = new GeneralMap();
+    for (let pair of pairs) {
+        let nodeKind = NODES.map.get(pair.kind === '-' ? '@' : pair.kind);
+        if (nodeKind.edgeAction.matrix !== 1) {
+            basisChanges.set(pair.qs[0], pair.kind);
+        }
+    }
     if (basisChanges.size > 0) {
-        outProgram.statements.push(new SingleQubitGates(basisChanges));
+        outProgram.statements.push(new EdgeActions(basisChanges));
     }
 }
 
@@ -449,7 +426,7 @@ function _zxEval_performSpiderMeasurements(outProgram, graph, portQubitMapping) 
     allMeasured.sort((a, b) => a - b);
 
     // Act.
-    outProgram.statements.push(new SingleQubitGates(new Map(xMeasured.map(q => [q, 'h']))));
+    outProgram.statements.push(new EdgeActions(new Map(xMeasured.map(q => [q, 'h']))));
 
     let measurementToFeedback = _spiderMeasurementToFeedbackMap(
         graph, portQubitMapping, spiderMeasurements);

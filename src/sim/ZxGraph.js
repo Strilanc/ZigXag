@@ -1,6 +1,7 @@
 import {GeneralMap} from "src/base/GeneralMap.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
 import {Seq, seq} from "src/base/Seq.js";
+import {NODES} from "src/sim/ZxNodeKind.js";
 
 
 class ZxNode {
@@ -646,35 +647,23 @@ class ZxGraph {
 
         let graph = new ZxGraph();
 
-        let edgeKindMap = {
-            '-': '-',
-            '|': '-',
-            'x': 'x',
-            'X': 'x',
-            'z': 'z',
-            'Z': 'z',
-            'f': 'f',
-            'F': 'f',
-            's': 's',
-            'S': 's',
-            'h': 'h',
-            'H': 'h',
-        };
-        let nodeKindMap = {
-            '@!': '@!',
-            '@': '@',
-            'O!': 'O!',
-            '0!': 'O!',
-            'o!': 'O!',
-            'O': 'O',
-            '0': 'O',
-            'o': 'O',
-            '!': 'in',
-            '?': 'out',
-            '+': '+',
-            '-': '+',
-            '|': '+',
-        };
+        let edgeKindMap = {};
+        for (let nodeKind of NODES.all) {
+            if (nodeKind.allowedDegrees.indexOf(2) !== -1) {
+                for (let rep of nodeKind.diagramReps) {
+                    edgeKindMap[rep] = nodeKind.id;
+                }
+            }
+        }
+        edgeKindMap['|'] = '-';
+        edgeKindMap['-'] = '-';
+
+        let nodeKindMap = {};
+        for (let nodeKind of NODES.all) {
+            for (let rep of nodeKind.diagramReps) {
+                nodeKindMap[rep] = nodeKind.id;
+            }
+        }
 
         // Nodes.
         for (let row = 0; row < lines.length; row += 4) {
@@ -1010,29 +999,21 @@ class ZxGraph {
         let lines = [];
         let node_reps = {
             '': ' ',
-            '@': '@',
-            'O': 'O',
-            'in': '!',
-            'out': '?',
-            '@!': '@!',
-            'O!': 'O!',
         };
-        let horizontal_edge_reps = {
-            'h': 'H',
-            's': 'S',
-            'x': 'X',
-            'z': 'Z',
-            'f': 'F',
-        };
-        let vertical_edge_reps = {
+        for (let node of NODES.all) {
+            node_reps[node.id] = node.diagramReps[0];
+        }
+        let horizontalEdgeReps = {};
+        let verticalEdgeReps = {
             '': ' ',
             '-': '|',
-            'h': 'H',
-            's': 'S',
-            'x': 'X',
-            'z': 'Z',
-            'f': 'F',
         };
+        for (let node of NODES.all) {
+            if (node.allowedDegrees.indexOf(2) !== -1) {
+                horizontalEdgeReps[node.id] = node.diagramReps[0];
+                verticalEdgeReps[node.id] = node.diagramReps[0];
+            }
+        }
 
         for (let row = 0; row < h; row++) {
             if (row > 0) {
@@ -1046,7 +1027,7 @@ class ZxGraph {
                     let e = new ZxNode(col, row).upUnitEdge();
                     let c = this.edges.get(e) || '';
                     vertical_connectors.push(c === '' ? ' ' : '|');
-                    vertical_modifiers.push(vertical_edge_reps[c] || c);
+                    vertical_modifiers.push(verticalEdgeReps[c] || c);
                 }
 
                 lines.push(vertical_connectors.join(''));
@@ -1063,7 +1044,7 @@ class ZxGraph {
                     if (c === undefined) {
                         chars.push('   '.slice(cut));
                     } else {
-                        chars.push(`-${horizontal_edge_reps[c] || c}-`.slice(cut));
+                        chars.push(`-${horizontalEdgeReps[c] || c}-`.slice(cut));
                     }
 
                 }
@@ -1087,7 +1068,7 @@ class ZxGraph {
             }
             lines.push(chars.join(''));
         }
-        return lines.map(rtrim).join('\n')
+        return lines.map(rtrim).join('\n');
     }
 
     /**

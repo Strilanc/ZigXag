@@ -35,6 +35,7 @@ import {
     maybeRemoveEdgeModifier,
     maybeDragNodeEdit,
 } from "src/edit.js";
+import {NODES} from "src/sim/ZxNodeKind.js";
 import {makeNodeRingMenu} from "src/ui/RingMenu.js"
 
 /**
@@ -172,24 +173,20 @@ function xyToGraphElement(x, y) {
  */
 function drawNode(ctx, node, radius=8, fill=undefined, stroke=undefined) {
     let kind = curGraph.nodes.get(node);
-    let text = '';
+    let nodeKind = NODES.map.get(kind);
+    if (nodeKind !== undefined) {
+        ctx.save();
+        ctx.translate(...nodeToXy(node));
+        nodeKind.contentDrawer(ctx);
+        ctx.restore();
+        return;
+    }
+
     if (stroke !== undefined) {
         ctx.strokeStyle = stroke;
-    } else if (kind === 'O!' || kind === '@!') {
-        ctx.strokeStyle = 'red';
-        ctx.lineWidth = 3;
-    } else {
-        ctx.strokeStyle = 'black';
     }
     if (fill !== undefined) {
         ctx.fillStyle = fill;
-    } else if (kind === 'O' || kind === 'O!') {
-        ctx.fillStyle = 'white';
-    } else if (kind === '@' || kind === '@!') {
-        ctx.fillStyle = 'black';
-    } else if (kind === 'in' || kind === 'out') {
-        ctx.fillStyle = 'yellow';
-        text = kind[0];
     } else {
         ctx.fillStyle = 'red';
     }
@@ -198,13 +195,6 @@ function drawNode(ctx, node, radius=8, fill=undefined, stroke=undefined) {
     ctx.fill();
     ctx.stroke();
     ctx.lineWidth = 1;
-
-    if (text !== '') {
-        let [x, y] = nodeToXy(node);
-        ctx.fillStyle = 'black';
-        ctx.font = '14px monospace';
-        ctx.fillText(text, x-4, y+5);
-    }
 }
 
 /**
@@ -227,39 +217,18 @@ function drawEdge(ctx, edge, thickness=1, color='black', showKind=true) {
     ctx.stroke();
 
     if (showKind) {
+        let nodeKind = NODES.map.get(kind);
+        if (nodeKind !== undefined) {
+            ctx.save();
+            ctx.translate(...graphElementToCenterXy(edge));
+            nodeKind.contentDrawer(ctx);
+            ctx.restore();
+            return;
+        }
+
         let [cx, cy] = graphElementToCenterXy(edge);
         let r = [cx - 4, cy - 4, 8, 8];
-        if (kind === 'h') {
-            ctx.fillStyle = 'yellow';
-            ctx.strokeStyle = 'black';
-            ctx.fillRect(...r);
-            ctx.strokeRect(...r)
-        } else if (kind === 'z' || kind === 'x' || kind === 's' || kind === 'f') {
-            let b = kind === 'x' || kind === 'f';
-            let b2 = kind === 's' || kind === 'f';
-            ctx.fillStyle = b ? 'white' : 'black';
-            ctx.strokeStyle = 'black';
-            ctx.beginPath();
-            ctx.arc(cx, cy, 7, 0, 2*Math.PI);
-            ctx.stroke();
-            ctx.fill();
-
-            if (b2) {
-                ctx.fillStyle = b ? 'black' : 'white';
-                ctx.font = '10px monospace';
-                ctx.fillText('π', cx-3, cy-1);
-                ctx.fillText('2', cx-3, cy+7);
-                ctx.beginPath();
-                ctx.moveTo(cx-4, cy);
-                ctx.lineTo(cx+4, cy);
-                ctx.strokeStyle = ctx.fillStyle;
-                ctx.stroke();
-            } else {
-                ctx.fillStyle = b ? 'black' : 'white';
-                ctx.font = '12px monospace';
-                ctx.fillText('π', cx-3, cy+3);
-            }
-        } else if (kind !== '-') {
+        if (kind !== '-') {
             ctx.fillStyle = 'red';
             ctx.strokeStyle = 'black';
             ctx.fillRect(...r);
@@ -694,7 +663,7 @@ function changeEdgeKindEdit(edge) {
     return new Edit(
         () => `cycle ${edge}`,
         graph => {
-            let cycle = ['-', 'h', 'x', 'z', 'f', 's'];
+            let cycle = ['-', 'h', 'x', 'z', 'f', 's', 'w', 'a'];
             let kind = curGraph.edges.get(edge);
             let i = cycle.indexOf(kind);
             i++;
