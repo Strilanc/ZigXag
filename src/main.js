@@ -400,6 +400,17 @@ function drawGraph(ctx) {
     }
 }
 
+/**
+ * @param {!ZxNode} node
+ * @returns {![!number, !number]}
+ */
+function nodeToMenuXy(node) {
+    let [x, y] = nodeToXy(node);
+    x = Math.max(x, 150);
+    y = Math.max(y, 135);
+    return [x, y];
+}
+
 function draw() {
     canvas.width = canvasDiv.clientWidth;
     canvas.height = 600;
@@ -424,17 +435,16 @@ function draw() {
 
         if (menuNode !== undefined) {
             ctx.save();
-            let [x, y] = nodeToXy(menuNode);
-            x = Math.max(x, 125);
-            y = Math.max(y, 125);
             ctx.globalAlpha *= 0.85;
             ctx.beginPath();
-            ctx.arc(x, y, 1000, 0, 2*Math.PI);
+            let [nx, ny] = nodeToXy(menuNode);
+            ctx.arc(nx, ny, 1000, 0, 2*Math.PI);
             ctx.lineWidth = 1950;
             ctx.strokeStyle = 'white';
             ctx.stroke();
             ctx.restore();
 
+            let [x, y] = nodeToMenuXy(menuNode);
             makeNodeRingMenu().draw(ctx, x, y, curShiftKey, mouseX, mouseY);
         }
     } finally {
@@ -792,14 +802,26 @@ canvasDiv.addEventListener('mouseup', ev => {
     }
     ev.preventDefault();
     let [x, y] = eventPosRelativeTo(ev, canvasDiv);
-
     curCtrlKey = ev.ctrlKey;
     curAltKey = ev.altKey;
     curShiftKey = ev.shiftKey;
 
-    let startNode = xyToNode(mouseDownX, mouseDownY);
-    let endNode = xyToNode(mouseDownX, mouseDownY);
-    if (startNode !== undefined && startNode.isEqualTo(endNode) && ev.which === 1 && ev.altKey) {
+    if (menuNode !== undefined) {
+        let [cx, cy] = nodeToMenuXy(menuNode);
+        let selection = makeNodeRingMenu().entryAt(cx, cy, x, y);
+        if (selection !== undefined) {
+            let copy = curGraph.copy();
+            copy.nodes.set(menuNode, selection.id);
+            revision.commit(copy.serialize());
+        }
+        menuNode = undefined;
+        draw();
+        return;
+    }
+
+    let startNode = xyToGraphElement(mouseDownX, mouseDownY);
+    let endNode = xyToGraphElement(x, y);
+    if (startNode instanceof ZxNode && startNode.isEqualTo(endNode) && ev.which === 1) {
         menuNode = startNode;
         draw();
         return;
@@ -873,6 +895,19 @@ document.addEventListener('keydown', ev => {
     curCtrlKey = ev.ctrlKey;
     curAltKey = ev.altKey;
     curShiftKey = ev.shiftKey;
+
+    if (!curAltKey && !curCtrlKey) {
+        let entry = makeNodeRingMenu().entryForKey(ev.keyCode, curShiftKey);
+        let targetNode = menuNode || xyToGraphElement(mouseX, mouseY);
+        if (entry !== undefined && targetNode instanceof ZxNode) {
+            let copy = curGraph.copy();
+            copy.nodes.set(targetNode, entry.id);
+            revision.commit(copy.serialize());
+            menuNode = undefined;
+            draw();
+        }
+    }
+
     let handlers = keyListeners.get(ev.keyCode);
     if (handlers !== undefined) {
         ev.preventDefault();
@@ -892,7 +927,6 @@ canvas.addEventListener('keyup', ev => {
 });
 
 document.addEventListener('keyup', ev => {
-    console.log("KEYUP");
     curCtrlKey = ev.ctrlKey;
     curAltKey = ev.altKey;
     curShiftKey = ev.shiftKey;

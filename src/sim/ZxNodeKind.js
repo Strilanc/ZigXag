@@ -258,7 +258,7 @@ function* _iterNodeKinds() {
                 diagramReps: (axis ? ['@'] : ['O', 'o', '0']).map(e => post ? e + '!' : e),
                 contentDrawer: nodeDraw,
                 hotkeys: post
-                    ? (axis ? ['@'] : ['O', ')'])
+                    ? (axis ? ['@', '2'] : ['O', ')', '0'])
                     : (axis ? ['2'] : ['o', '0']),
                 hotkeyShiftMask: post,
                 mouseHotkey: undefined,
@@ -281,7 +281,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(false),
                 tensor: spiderTensor(Math.PI),
-                edgeAction: post ? invalidAction : {
+                edgeAction: {
                     quirkGate: axis ? 'Z' : 'X',
                     qasmGates: axis ? ['z'] : ['x'],
                     sim: (sim, qubit) => {
@@ -312,7 +312,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(true),
                 tensor: spiderTensor(Math.PI / 2),
-                edgeAction: post ? invalidAction : {
+                edgeAction: {
                     quirkGate: axis ? 'Z^½' : 'X^½',
                     qasmGates: axis ? ['s'] : ['h', 's', 'h'],
                     sim: (sim, qubit) => {
@@ -343,7 +343,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(true),
                 tensor: spiderTensor(-Math.PI / 2),
-                edgeAction: post ? invalidAction : {
+                edgeAction: {
                     quirkGate: axis ? 'Z^-½' : 'X^-½',
                     qasmGates: axis ? ['z', 's'] : ['x', 'h', 's', 'h'],
                     sim: (sim, qubit) => {
@@ -495,6 +495,8 @@ const NODES = {
     map: map,
     all: [...map.values()],
     cross: map.get('+'),
+    in: map.get('in'),
+    out: map.get('out'),
     x: map.get('O'),
     z: map.get('@'),
     white: map.get('O'),

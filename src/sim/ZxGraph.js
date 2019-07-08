@@ -491,9 +491,9 @@ class ZxGraph {
         let result = [];
         for (let node of this.sortedNodes()) {
             let kind = this.nodes.get(node);
-            if (kind === 'O!') {
+            if (kind === 'O!' || kind === 'w!' || kind === 'f!' || kind === 'x!') {
                 result.push({node, axis: true});
-            } else if (kind === '@!') {
+            } else if (kind === '@!' || kind === 's!' || kind === 'a!' || kind === 'z!') {
                 result.push({node, axis: false});
             }
         }
