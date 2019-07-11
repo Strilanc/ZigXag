@@ -9,6 +9,7 @@ import {Reader, Writer} from "src/base/Serialize.js";
 import {GeneralMap} from "src/base/GeneralMap.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
 import {ZxGraph, ZxEdge, ZxNode, ZxPort} from "src/sim/ZxGraph.js";
+import {NODES} from "src/sim/ZxNodeKind.js";
 import {evalZxGraph} from "src/sim/ZxGraphEval.js";
 import {Util} from "src/base/Util.js";
 import {MathPainter} from "src/MathPainter.js";
@@ -41,6 +42,21 @@ class Edit {
  */
 function nodeToXy(n) {
     return [-100 + n.x * 50, -100 + n.y * 50];
+}
+
+/**
+ * @param {!ZxNode|!ZxEdge} element
+ * @returns {![!number, !number]}
+ */
+function graphElementToCenterXy(element) {
+    if (element instanceof ZxNode) {
+        return nodeToXy(element);
+    } else {
+        let [n1, n2] = element.nodes();
+        let [x1, y1] = nodeToXy(n1);
+        let [x2, y2] = nodeToXy(n2);
+        return [(x1 + x2) / 2, (y1 + y2) / 2];
+    }
 }
 
 /**
@@ -114,6 +130,27 @@ function maybeRemoveEdgeModifier(graphAtFocusTime, edge) {
             ctx.globalAlpha *= 0.5;
             ctx.fill();
             ctx.globalAlpha *= 2;
+        });
+}
+
+/**
+ * Removes an edge from the graph, along with its leaf nodes.
+ * @param {!ZxNode|!ZxEdge} element
+ * @param {!string} kind
+ * @returns {undefined|!Edit}
+ */
+function setElementKindEdit(element, kind) {
+    return new Edit(
+        () => `set ${element} kind to ${kind}`,
+        graph => graph.setKind(element, kind),
+        (graph, ctx) => {
+            let nodeKind = NODES.map.get(kind);
+            ctx.save();
+            ctx.translate(...graphElementToCenterXy(element));
+            if (nodeKind !== undefined) {
+                nodeKind.contentDrawer(ctx);
+            }
+            ctx.restore();
         });
 }
 
@@ -349,4 +386,5 @@ export {
     maybeContractNodeEdit,
     maybeRemoveEdgeModifier,
     maybeDragNodeEdit,
+    setElementKindEdit,
 };

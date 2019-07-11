@@ -34,6 +34,7 @@ import {
     maybeContractNodeEdit,
     maybeRemoveEdgeModifier,
     maybeDragNodeEdit,
+    setElementKindEdit,
 } from "src/edit.js";
 import {NODES} from "src/sim/ZxNodeKind.js";
 import {makeNodeRingMenu} from "src/ui/RingMenu.js"
@@ -731,6 +732,18 @@ function maybeIntroduceEdgeEdit(edge) {
  * @returns {undefined|!Edit}
  */
 function pickEdit(wantDelete, x, y) {
+    if (menuNode !== undefined) {
+        let [cx, cy] = nodeToMenuXy(menuNode);
+        let selection = makeNodeRingMenu().entryAt(cx, cy, x, y);
+        if (selection !== undefined) {
+            if (selection.id === 'del') {
+                return maybeDeleteElementEdit(menuNode);
+            }
+            return setElementKindEdit(menuNode, selection.id);
+        }
+        return undefined;
+    }
+
     let oldElement = xyToGraphElement(mouseDownX, mouseDownY);
     let element = xyToGraphElement(x, y);
     let nearestNode = xyToNode(x, y);
@@ -806,25 +819,14 @@ canvasDiv.addEventListener('mouseup', ev => {
     curAltKey = ev.altKey;
     curShiftKey = ev.shiftKey;
 
-    if (menuNode !== undefined) {
-        let [cx, cy] = nodeToMenuXy(menuNode);
-        let selection = makeNodeRingMenu().entryAt(cx, cy, x, y);
-        if (selection !== undefined) {
-            let copy = curGraph.copy();
-            copy.nodes.set(menuNode, selection.id);
-            revision.commit(copy.serialize());
+    if (menuNode === undefined) {
+        let startNode = xyToGraphElement(mouseDownX, mouseDownY);
+        let endNode = xyToGraphElement(x, y);
+        if (startNode instanceof ZxNode && startNode.isEqualTo(endNode) && ev.which === 1) {
+            menuNode = startNode;
+            draw();
+            return;
         }
-        menuNode = undefined;
-        draw();
-        return;
-    }
-
-    let startNode = xyToGraphElement(mouseDownX, mouseDownY);
-    let endNode = xyToGraphElement(x, y);
-    if (startNode instanceof ZxNode && startNode.isEqualTo(endNode) && ev.which === 1) {
-        menuNode = startNode;
-        draw();
-        return;
     }
 
     let edit = pickEdit(curWantDeleteEdit(), x, y);
@@ -833,6 +835,7 @@ canvasDiv.addEventListener('mouseup', ev => {
         edit.action(g);
         revision.commit(g.serialize());
     }
+    menuNode = undefined;
     curMouseButton = undefined;
     mouseDownX = undefined;
     mouseDownY = undefined;

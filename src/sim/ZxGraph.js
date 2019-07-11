@@ -400,6 +400,15 @@ class ZxGraph {
     }
 
     /**
+     * @param {!ZxNode|!ZxEdge} element
+     * @param {!string} kind
+     */
+    setKind(element, kind) {
+        let map = (element instanceof ZxNode) ? this.nodes : this.edges;
+        map.set(element, kind);
+    }
+
+    /**
      * @returns {!string}
      */
     serialize() {
