@@ -342,9 +342,6 @@ function _zxEval_performNodeMeasurements(outProgram, graph, portQubitMapping) {
     let nodeBasisChanges = new GeneralMap();
     for (let node of graph.nodes.keys()) {
         let nodeKind = NODES.map.get(graph.kind(node));
-        if (nodeKind === NODES.h) {
-            continue;
-        }
         let ports = graph.activePortsOf(node);
         let mat = nodeKind.nodeRootEdgeAction.matrix;
         if (ports.length > 0 && mat !== 1 && mat !== null) {

@@ -574,6 +574,7 @@ function* _iterNodeKinds() {
             },
             matrix: Matrix.square(1, 1, 1, -1).times(Math.sqrt(0.5)),
         },
+        nodeRootEdgeAction: noAction,
         tensor: dim => {
             if (dim !== 2) {
                 throw new Error(`Bad Hadamard dimension: ${dim}`);
