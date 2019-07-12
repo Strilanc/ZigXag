@@ -39,7 +39,7 @@ function fixedPointsOfGraph(graph, qubitMap) {
 
     // Pauli products that are about to be measured are fixed points.
     for (let node of graph.nodes.keys()) {
-        fixedPoints.push(..._nodeSpiderFixedPoints(graph, node, qubitMap));
+        fixedPoints.push(..._nodeFixedPoints(graph, node, qubitMap));
     }
 
     // Stabilizers of the input state are fixed points.
@@ -68,7 +68,7 @@ function _remapProductQubits(product, n, qubits) {
  * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
  * @private
  */
-function _nodeSpiderFixedPoints(graph, node, qubit_map) {
+function _nodeFixedPoints(graph, node, qubit_map) {
     let ports = graph.activePortsOf(node);
     let kind = graph.kind(node);
 
@@ -174,10 +174,12 @@ function graphToPortQubitMapping(graph) {
     let postNodes = graph.postselectionNodesWithAxis();
     let measurementNodes = graph.spiderNodesWithAxis();
     let crossingNodes = graph.crossingNodes();
+    let hadamardNodes = graph.hadamardNodes();
     if (inputNodes.length +
             outputNodes.length +
             measurementNodes.length +
             crossingNodes.length +
+            hadamardNodes.length +
             postNodes.length !== graph.nodes.size) {
         throw new Error('Unrecognized node(s).');
     }
@@ -188,6 +190,11 @@ function graphToPortQubitMapping(graph) {
 
     // Internal nodes go first.
     for (let node of crossingNodes) {
+        for (let p of graph.activePortsOf(node)) {
+            portToQubitMap.set(p, portToQubitMap.size);
+        }
+    }
+    for (let node of hadamardNodes) {
         for (let p of graph.activePortsOf(node)) {
             portToQubitMap.set(p, portToQubitMap.size);
         }
@@ -330,6 +337,9 @@ function _zxEval_initEprPairs(outProgram, graph, portToQubitMap) {
     let nodeBasisChanges = new GeneralMap();
     for (let node of graph.nodes.keys()) {
         let nodeKind = NODES.map.get(graph.kind(node));
+        if (nodeKind === NODES.h) {
+            continue;
+        }
         let ports = graph.activePortsOf(node);
         if (ports.length > 0 && nodeKind.edgeAction.matrix !== 1 && nodeKind.edgeAction.matrix !== null) {
             nodeBasisChanges.set(portToQubitMap.get(ports[0]), nodeKind.id);
@@ -354,7 +364,7 @@ function _transformedSpiderMeasurement(outProgram, totalQubits, qubitIds, axis) 
         return [];
     }
     let [head, ...tail] = qubitIds;
-    outProgram.statements.push(new MultiCnot(head, tail, !axis));
+    outProgram.statements.push(new MultiCnot(head, tail, !axis, axis));
     let result = [];
     result.push(new TransformedMeasurement(
         PauliProduct.fromXzParity(totalQubits, axis, qubitIds),
@@ -423,6 +433,18 @@ function _zxEval_performSpiderMeasurements(outProgram, graph, portQubitMapping) 
         let qubits = graph.activePortsOf(node).map(p => portQubitMapping.map.get(p));
         spiderMeasurements.push(
             ..._transformedSpiderMeasurement(outProgram, portQubitMapping.numQubits, qubits, axis));
+    }
+    for (let node of graph.hadamardNodes()) {
+        let [a, b] = graph.activePortsOf(node).map(p => portQubitMapping.map.get(p));
+        outProgram.statements.push(new MultiCnot(a, [b], true, true));
+        spiderMeasurements.push(new TransformedMeasurement(
+            PauliProduct.fromSparseByType(portQubitMapping.numQubits, {X: a, Z: b}),
+            new QubitAxis(a, false),
+            new QubitAxis(b, false)));
+        spiderMeasurements.push(new TransformedMeasurement(
+            PauliProduct.fromSparseByType(portQubitMapping.numQubits, {X: b, Z: a}),
+            new QubitAxis(b, false),
+            new QubitAxis(a, false)));
     }
 
     // Perform Bell measurements on crossing lines.

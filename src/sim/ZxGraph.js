@@ -528,6 +528,20 @@ class ZxGraph {
     /**
      * @returns {!Array.<!ZxNode>}
      */
+    hadamardNodes() {
+        let result = [];
+        for (let node of this.sortedNodes()) {
+            let kind = this.nodes.get(node);
+            if (kind === 'h') {
+                result.push(node);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @returns {!Array.<!ZxNode>}
+     */
     crossingNodes() {
         let result = [];
         for (let node of this.sortedNodes()) {

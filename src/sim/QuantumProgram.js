@@ -172,14 +172,15 @@ class MultiCnot extends QuantumStatement {
     /**
      * @param {!int} control
      * @param {!Array.<!int>} targets
-     * @param {!boolean} axis The control qubit's interaction axis, and the inverse axis of the target qubits.
-     *     When axis is true does CNOTs, when axis is false does NOTCs.
+     * @param {!boolean} controlAxis
+     * @param {!boolean} targetAxis
      */
-    constructor(control, targets, axis) {
+    constructor(control, targets, controlAxis, targetAxis) {
         super();
         this.control = control;
         this.targets = targets;
-        this.axis = axis;
+        this.controlAxis = controlAxis;
+        this.targetAxis = targetAxis;
     }
 
     /**
@@ -189,16 +190,23 @@ class MultiCnot extends QuantumStatement {
     isEqualTo(other) {
         return (other instanceof MultiCnot &&
             this.control === other.control &&
-            this.axis === other.axis &&
+            this.controlAxis === other.controlAxis &&
+            this.targetAxis === other.targetAxis &&
             equate(this.targets, other.targets));
     }
 
     writeQasm(statements) {
         for (let target of this.targets) {
-            if (this.axis) {
+            if (this.controlAxis && this.targetAxis) {
+                statements.push(`cz q[${this.control}], q[${target}];`);
+            } else if (this.controlAxis && !this.targetAxis) {
                 statements.push(`cx q[${this.control}], q[${target}];`);
-            } else {
+            } else if (!this.controlAxis && this.targetAxis) {
                 statements.push(`cx q[${target}], q[${this.control}];`);
+            } else {
+                statements.push(`h q[${this.control}];`);
+                statements.push(`cx q[${this.control}], q[${target}];`);
+                statements.push(`h q[${this.control}];`);
             }
         }
     }
@@ -208,8 +216,8 @@ class MultiCnot extends QuantumStatement {
             return;
         }
 
-        let controlType = this.axis ? '•' : '⊖';
-        let targetType = this.axis ? 'X' : 'Z';
+        let controlType = this.controlAxis ? '•' : '⊖';
+        let targetType = this.targetAxis ? 'Z' : 'X';
 
         let col = [];
         padSetTo(col, 1, this.control, controlType);
@@ -221,10 +229,18 @@ class MultiCnot extends QuantumStatement {
 
     interpret(sim, out) {
         for (let target of this.targets) {
-            if (this.axis) {
+            if (this.controlAxis && this.targetAxis) {
+                sim.hadamard(target);
                 sim.cnot(this.control, target);
-            } else {
+                sim.hadamard(target);
+            } else if (this.controlAxis && !this.targetAxis) {
+                sim.cnot(this.control, target);
+            } else if (!this.controlAxis && this.targetAxis) {
                 sim.cnot(target, this.control);
+            } else {
+                sim.hadamard(this.control);
+                sim.cnot(this.control, target);
+                sim.hadamard(this.control);
             }
         }
     }

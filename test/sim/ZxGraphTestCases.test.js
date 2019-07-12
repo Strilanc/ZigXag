@@ -782,6 +782,9 @@ graphTestCase({
     `,
     alternates: [`
         !---@-H-@---?
+    `,
+    `
+        !---H---?
     `],
     stabilizers: [
         '+XZ',
@@ -800,6 +803,9 @@ graphTestCase({
         !-X-+-H-?
     `,
     alternates: [`
+        !-X-H---?
+    `,
+    `
         !---X-H-?
     `],
     stabilizers: [
