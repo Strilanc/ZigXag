@@ -3,17 +3,7 @@ import {GeneralSet} from "src/base/GeneralSet.js";
 import {seq, Seq} from "src/base/Seq.js";
 import {SimulatorSpec} from "src/sim/SimulatorSpec.js"
 import {equate} from "src/base/Equate.js"
-import {ChpSimulator} from "src/sim/ChpSimulator.js"
-import {VectorSimulator} from "src/sim/VectorSimulator.js"
-import {Measurement} from "src/sim/Measurement.js"
-import {Complex} from "src/base/Complex.js"
-import {Matrix} from "src/base/Matrix.js"
-import {ZxPort, ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js"
-import {BitTable} from "src/sim/BitTable.js"
-import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
-import {popcnt} from "src/base/Util.js";
-import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
-import {NODES} from "src/sim/ZxNodeKind.js";
+import {QubitAxis} from "src/sim/PauliProduct.js"
 
 
 /**
@@ -242,48 +232,6 @@ class MultiCnot extends QuantumStatement {
                 sim.cnot(this.control, target);
                 sim.hadamard(this.control);
             }
-        }
-    }
-}
-
-class EdgeActions extends QuantumStatement {
-    /**
-     * @param {!GeneralMap.<!int, !string>|!Map.<!int, !string>} changes Qubit to edge action kind.
-     */
-    constructor(changes) {
-        super();
-        this.changes = changes;
-    }
-
-    /**
-     * @param {*} other
-     * @returns {!boolean}
-     */
-    isEqualTo(other) {
-        return other instanceof EdgeActions && equate(this.changes, other.changes);
-    }
-
-    writeQasm(statements) {
-        for (let [qubit, kind] of this.changes.entries()) {
-            let ops = NODES.map.get(kind).edgeAction.qasmGates;
-            for (let op of ops) {
-                statements.push(`${op} q[${qubit}];`);
-            }
-        }
-    }
-
-    writeQuirk(init, cols) {
-        let col = [];
-        for (let [qubit, kind] of this.changes.entries()) {
-            let quirkGate = NODES.map.get(kind).edgeAction.quirkGate;
-            padSetTo(col, 1, qubit, quirkGate);
-        }
-        cols.push(col);
-    }
-
-    interpret(sim, out) {
-        for (let [qubit, kind] of this.changes.entries()) {
-            NODES.map.get(kind).edgeAction.sim(sim, qubit);
         }
     }
 }
@@ -598,7 +546,6 @@ export {
     QuantumStatement,
     QuantumProgram,
     InitEprPairs,
-    EdgeActions,
     MeasurementsWithPauliFeedback,
     Comment,
     HeaderAlloc,

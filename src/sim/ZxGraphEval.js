@@ -1,28 +1,19 @@
 import {GeneralMap} from "src/base/GeneralMap.js";
-import {seq, Seq} from "src/base/Seq.js";
-import {SimulatorSpec} from "src/sim/SimulatorSpec.js"
 import {ChpSimulator} from "src/sim/ChpSimulator.js"
-import {VectorSimulator} from "src/sim/VectorSimulator.js"
-import {Measurement} from "src/sim/Measurement.js"
-import {Complex} from "src/base/Complex.js"
 import {Matrix} from "src/base/Matrix.js"
 import {ZxPort, ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js"
-import {BitTable} from "src/sim/BitTable.js"
 import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
-import {popcnt} from "src/base/Util.js";
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 import {
     QuantumProgram,
     Comment,
     HeaderAlloc,
     MeasurementsWithPauliFeedback,
-    EdgeActions,
     InitEprPairs,
-    MultiCnot,
     AmpsDisplay,
     PostSelection,
 } from "src/sim/QuantumProgram.js"
-import {NODES} from "src/sim/ZxNodeKind.js";
+import {NODES, EdgeActions} from "src/sim/ZxNodeKind.js";
 
 /**
  * Determines products of Paulis that can be applied after EPR pairs are made, but before spider measurements
@@ -144,19 +135,19 @@ function _internalToExternalMapFromFixedPoints(fixedPoints, internalWidth) {
 /**
  * @param {!ZxGraph} graph
  * @param {!PortQubitMapping} portQubitMapping
- * @param {!Array.<TransformedMeasurement>} spiderMeasurements
+ * @param {!Array.<TransformedMeasurement>} transMeasurements
  * @returns {!GeneralMap<!int, !Array.<!QubitAxis>>} Map from in/out axis to measurement qubits that flip it.
  */
-function _spiderMeasurementToFeedbackMap(graph, portQubitMapping, spiderMeasurements) {
+function _transformedMeasurementToFeedbackMap(graph, portQubitMapping, transMeasurements) {
     let fixedPoints = fixedPointsOfGraph(graph, portQubitMapping.map);
     let externalMap = _internalToExternalMapFromFixedPoints(fixedPoints, portQubitMapping.numInternal);
     let out = new GeneralMap();
-    for (let spider of spiderMeasurements) {
-        if (!externalMap.has(spider.postselectionControlAxis)) {
+    for (let transMeasure of transMeasurements) {
+        if (!externalMap.has(transMeasure.postselectionControlAxis)) {
             throw new Error('Uncontrollable measurement.');
         }
-        let externalFlips = externalMap.get(spider.postselectionControlAxis) || [];
-        out.set(spider.measurementAxis.qubit, externalFlips);
+        let externalFlips = externalMap.get(transMeasure.postselectionControlAxis) || [];
+        out.set(transMeasure.measurementAxis.qubit, externalFlips);
     }
     return out;
 }
@@ -257,8 +248,8 @@ function evalZxGraph(graph) {
     outProgram.statements.push(new HeaderAlloc(portQubitMapping));
 
     // Perform operations congruent to the ZX graph.
-    _zxEval_initEprPairs(outProgram, graph, portQubitMapping.map);
-    _zxEval_performSpiderMeasurements(outProgram, graph, portQubitMapping);
+    _zxEval_initEdgeEprPairs(outProgram, graph, portQubitMapping.map);
+    _zxEval_performNodeMeasurements(outProgram, graph, portQubitMapping);
     outProgram.statements.push(new AmpsDisplay(
         portQubitMapping.numInternal,
         portQubitMapping.numIn + portQubitMapping.numOut));
@@ -267,46 +258,13 @@ function evalZxGraph(graph) {
     return _analyzeProgram(outProgram, portQubitMapping);
 }
 
-class TransformedMeasurement {
-    /**
-     * @param {!PauliProduct} originalStabilizer
-     * @param {!QubitAxis} postselectionControlAxis
-     * @param {!QubitAxis} measurementAxis
-     */
-    constructor(originalStabilizer, measurementAxis, postselectionControlAxis) {
-        this.originalStabilizer = originalStabilizer;
-        this.measurementAxis = measurementAxis;
-        this.postselectionControlAxis = postselectionControlAxis;
-    }
-
-    /**
-     * @param {*} other
-     * @returns {!boolean}
-     */
-    isEqualTo(other) {
-        return (other instanceof TransformedMeasurement &&
-            this.measurementAxis.isEqualTo(other.measurementAxis) &&
-            this.originalStabilizer.isEqualTo(other.originalStabilizer) &&
-            this.postselectionControlAxis.isEqualTo(other.postselectionControlAxis));
-    }
-
-    /**
-     * @returns {!string}
-     */
-    toString() {
-        return `originalStabilizer: ${this.originalStabilizer}
-postselectionControlAxis: ${this.postselectionControlAxis}
-measurementAxis: ${this.measurementAxis}`;
-    }
-}
-
 /**
  * @param {!QuantumProgram} outProgram
  * @param {!ZxGraph} graph
  * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
  * @private
  */
-function _zxEval_initEprPairs(outProgram, graph, portToQubitMap) {
+function _zxEval_initEdgeEprPairs(outProgram, graph, portToQubitMap) {
     outProgram.statements.push(new Comment('', 'Init per-edge EPR pairs.'));
 
     // Identify edge qubit pairs.
@@ -330,53 +288,8 @@ function _zxEval_initEprPairs(outProgram, graph, portToQubitMap) {
         }
     }
     if (edgeBasisChanges.size > 0) {
-        outProgram.statements.push(new EdgeActions(edgeBasisChanges));
+        outProgram.statements.push(new EdgeActions(edgeBasisChanges, false));
     }
-
-    // Apply any spider-based basis changes.
-    let nodeBasisChanges = new GeneralMap();
-    for (let node of graph.nodes.keys()) {
-        let nodeKind = NODES.map.get(graph.kind(node));
-        if (nodeKind === NODES.h) {
-            continue;
-        }
-        let ports = graph.activePortsOf(node);
-        if (ports.length > 0 && nodeKind.edgeAction.matrix !== 1 && nodeKind.edgeAction.matrix !== null) {
-            nodeBasisChanges.set(portToQubitMap.get(ports[0]), nodeKind.id);
-        }
-    }
-    if (nodeBasisChanges.size > 0) {
-        outProgram.statements.push(new Comment('', 'Apply spider node transformations.'));
-        outProgram.statements.push(new EdgeActions(nodeBasisChanges));
-    }
-}
-
-/**
- * @param {!QuantumProgram} outProgram
- * @param {!int} totalQubits
- * @param {!Array.<!int>} qubitIds
- * @param {!boolean} axis
- * @returns {!Array.<!TransformedMeasurement>}
- * @private
- */
-function _transformedSpiderMeasurement(outProgram, totalQubits, qubitIds, axis) {
-    if (qubitIds.length === 0) {
-        return [];
-    }
-    let [head, ...tail] = qubitIds;
-    outProgram.statements.push(new MultiCnot(head, tail, !axis, axis));
-    let result = [];
-    result.push(new TransformedMeasurement(
-        PauliProduct.fromXzParity(totalQubits, axis, qubitIds),
-        new QubitAxis(head, axis),
-        new QubitAxis(head, !axis)));
-    for (let t of tail) {
-        result.push(new TransformedMeasurement(
-            PauliProduct.fromXzParity(totalQubits, !axis, [head, t]),
-            new QubitAxis(t, !axis),
-            new QubitAxis(t, axis)));
-    }
-    return result;
 }
 
 class PortQubitMapping {
@@ -424,50 +337,55 @@ class PortQubitMapping {
  * @param {!PortQubitMapping} portQubitMapping
  * @private
  */
-function _zxEval_performSpiderMeasurements(outProgram, graph, portQubitMapping) {
-    outProgram.statements.push(new Comment('', 'Perform per-node spider measurements.'));
-
-    // Perform 2-qubit operations and determine what to measure.
-    let spiderMeasurements = /** @type {!Array.<TransformedMeasurement>} */ [];
-    for (let {node, axis} of graph.spiderNodesWithAxis()) {
-        let qubits = graph.activePortsOf(node).map(p => portQubitMapping.map.get(p));
-        spiderMeasurements.push(
-            ..._transformedSpiderMeasurement(outProgram, portQubitMapping.numQubits, qubits, axis));
+function _zxEval_performNodeMeasurements(outProgram, graph, portQubitMapping) {
+    // Apply single-qubit basis changes.
+    let nodeBasisChanges = new GeneralMap();
+    for (let node of graph.nodes.keys()) {
+        let nodeKind = NODES.map.get(graph.kind(node));
+        if (nodeKind === NODES.h) {
+            continue;
+        }
+        let ports = graph.activePortsOf(node);
+        let mat = nodeKind.nodeRootEdgeAction.matrix;
+        if (ports.length > 0 && mat !== 1 && mat !== null) {
+            nodeBasisChanges.set(portQubitMapping.map.get(ports[0]), nodeKind.id);
+        }
     }
-    for (let node of graph.hadamardNodes()) {
-        let [a, b] = graph.activePortsOf(node).map(p => portQubitMapping.map.get(p));
-        outProgram.statements.push(new MultiCnot(a, [b], true, true));
-        spiderMeasurements.push(new TransformedMeasurement(
-            PauliProduct.fromSparseByType(portQubitMapping.numQubits, {X: a, Z: b}),
-            new QubitAxis(a, false),
-            new QubitAxis(b, false)));
-        spiderMeasurements.push(new TransformedMeasurement(
-            PauliProduct.fromSparseByType(portQubitMapping.numQubits, {X: b, Z: a}),
-            new QubitAxis(b, false),
-            new QubitAxis(a, false)));
+    if (nodeBasisChanges.size > 0) {
+        outProgram.statements.push(new Comment('', 'Apply per-node basis changes.'));
+        outProgram.statements.push(new EdgeActions(nodeBasisChanges, true));
     }
 
-    // Perform Bell measurements on crossing lines.
-    for (let node of graph.crossingNodes()) {
-        for (let pair of graph.activeCrossingPortPairs(node)) {
-            let qubits = pair.map(p => portQubitMapping.map.get(p));
-            spiderMeasurements.push(
-                ..._transformedSpiderMeasurement(outProgram, portQubitMapping.numQubits, qubits, false));
+    // Multi-qubit basis changes and transformed measurement collection.
+    outProgram.statements.push(new Comment('', 'Perform per-node measurements.'));
+    let transMeasurements = /** @type {!Array.<TransformedMeasurement>} */ [];
+    for (let [node, kind] of graph.nodes.entries()) {
+        if (kind !== '+') {
+            let nodeKind = NODES.map.get(kind);
+            let qubits = graph.activePortsOf(node).map(p => portQubitMapping.map.get(p));
+            transMeasurements.push(
+                ...nodeKind.nodeMeasurer(outProgram, portQubitMapping.numQubits, qubits));
+        } else {
+            for (let pair of graph.activeCrossingPortPairs(node)) {
+                let qubits = pair.map(p => portQubitMapping.map.get(p));
+                transMeasurements.push(
+                    ...NODES.black.nodeMeasurer(outProgram, portQubitMapping.numQubits, qubits, false));
+            }
         }
     }
 
-    // Group.
-    let xMeasured = spiderMeasurements.filter(e => !e.measurementAxis.axis).map(e => e.measurementAxis.qubit);
-    let allMeasured = spiderMeasurements.map(e => e.measurementAxis.qubit);
+    // Group transformed measurements by basis.
+    let xMeasured = transMeasurements.filter(e => !e.measurementAxis.axis).map(e => e.measurementAxis.qubit);
+    let allMeasured = transMeasurements.map(e => e.measurementAxis.qubit);
     allMeasured.sort((a, b) => a - b);
 
-    // Act.
-    outProgram.statements.push(new EdgeActions(new Map(xMeasured.map(q => [q, 'h']))));
-
-    let measurementToFeedback = _spiderMeasurementToFeedbackMap(
-        graph, portQubitMapping, spiderMeasurements);
+    // Measurements and feedback.
+    outProgram.statements.push(new EdgeActions(new Map(xMeasured.map(q => [q, 'h'])), false));
+    let measurementToFeedback = _transformedMeasurementToFeedbackMap(
+        graph, portQubitMapping, transMeasurements);
     outProgram.statements.push(new MeasurementsWithPauliFeedback(measurementToFeedback));
 
+    // Post-selections.
     let postSelections = new GeneralMap();
     for (let {node, axis} of graph.postselectionNodesWithAxis()) {
         let ports = graph.activePortsOf(node);

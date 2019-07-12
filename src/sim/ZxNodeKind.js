@@ -1,11 +1,70 @@
 import {GeneralMap} from "src/base/GeneralMap.js";
-import {GeneralSet} from "src/base/GeneralSet.js";
-import {Seq, seq} from "src/base/Seq.js";
-import {PauliProduct} from "src/sim/PauliProduct.js";
+import {QubitAxis, PauliProduct} from "src/sim/PauliProduct.js";
 import {Matrix} from "src/base/Matrix.js";
 import {Complex} from "src/base/Complex.js";
+import {equate} from "src/base/Equate.js";
 import {popcnt} from "src/base/Util.js";
+import {padSetTo, QuantumStatement, MultiCnot} from "src/sim/QuantumProgram.js";
 
+
+class EdgeActions extends QuantumStatement {
+    /**
+     * @param {!GeneralMap.<!int, !string>|!Map.<!int, !string>} changes Qubit to edge action kind.
+     * @param {!boolean} useRootNodeEdgeAction
+     */
+    constructor(changes, useRootNodeEdgeAction) {
+        super();
+        this.changes = changes;
+        this.useRootNodeEdgeAction = useRootNodeEdgeAction;
+    }
+
+    /**
+     * @param {*} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return (other instanceof EdgeActions &&
+        equate(this.changes, other.changes) &&
+        this.useRootNodeEdgeAction === other.useRootNodeEdgeAction);
+    }
+
+    /**
+     * @param {!string} kind
+     * @returns {*}
+     * @private
+     */
+    _action(kind) {
+        let nodeKind = NODES.map.get(kind);
+        if (this.useRootNodeEdgeAction) {
+            return nodeKind.nodeRootEdgeAction;
+        }
+        return nodeKind.edgeAction;
+    }
+
+    writeQasm(statements) {
+        for (let [qubit, kind] of this.changes.entries()) {
+            let ops = this._action(kind).qasmGates;
+            for (let op of ops) {
+                statements.push(`${op} q[${qubit}];`);
+            }
+        }
+    }
+
+    writeQuirk(init, cols) {
+        let col = [];
+        for (let [qubit, kind] of this.changes.entries()) {
+            let quirkGate = this._action(kind).quirkGate;
+            padSetTo(col, 1, qubit, quirkGate);
+        }
+        cols.push(col);
+    }
+
+    interpret(sim, out) {
+        for (let [qubit, kind] of this.changes.entries()) {
+            this._action(kind).sim(sim, qubit);
+        }
+    }
+}
 
 /**
  * @param {!int} inDim
@@ -52,6 +111,38 @@ function xBasisEqualityMatrix(inDim, outDim, phase=0) {
     return result;
 }
 
+class TransformedMeasurement {
+    /**
+     * @param {!PauliProduct} originalStabilizer
+     * @param {!QubitAxis} postselectionControlAxis
+     * @param {!QubitAxis} measurementAxis
+     */
+    constructor(originalStabilizer, measurementAxis, postselectionControlAxis) {
+        this.originalStabilizer = originalStabilizer;
+        this.measurementAxis = measurementAxis;
+        this.postselectionControlAxis = postselectionControlAxis;
+    }
+
+    /**
+     * @param {*} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return (other instanceof TransformedMeasurement &&
+        this.measurementAxis.isEqualTo(other.measurementAxis) &&
+        this.originalStabilizer.isEqualTo(other.originalStabilizer) &&
+        this.postselectionControlAxis.isEqualTo(other.postselectionControlAxis));
+    }
+
+    /**
+     * @returns {!string}
+     */
+    toString() {
+        return `originalStabilizer: ${this.originalStabilizer}
+postselectionControlAxis: ${this.postselectionControlAxis}
+measurementAxis: ${this.measurementAxis}`;
+    }
+}
 
 class ZxNodeKind {
     /**
@@ -72,6 +163,17 @@ class ZxNodeKind {
      *         sim: !function(sim: !ChpSimulator, qubit: !int),
      *         matrix: null|!int|!Matrix,
      *     },
+     *     nodeRootEdgeAction?: !{
+     *         quirkGate: null|!string,
+     *         qasmGates: null|!Array.<!string>,
+     *         sim: !function(sim: !ChpSimulator, qubit: !int),
+     *         matrix: null|!int|!Matrix,
+     *     },
+     *     nodeMeasurer: !function(
+     *         outProgram: !QuantumProgram,
+     *         totalQubits: !int,
+     *         qubitIds: !Array.<!int>,
+     *     ): !Array.<!TransformedMeasurement>,
      * }} attributes
      */
     constructor(attributes) {
@@ -86,6 +188,8 @@ class ZxNodeKind {
         this.fixedPoints = attributes.fixedPoints;
         this.tensor = attributes.tensor;
         this.edgeAction = attributes.edgeAction;
+        this.nodeRootEdgeAction = attributes.nodeRootEdgeAction || attributes.edgeAction;
+        this.nodeMeasurer = attributes.nodeMeasurer;
     }
 }
 
@@ -173,6 +277,39 @@ function _concatDrawers(...drawers) {
             drawer(ctx);
         }
     }
+}
+
+const NO_ACTION_NODE_MEASURER = (outProgram, totalQubits, qubitIds) => [];
+
+/**
+ * @param {!boolean} axis
+ * @returns {!function(
+ *     outProgram: !QuantumProgram,
+ *     totalQubits: !int,
+ *     qubitIds: !Array.<!int>,
+ * ): !Array.<!TransformedMeasurement>}
+ * @private
+ */
+function _spiderMeasurer(axis) {
+    return (outProgram, totalQubits, qubitIds) => {
+        if (qubitIds.length === 0) {
+            return [];
+        }
+        let [head, ...tail] = qubitIds;
+        outProgram.statements.push(new MultiCnot(head, tail, !axis, axis));
+        let measurements = [];
+        measurements.push(new TransformedMeasurement(
+            PauliProduct.fromXzParity(totalQubits, axis, qubitIds),
+            new QubitAxis(head, axis),
+            new QubitAxis(head, !axis)));
+        for (let t of tail) {
+            measurements.push(new TransformedMeasurement(
+                PauliProduct.fromXzParity(totalQubits, !axis, [head, t]),
+                new QubitAxis(t, !axis),
+                new QubitAxis(t, axis)));
+        }
+        return measurements;
+    };
 }
 
 /**
@@ -266,6 +403,7 @@ function* _iterNodeKinds() {
                 fixedPoints: spiderFixedPoints(false),
                 tensor: spiderTensor(0),
                 edgeAction: noAction,
+                nodeMeasurer: _spiderMeasurer(!axis),
             });
 
             yield new ZxNodeKind({
@@ -297,6 +435,7 @@ function* _iterNodeKinds() {
                     },
                     matrix: axis ? Matrix.square(1, 0, 0, -1) : Matrix.square(0, 1, 1, 0),
                 },
+                nodeMeasurer: _spiderMeasurer(!axis),
             });
 
             yield new ZxNodeKind({
@@ -328,6 +467,7 @@ function* _iterNodeKinds() {
                         Matrix.square(1, 0, 0, Complex.I) :
                         Matrix.square(1, Complex.I.neg(), Complex.I.neg(), 1).times(new Complex(0.5, 0.5)),
                 },
+                nodeMeasurer: _spiderMeasurer(!axis),
             });
 
             yield new ZxNodeKind({
@@ -363,6 +503,7 @@ function* _iterNodeKinds() {
                         Matrix.square(1, 0, 0, Complex.I.neg()) :
                         Matrix.square(1, Complex.I, Complex.I, 1).times(new Complex(0.5, -0.5)),
                 },
+                nodeMeasurer: _spiderMeasurer(!axis),
             });
         }
     }
@@ -395,10 +536,13 @@ function* _iterNodeKinds() {
 
             throw new Error('Invalid degree.');
         },
-        tensor: dim => {
+        tensor: () => {
             throw new Error('Crossing node tensor must be handled specially.');
         },
         edgeAction: noAction,
+        nodeMeasurer: () => {
+            throw new Error('Crossing node tensor must be handled specially.');
+        },
     });
 
     yield new ZxNodeKind({
@@ -436,6 +580,20 @@ function* _iterNodeKinds() {
             }
             return Matrix.square(1, 1, 1, -1).times(Math.sqrt(0.5));
         },
+        nodeMeasurer: (outProgram, totalQubits, qubitIds) => {
+            let [a, b] = qubitIds;
+            outProgram.statements.push(new MultiCnot(a, [b], true, true));
+            return [
+                new TransformedMeasurement(
+                    PauliProduct.fromSparseByType(totalQubits, {X: a, Z: b}),
+                    new QubitAxis(a, false),
+                    new QubitAxis(b, false)),
+                new TransformedMeasurement(
+                    PauliProduct.fromSparseByType(totalQubits, {X: b, Z: a}),
+                    new QubitAxis(b, false),
+                    new QubitAxis(a, false))
+            ];
+        },
     });
 
     yield new ZxNodeKind({
@@ -460,6 +618,7 @@ function* _iterNodeKinds() {
             }
             return zBasisEqualityMatrix(0, 2);
         },
+        nodeMeasurer: NO_ACTION_NODE_MEASURER,
     });
 
     yield new ZxNodeKind({
@@ -484,6 +643,7 @@ function* _iterNodeKinds() {
             }
             return zBasisEqualityMatrix(0, 2);
         },
+        nodeMeasurer: NO_ACTION_NODE_MEASURER,
     });
 }
 
@@ -504,4 +664,4 @@ const NODES = {
     h: map.get('h'),
 };
 
-export {zBasisEqualityMatrix, xBasisEqualityMatrix, ZxNodeKind, NODES}
+export {zBasisEqualityMatrix, xBasisEqualityMatrix, ZxNodeKind, NODES, EdgeActions}
