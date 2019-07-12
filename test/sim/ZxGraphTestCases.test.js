@@ -23,6 +23,7 @@ const ALLOWED_ATTRS = new Set([
     'satisfiable',
     'gain',
     'tensor',
+    'successProbability',
 ]);
 
 /**
@@ -30,12 +31,13 @@ const ALLOWED_ATTRS = new Set([
  *     name?: undefined|!string,
  *     diagram: !string,
  *     alternates?: !Array.<!string>,
+ *     successProbability?: !number,
  *     quirk?: !string,
  *     qasm?: !string,
  *     stabilizers?: !Array.<!string>,
  *     tensor?: !Matrix,
  *     wavefunction?: !Matrix,
- *     gain?: !int|!float|!Complex
+ *     gain?: null|!int|!float|!Complex
  *     satisfiable?: !boolean,
  * }} attrs
  */
@@ -49,13 +51,19 @@ function graphTestCase(attrs) {
             throw new Error(`Unexpected graph test case attribute: ${key}`);
         }
     }
+    let gainSpecified = attrs.gain !== undefined && attrs.gain !== null;
+    let gainVaries = attrs.gain === null;
+
     suite.test(name, () => {
         // Fill in.
-        if (attrs.wavefunction === undefined && attrs.gain !== undefined && attrs.gain !== undefined) {
+        if (attrs.wavefunction === undefined && gainSpecified) {
             attrs.wavefunction = attrs.tensor.times(Complex.ONE.dividedBy(attrs.gain));
         }
-        if (attrs.tensor === undefined && attrs.gain !== undefined && attrs.wavefunction !== undefined) {
+        if (attrs.tensor === undefined && gainSpecified && attrs.wavefunction !== undefined) {
             attrs.tensor = attrs.wavefunction.times(attrs.gain);
+        }
+        if (attrs.successProbability === undefined && attrs.satisfiable === undefined) {
+            attrs.successProbability = 1;
         }
 
         let graph = ZxGraph.fromDiagram(diagram);
@@ -67,6 +75,9 @@ function graphTestCase(attrs) {
         assertThat(result.satisfiable).withInfo(
             {diagram, test: 'result.satisfiable == groundSatisfiable'}
         ).isEqualTo(groundSatisfiable);
+        if (gainVaries && groundSatisfiable) {
+            ground = ground.phaseMatchedTo(result.wavefunction);
+        }
         if (groundSatisfiable) {
             assertThat(result.wavefunction.phaseMatchedTo(ground, true)).withInfo(
                 {diagram, test: 'result.wavefunction ~= c*ground'}
@@ -78,6 +89,11 @@ function graphTestCase(attrs) {
             assertThat(ground).withInfo(
                 {diagram, test: 'ground ~= attrs.tensor'}
             ).isApproximatelyEqualTo(attrs.tensor);
+        }
+        if (attrs.successProbability !== undefined) {
+            assertThat(result.successProbability).withInfo(
+                {diagram, test: 'result.successProbability ~= attrs.successProbability'}
+            ).isApproximatelyEqualTo(attrs.successProbability);
         }
         if (attrs.wavefunction !== undefined) {
             assertThat(result.wavefunction).withInfo(
@@ -124,6 +140,9 @@ function graphTestCase(attrs) {
             assertThat(altResult.successProbability).withInfo(
                 {diagram, altDiagram, test: 'altResult.successProbability == result.successProbability'}
             ).isEqualTo(result.successProbability);
+            if (gainVaries && altResult.satisfiable) {
+                altGround = altGround.phaseMatchedTo(altResult.wavefunction);
+            }
             assertThat(altGround).withInfo(
                 {diagram, altDiagram, test: 'altGround ~= ground'}
             ).isApproximatelyEqualTo(ground);
@@ -972,6 +991,218 @@ graphTestCase({
         [1],
     ]).times(Math.sqrt(0.5)),
     gain: Math.sqrt(2),
+});
+
+graphTestCase({
+    name: 'postselect_zero',
+    diagram: `
+        !---O!
+    `,
+    alternates: [`
+        !---+---O!
+    `, `
+        !---O---O!
+            |
+            |
+            |
+            O
+    `, `
+        !---@---O!
+            |
+            |
+            |
+            @
+    `],
+    stabilizers: [
+        '+Z',
+    ],
+    wavefunction: Matrix.fromRows([
+        [1, 0],
+    ]),
+    gain: Math.sqrt(2),
+    successProbability: 0.5,
+});
+
+graphTestCase({
+    name: 'postselect_one',
+    diagram: `
+        !---X!
+    `,
+    alternates: [`
+        !---+---X!
+    `, `
+        !---O---X!
+            |
+            |
+            |
+            O
+    `, `
+        !---@---X!
+            |
+            |
+            |
+            @
+    `],
+    stabilizers: [
+        '-Z',
+    ],
+    wavefunction: Matrix.fromRows([
+        [0, 1],
+    ]),
+    gain: Math.sqrt(2),
+    successProbability: 0.5,
+});
+
+graphTestCase({
+    name: 'postselect_plus',
+    diagram: `
+        !---@!
+    `,
+    alternates: [`
+        !---+---@!
+    `, `
+        !---O---@!
+            |
+            |
+            |
+            O
+    `, `
+        !---@---@!
+            |
+            |
+            |
+            @
+    `],
+    stabilizers: [
+        '+X',
+    ],
+    wavefunction: Matrix.fromRows([
+        [1, 1],
+    ]).times(Math.sqrt(0.5)),
+    gain: Math.sqrt(2),
+    successProbability: 0.5,
+});
+
+graphTestCase({
+    name: 'postselect_minus',
+    diagram: `
+        !---Z!
+    `,
+    alternates: [`
+        !---+---Z!
+    `, `
+        !---O---Z!
+            |
+            |
+            |
+            O
+    `, `
+        !---@---Z!
+            |
+            |
+            |
+            @
+    `],
+    stabilizers: [
+        '-X',
+    ],
+    wavefunction: Matrix.fromRows([
+        [1, -1],
+    ]).times(Math.sqrt(0.5)),
+    gain: Math.sqrt(2),
+    successProbability: 0.5,
+});
+
+graphTestCase({
+    name: 'postselect_i',
+    diagram: `
+        !---S!
+    `,
+    alternates: [`
+        !---W!
+    `, `
+        !---+---S!
+    `, `
+        !---+---W!
+    `, `
+        !---O---W!
+            |
+            |
+            |
+            O
+    `, `
+        !---@---W!
+            |
+            |
+            |
+            @
+    `, `
+        !---O---S!
+            |
+            |
+            |
+            O
+    `, `
+        !---@---S!
+            |
+            |
+            |
+            @
+    `],
+    stabilizers: [
+        '+Y',
+    ],
+    wavefunction: Matrix.fromRows([
+        [1, Complex.I],
+    ]).times(Math.sqrt(0.5)),
+    gain: null,
+    successProbability: 0.5,
+});
+
+graphTestCase({
+    name: 'postselect_minus_i',
+    diagram: `
+        !---A!
+    `,
+    alternates: [`
+        !---F!
+    `, `
+        !---+---A!
+    `, `
+        !---+---F!
+    `, `
+        !---O---A!
+            |
+            |
+            |
+            O
+    `, `
+        !---@---A!
+            |
+            |
+            |
+            @
+    `, `
+        !---O---F!
+            |
+            |
+            |
+            O
+    `, `
+        !---@---F!
+            |
+            |
+            |
+            @
+    `],
+    stabilizers: [
+        '-Y',
+    ],
+    wavefunction: Matrix.fromRows([
+        [1, Complex.I.neg()],
+    ]).times(Math.sqrt(0.5)),
+    gain: null,
+    successProbability: 0.5,
 });
 
 graphTestCase({

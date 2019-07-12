@@ -174,6 +174,7 @@ class ZxNodeKind {
      *         totalQubits: !int,
      *         qubitIds: !Array.<!int>,
      *     ): !Array.<!TransformedMeasurement>,
+     *     postSelectStabilizer?: undefined|!string
      * }} attributes
      */
     constructor(attributes) {
@@ -190,6 +191,7 @@ class ZxNodeKind {
         this.edgeAction = attributes.edgeAction;
         this.nodeRootEdgeAction = attributes.nodeRootEdgeAction || attributes.edgeAction;
         this.nodeMeasurer = attributes.nodeMeasurer;
+        this.postSelectStabilizer = attributes.postSelectStabilizer || undefined;
     }
 }
 
@@ -283,6 +285,7 @@ const NO_ACTION_NODE_MEASURER = (outProgram, totalQubits, qubitIds) => [];
 
 /**
  * @param {!boolean} axis
+ * @param {!boolean} post
  * @returns {!function(
  *     outProgram: !QuantumProgram,
  *     totalQubits: !int,
@@ -290,7 +293,10 @@ const NO_ACTION_NODE_MEASURER = (outProgram, totalQubits, qubitIds) => [];
  * ): !Array.<!TransformedMeasurement>}
  * @private
  */
-function _spiderMeasurer(axis) {
+function _spiderMeasurer(axis, post) {
+    if (post) {
+        return NO_ACTION_NODE_MEASURER;
+    }
     return (outProgram, totalQubits, qubitIds) => {
         if (qubitIds.length === 0) {
             return [];
@@ -403,7 +409,8 @@ function* _iterNodeKinds() {
                 fixedPoints: spiderFixedPoints(false),
                 tensor: spiderTensor(0),
                 edgeAction: noAction,
-                nodeMeasurer: _spiderMeasurer(!axis),
+                nodeMeasurer: _spiderMeasurer(!axis, post),
+                postSelectStabilizer: !post ? undefined : axis ? '+X' : '+Z',
             });
 
             yield new ZxNodeKind({
@@ -419,7 +426,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(false),
                 tensor: spiderTensor(Math.PI),
-                edgeAction: {
+                edgeAction: post ? noAction : {
                     quirkGate: axis ? 'Z' : 'X',
                     qasmGates: axis ? ['z'] : ['x'],
                     sim: (sim, qubit) => {
@@ -435,7 +442,8 @@ function* _iterNodeKinds() {
                     },
                     matrix: axis ? Matrix.square(1, 0, 0, -1) : Matrix.square(0, 1, 1, 0),
                 },
-                nodeMeasurer: _spiderMeasurer(!axis),
+                nodeMeasurer: _spiderMeasurer(!axis, post),
+                postSelectStabilizer: !post ? undefined : axis ? '-X' : '-Z',
             });
 
             yield new ZxNodeKind({
@@ -451,7 +459,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(true),
                 tensor: spiderTensor(Math.PI / 2),
-                edgeAction: {
+                edgeAction: post ? noAction : {
                     quirkGate: axis ? 'Z^½' : 'X^½',
                     qasmGates: axis ? ['s'] : ['h', 's', 'h'],
                     sim: (sim, qubit) => {
@@ -467,7 +475,8 @@ function* _iterNodeKinds() {
                         Matrix.square(1, 0, 0, Complex.I) :
                         Matrix.square(1, Complex.I.neg(), Complex.I.neg(), 1).times(new Complex(0.5, 0.5)),
                 },
-                nodeMeasurer: _spiderMeasurer(!axis),
+                nodeMeasurer: _spiderMeasurer(!axis, post),
+                postSelectStabilizer: !post ? undefined : axis ? '-Y' : '+Y',
             });
 
             yield new ZxNodeKind({
@@ -483,7 +492,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(true),
                 tensor: spiderTensor(-Math.PI / 2),
-                edgeAction: {
+                edgeAction: post ? noAction : {
                     quirkGate: axis ? 'Z^-½' : 'X^-½',
                     qasmGates: axis ? ['z', 's'] : ['x', 'h', 's', 'h'],
                     sim: (sim, qubit) => {
@@ -503,7 +512,8 @@ function* _iterNodeKinds() {
                         Matrix.square(1, 0, 0, Complex.I.neg()) :
                         Matrix.square(1, Complex.I, Complex.I, 1).times(new Complex(0.5, -0.5)),
                 },
-                nodeMeasurer: _spiderMeasurer(!axis),
+                nodeMeasurer: _spiderMeasurer(!axis, post),
+                postSelectStabilizer: !post ? undefined : axis ? '+Y' : '-Y',
             });
         }
     }

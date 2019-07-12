@@ -384,13 +384,17 @@ function _zxEval_performNodeMeasurements(outProgram, graph, portQubitMapping) {
 
     // Post-selections.
     let postSelections = new GeneralMap();
-    for (let {node, axis} of graph.postselectionNodesWithAxis()) {
+    for (let [node, kind] of graph.nodes.entries()) {
+        let nodeKind = NODES.map.get(kind);
+        if (nodeKind.postSelectStabilizer === undefined) {
+            continue;
+        }
         let ports = graph.activePortsOf(node);
         if (ports.length !== 1) {
             throw new Error('Postselection node must have degree 1.');
         }
         let qubit = portQubitMapping.map.get(ports[0]);
-        postSelections.set(qubit, axis);
+        postSelections.set(qubit, nodeKind.postSelectStabilizer);
     }
     if (postSelections.size > 0) {
         outProgram.statements.push(new PostSelection(postSelections));

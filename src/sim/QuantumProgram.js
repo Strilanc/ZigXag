@@ -4,6 +4,7 @@ import {seq, Seq} from "src/base/Seq.js";
 import {SimulatorSpec} from "src/sim/SimulatorSpec.js"
 import {equate} from "src/base/Equate.js"
 import {QubitAxis} from "src/sim/PauliProduct.js"
+import {PauliProduct} from "src/sim/PauliProduct.js";
 
 
 /**
@@ -123,7 +124,7 @@ class InitEprPairs extends QuantumStatement {
     }
 
     writeQasm(statements) {
-        for (let [q, _] of this.qubitPairs) {
+        for (let [q] of this.qubitPairs) {
             statements.push(`h q[${q}];`);
         }
         for (let [q1, q2] of this.qubitPairs) {
@@ -132,7 +133,7 @@ class InitEprPairs extends QuantumStatement {
     }
 
     writeQuirk(init, cols) {
-        for (let [q, _] of this.qubitPairs) {
+        for (let [q] of this.qubitPairs) {
             while (init.length <= q) {
                 init.push(0);
             }
@@ -148,7 +149,7 @@ class InitEprPairs extends QuantumStatement {
     }
 
     interpret(sim, out) {
-        for (let [q, _] of this.qubitPairs) {
+        for (let [q] of this.qubitPairs) {
             sim.hadamard(q);
         }
 
@@ -276,11 +277,11 @@ class HeaderAlloc extends QuantumStatement {
 
 class PostSelection extends QuantumStatement {
     /**
-     * @param {!GeneralMap.<!int, !boolean>} qubitAxes
+     * @param {!GeneralMap.<!int, !string>} qubitStabilizerMap
      */
-    constructor(qubitAxes) {
+    constructor(qubitStabilizerMap) {
         super();
-        this.qubitAxes = qubitAxes;
+        this.qubitStabilizerMap = qubitStabilizerMap;
     }
 
     /**
@@ -289,35 +290,84 @@ class PostSelection extends QuantumStatement {
      */
     isEqualTo(other) {
         return (other instanceof PostSelection &&
-            equate(this.qubitAxes, other.qubitAxes));
+            equate(this.qubitStabilizerMap, other.qubitStabilizerMap));
     }
 
     writeQasm(statements) {
         statements.push('');
         statements.push('// Post-selected measurements that must return 0.');
-        statements.push(...seq(this.qubitAxes.entries()).
-            filter(e => !e[1]).
-            map(e => e[0]).
-            sorted().
-            map(q => `h q[${q}];`));
-        statements.push(...seq(this.qubitAxes.keys()).
-            sorted().
-            mapWithIndex((q, i) => `measure q[${q}] -> post[${i}];`));
+        let i = 0;
+        for (let [qubit, stabilizer] of this.qubitStabilizerMap.entries()) {
+            if (stabilizer === '+X') {
+                statements.push(`h q[${qubit}];`);
+            } else if (stabilizer === '-X') {
+                statements.push(
+                    `z q[${qubit}];`,
+                    `h q[${qubit}];`);
+            } else if (stabilizer === '+Y') {
+                statements.push(
+                    `z q[${qubit}];`,
+                    `s q[${qubit}];`,
+                    `h q[${qubit}];`);
+            } else if (stabilizer === '-Y') {
+                statements.push(
+                    `s q[${qubit}];`,
+                    `h q[${qubit}];`);
+            } else if (stabilizer === '-Z') {
+                statements.push(`x q[${qubit}];`);
+            } else if (stabilizer !== '+Z') {
+                throw new Error(`Unrecognized post-selection stabilizer: ${stabilizer}`);
+            }
+            statements.push(`measure q[${qubit}] -> post[${i}];`);
+            i += 1;
+        }
     }
 
     writeQuirk(init, cols) {
         let col = [];
-        for (let [qubit, axis] of this.qubitAxes.entries()) {
-            padSetTo(col, 1, qubit, axis ? '|0⟩⟨0|' : '|+⟩⟨+|');
+        let map = {
+            '+Z': '|0⟩⟨0|',
+            '-Z': '|1⟩⟨1|',
+            '+X': '|+⟩⟨+|',
+            '-X': '|-⟩⟨-|',
+            '+Y': '|X⟩⟨X|',
+            '-Y': '|/⟩⟨/|',
+        };
+        for (let [qubit, stabilizer] of this.qubitStabilizerMap.entries()) {
+            let gate = map[stabilizer];
+            if (gate === undefined) {
+                throw new Error(`Unrecognized post-selection stabilizer: ${stabilizer}`);
+            }
+            padSetTo(col, 1, qubit, gate);
         }
         cols.push(col);
     }
 
     interpret(sim, out) {
-        for (let [qubit, axis] of this.qubitAxes.entries()) {
-            if (!axis) {
+        for (let [qubit, stabilizer] of this.qubitStabilizerMap.entries()) {
+            if (stabilizer === '+X') {
                 sim.hadamard(qubit);
+            } else if (stabilizer === '-X') {
+                sim.phase(qubit);
+                sim.phase(qubit);
+                sim.hadamard(qubit);
+            } else if (stabilizer === '+Y') {
+                sim.phase(qubit);
+                sim.phase(qubit);
+                sim.phase(qubit);
+                sim.hadamard(qubit);
+            } else if (stabilizer === '-Y') {
+                sim.phase(qubit);
+                sim.hadamard(qubit);
+            } else if (stabilizer === '-Z') {
+                sim.hadamard(qubit);
+                sim.phase(qubit);
+                sim.phase(qubit);
+                sim.hadamard(qubit);
+            } else if (stabilizer !== '+Z') {
+                throw new Error(`Unrecognized post-selection stabilizer: ${stabilizer}`);
             }
+
             let measurement = sim.measure(qubit, 0.0);
             out.measurements.push([qubit, measurement.result]);
             if (measurement.random) {
