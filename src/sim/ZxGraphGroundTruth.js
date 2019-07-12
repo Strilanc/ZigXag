@@ -243,6 +243,9 @@ function evalZxGraphGroundTruth(graph) {
             throw new Error(`Unrecognized node kind ${kind}`);
         }
         let data = nodeKind.tensor(degree);
+        if (data.width() > 1) {
+            data = new Matrix(1, data.height() * data.width(), data.rawBuffer());
+        }
 
         if (kind === 'in' || kind === 'out') {
             let outerPort = new ZxPort(ports[0].edge, new ZxNode(100000, inputPorts.length + outputPorts.length));

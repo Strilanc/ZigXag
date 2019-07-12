@@ -221,9 +221,10 @@ class Matrix {
 
     /**
      * @param {!Matrix} other
+     * @param {!boolean} alsoMatchMagnitude
      * @returns {!Matrix}
      */
-    phaseMatchedTo(other) {
+    phaseMatchedTo(other, alsoMatchMagnitude=false) {
         let w = Math.min(this._width, other._width);
         let h = Math.min(this._height, other._height);
         let bestRow = 0;
@@ -239,9 +240,17 @@ class Matrix {
                 }
             }
         }
-        let angle1 = this.cell(bestCol, bestRow).phase();
-        let angle2 = other.cell(bestCol, bestRow).phase();
-        return this.times(Complex.polar(1, angle2 - angle1));
+        let a = this.cell(bestCol, bestRow);
+        let b = other.cell(bestCol, bestRow);
+        let s;
+        if (alsoMatchMagnitude && b.abs() !== 0) {
+            s = b.dividedBy(a);
+        } else {
+            let angle1 = a.phase();
+            let angle2 = b.phase();
+            s = Complex.polar(1, angle2 - angle1);
+        }
+        return this.times(s);
     }
 
     /**

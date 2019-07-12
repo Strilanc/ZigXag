@@ -1261,4 +1261,8 @@ suite.test('phaseMatchedTo', () => {
         Matrix.square(1, 2, 3, 4));
     assertThat(Matrix.square(1, 2, 3, 4).phaseMatchedTo(Matrix.square(0, 0, Complex.I, 0))).isEqualTo(
         Matrix.square(1, 2, 3, 4).times(Complex.I));
+
+    assertThat(Matrix.square(1, 2, 3, 4).phaseMatchedTo(
+        Matrix.square(0.1, 0.2, 0.3, -0.4), true
+    )).isApproximatelyEqualTo(Matrix.square(-0.1, -0.2, -0.3, -0.4));
 });
