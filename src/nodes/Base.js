@@ -1,10 +1,6 @@
-import {GeneralMap} from "src/base/GeneralMap.js";
-import {QubitAxis, PauliProduct} from "src/sim/PauliProduct.js";
 import {Matrix} from "src/base/Matrix.js";
 import {Complex} from "src/base/Complex.js";
-import {equate} from "src/base/Equate.js";
 import {popcnt} from "src/base/Util.js";
-import {padSetTo, QuantumStatement, MultiCnot} from "src/sim/QuantumProgram.js";
 
 
 /**
@@ -70,22 +66,6 @@ function nodeDrawer(stroke, fill, lineWidth) {
         ctx.stroke();
     };
 }
-
-const NO_FIXED_POINTS = deg => [];
-const NO_EDGE_ACTION = {
-    quirkGate: '…',
-    qasmGates: [],
-    sim: (sim, qubit) => {},
-    matrix: 1,
-};
-const INVALID_EDGE_ACTION = {
-    quirkGate: null,
-    qasmGates: null,
-    sim: () => { throw new Error('No valid edge action.'); },
-    matrix: null,
-};
-
-const NO_ACTION_NODE_MEASURER = (outProgram, totalQubits, qubitIds) => [];
 
 /**
  * @param {!string} color
@@ -158,10 +138,6 @@ export {
     zBasisEqualityMatrix,
     xBasisEqualityMatrix,
     nodeDrawer,
-    NO_FIXED_POINTS,
-    NO_EDGE_ACTION,
-    INVALID_EDGE_ACTION,
-    NO_ACTION_NODE_MEASURER,
     negHalfPiDrawer,
     halfPiDrawer,
     piDrawer,

@@ -1,10 +1,7 @@
 import {QubitAxis, PauliProduct} from "src/sim/PauliProduct.js";
 import {Matrix} from "src/base/Matrix.js";
 import {MultiCnot} from "src/sim/QuantumProgram.js";
-import {ZxNodeKind, TransformedMeasurement} from "src/nodes/ZxNodeKind.js"
-import {
-    NO_EDGE_ACTION,
-} from "src/nodes/Base.js";
+import {ZxNodeKind, TransformedMeasurement, IDENTITY_EDGE_ACTION} from "src/nodes/ZxNodeKind.js"
 
 const HADAMARD_NODE = new ZxNodeKind({
     id: 'h',
@@ -19,7 +16,6 @@ const HADAMARD_NODE = new ZxNodeKind({
     },
     hotkeys: ['h', 'H'],
     hotkeyShiftMask: undefined,
-    mouseHotkey: undefined,
     allowedDegrees: [2],
     fixedPoints: deg => {
         if (deg !== 2) {
@@ -35,7 +31,7 @@ const HADAMARD_NODE = new ZxNodeKind({
         },
         matrix: Matrix.square(1, 1, 1, -1).times(Math.sqrt(0.5)),
     },
-    nodeRootEdgeAction: NO_EDGE_ACTION,
+    nodeRootEdgeAction: IDENTITY_EDGE_ACTION,
     tensor: dim => {
         if (dim !== 2) {
             throw new Error(`Bad Hadamard dimension: ${dim}`);

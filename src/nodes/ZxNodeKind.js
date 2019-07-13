@@ -7,11 +7,11 @@ class ZxNodeKind {
      *     diagramReps: (undefined|!Array.<!string>),
      *     hotkeys: !Array.<!string>,
      *     hotkeyShiftMask: (undefined|!boolean),
-     *     mouseHotkey: (undefined|!string),
+     *     mouseHotkey?: (undefined|!string),
      *     allowedDegrees: !Array.<!int>,
-     *     fixedPoints: !function(degree: !int): !Array.<!PauliProduct>,
+     *     fixedPoints?: undefined|!function(degree: !int): !Array.<!PauliProduct>,
      *     tensor: !function(dim: !int): !Matrix,
-     *     edgeAction: !{
+     *     edgeAction?: !{
      *         quirkGate: null|!string,
      *         qasmGates: null|!Array.<!string>,
      *         sim: !function(sim: !ChpSimulator, qubit: !int),
@@ -23,7 +23,7 @@ class ZxNodeKind {
      *         sim: !function(sim: !ChpSimulator, qubit: !int),
      *         matrix: null|!int|!Matrix,
      *     },
-     *     nodeMeasurer: !function(
+     *     nodeMeasurer?: undefined|!function(
      *         outProgram: !QuantumProgram,
      *         totalQubits: !int,
      *         qubitIds: !Array.<!int>,
@@ -40,14 +40,33 @@ class ZxNodeKind {
         this.hotkeyShiftMask = attributes.hotkeyShiftMask;
         this.mouseHotkey = attributes.mouseHotkey;
         this.allowedDegrees = attributes.allowedDegrees;
-        this.fixedPoints = attributes.fixedPoints;
+        this.fixedPoints = attributes.fixedPoints || NO_FIXED_POINTS;
         this.tensor = attributes.tensor;
-        this.edgeAction = attributes.edgeAction;
-        this.nodeRootEdgeAction = attributes.nodeRootEdgeAction || attributes.edgeAction;
-        this.nodeMeasurer = attributes.nodeMeasurer;
+        this.edgeAction = attributes.edgeAction || (
+            attributes.allowedDegrees.indexOf(2) !== -1 ? IDENTITY_EDGE_ACTION : INVALID_EDGE_ACTION);
+        this.nodeRootEdgeAction = attributes.nodeRootEdgeAction || this.edgeAction;
+        this.nodeMeasurer = attributes.nodeMeasurer || IDENTITY_NODE_MEASURER;
         this.postSelectStabilizer = attributes.postSelectStabilizer || undefined;
     }
 }
+
+const IDENTITY_NODE_MEASURER = (outProgram, totalQubits, qubitIds) => [];
+
+const NO_FIXED_POINTS = degree => [];
+
+const IDENTITY_EDGE_ACTION = {
+    quirkGate: '…',
+    qasmGates: [],
+    sim: (sim, qubit) => {},
+    matrix: 1,
+};
+
+const INVALID_EDGE_ACTION = {
+    quirkGate: null,
+    qasmGates: null,
+    sim: () => { throw new Error("Node doesn't permit degree 2 and so has no valid edge action."); },
+    matrix: null,
+};
 
 class TransformedMeasurement {
     /**
@@ -82,4 +101,4 @@ measurementAxis: ${this.measurementAxis}`;
     }
 }
 
-export {TransformedMeasurement, ZxNodeKind}
+export {TransformedMeasurement, ZxNodeKind, IDENTITY_EDGE_ACTION}

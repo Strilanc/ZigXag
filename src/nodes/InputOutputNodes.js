@@ -1,10 +1,7 @@
 import {ZxNodeKind} from "src/nodes/ZxNodeKind.js";
 import {
     nodeDrawer,
-    NO_FIXED_POINTS,
     zBasisEqualityMatrix,
-    INVALID_EDGE_ACTION,
-    NO_ACTION_NODE_MEASURER,
 } from "src/nodes/Base.js";
 
 
@@ -27,12 +24,8 @@ const INPUT_NODE = new ZxNodeKind({
     },
     hotkeys: ['i', 'I'],
     hotkeyShiftMask: undefined,
-    mouseHotkey: undefined,
     allowedDegrees: [1],
-    fixedPoints: NO_FIXED_POINTS,
-    edgeAction: INVALID_EDGE_ACTION,
     tensor: zOnlyFor2,
-    nodeMeasurer: NO_ACTION_NODE_MEASURER,
 });
 
 const OUTPUT_NODE = new ZxNodeKind({
@@ -47,12 +40,8 @@ const OUTPUT_NODE = new ZxNodeKind({
     },
     hotkeys: ['u', 'U'],
     hotkeyShiftMask: undefined,
-    mouseHotkey: undefined,
     allowedDegrees: [1],
-    fixedPoints: NO_FIXED_POINTS,
-    edgeAction: INVALID_EDGE_ACTION,
     tensor: zOnlyFor2,
-    nodeMeasurer: NO_ACTION_NODE_MEASURER,
 });
 
 export {INPUT_NODE, OUTPUT_NODE}

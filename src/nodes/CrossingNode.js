@@ -1,8 +1,5 @@
 import {PauliProduct} from "src/sim/PauliProduct.js";
 import {ZxNodeKind} from "src/nodes/ZxNodeKind.js"
-import {
-    NO_EDGE_ACTION,
-} from "src/nodes/Base.js";
 
 const CROSSING_NODE = new ZxNodeKind({
     id: '+',
@@ -13,7 +10,6 @@ const CROSSING_NODE = new ZxNodeKind({
     },
     hotkeys: [],
     hotkeyShiftMask: undefined,
-    mouseHotkey: undefined,
     allowedDegrees: [2, 4],
     fixedPoints: deg => {
         if (deg === 4) {
@@ -35,7 +31,6 @@ const CROSSING_NODE = new ZxNodeKind({
     tensor: () => {
         throw new Error('Crossing node tensor must be handled specially.');
     },
-    edgeAction: NO_EDGE_ACTION,
     nodeMeasurer: () => {
         throw new Error('Crossing node tensor must be handled specially.');
     },

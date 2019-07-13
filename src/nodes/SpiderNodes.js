@@ -7,7 +7,6 @@ import {
     nodeDrawer,
     xBasisEqualityMatrix,
     zBasisEqualityMatrix,
-    NO_EDGE_ACTION,
     concatDrawers,
     negHalfPiDrawer,
     halfPiDrawer,
@@ -29,17 +28,17 @@ function _spiderMeasurer(axis) {
             return [];
         }
         let [head, ...tail] = qubitIds;
-        outProgram.statements.push(new MultiCnot(head, tail, !axis, axis));
+        outProgram.statements.push(new MultiCnot(head, tail, axis, !axis));
         let measurements = [];
         measurements.push(new TransformedMeasurement(
-            PauliProduct.fromXzParity(totalQubits, axis, qubitIds),
-            new QubitAxis(head, axis),
-            new QubitAxis(head, !axis)));
+            PauliProduct.fromXzParity(totalQubits, !axis, qubitIds),
+            new QubitAxis(head, !axis),
+            new QubitAxis(head, axis)));
         for (let t of tail) {
             measurements.push(new TransformedMeasurement(
-                PauliProduct.fromXzParity(totalQubits, !axis, [head, t]),
-                new QubitAxis(t, !axis),
-                new QubitAxis(t, axis)));
+                PauliProduct.fromXzParity(totalQubits, axis, [head, t]),
+                new QubitAxis(t, axis),
+                new QubitAxis(t, !axis)));
         }
         return measurements;
     };
@@ -121,7 +120,7 @@ function* generateSpiderNodes(axis) {
         ].join('\n');
     };
 
-    let nodeMeasurer = _spiderMeasurer(!axis);
+    let nodeMeasurer = _spiderMeasurer(axis);
     let allowedDegrees = [0, 1, 2, 3, 4];
 
     yield new ZxNodeKind({
@@ -131,10 +130,8 @@ function* generateSpiderNodes(axis) {
         contentDrawer: spiderNodeDrawer,
         hotkeys: axis ? ['2'] : ['o', '0'],
         hotkeyShiftMask: false,
-        mouseHotkey: undefined,
         fixedPoints: spiderFixedPointsFunc(axis, false),
         tensor: spiderTensorFunc(axis, 0),
-        edgeAction: NO_EDGE_ACTION,
         allowedDegrees,
         nodeMeasurer,
     });
@@ -146,7 +143,6 @@ function* generateSpiderNodes(axis) {
         contentDrawer: concatDrawers(spiderNodeDrawer, piDrawer(textColor)),
         hotkeys: axis ? ['z'] : ['x'],
         hotkeyShiftMask: false,
-        mouseHotkey: undefined,
         fixedPoints: spiderFixedPointsFunc(axis, false),
         tensor: spiderTensorFunc(axis, Math.PI),
         edgeAction: {
@@ -166,7 +162,6 @@ function* generateSpiderNodes(axis) {
         contentDrawer: concatDrawers(spiderNodeDrawer, halfPiDrawer(textColor)),
         hotkeys: axis ? ['s'] : ['v'],
         hotkeyShiftMask: false,
-        mouseHotkey: undefined,
         fixedPoints: spiderFixedPointsFunc(axis, true),
         tensor: spiderTensorFunc(axis, Math.PI / 2),
         edgeAction: {
@@ -188,7 +183,6 @@ function* generateSpiderNodes(axis) {
         contentDrawer: concatDrawers(spiderNodeDrawer, negHalfPiDrawer(textColor)),
         hotkeys: axis ? ['a'] : ['w'],
         hotkeyShiftMask: false,
-        mouseHotkey: undefined,
         fixedPoints: spiderFixedPointsFunc(axis, true),
         tensor: spiderTensorFunc(axis, -Math.PI / 2),
         edgeAction: {

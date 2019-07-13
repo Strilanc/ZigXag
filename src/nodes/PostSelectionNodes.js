@@ -1,11 +1,8 @@
 import {ZxNodeKind} from "src/nodes/ZxNodeKind.js"
 import {
     nodeDrawer,
-    NO_FIXED_POINTS,
     xBasisEqualityMatrix,
     zBasisEqualityMatrix,
-    NO_EDGE_ACTION,
-    NO_ACTION_NODE_MEASURER,
     concatDrawers,
     negHalfPiDrawer,
     halfPiDrawer,
@@ -21,7 +18,6 @@ function* generatePostSelectionNodes(axis) {
     let textColor = axis ? 'white' : 'black';
     let axisPostChar = axis ? '+' : '0';
     let axisAntiPostChar = axis ? '-' : '1';
-    let spider = axis ? 'Z' : 'X';
 
     let spiderTensor = phase => {
         let method = axis ? zBasisEqualityMatrix : xBasisEqualityMatrix;
@@ -35,12 +31,8 @@ function* generatePostSelectionNodes(axis) {
         contentDrawer: nodeDraw,
         hotkeys: axis ? ['@', '2'] : ['O', ')', '0'],
         hotkeyShiftMask: true,
-        mouseHotkey: undefined,
         allowedDegrees: [1],
-        fixedPoints: NO_FIXED_POINTS,
         tensor: spiderTensor(0),
-        edgeAction: NO_EDGE_ACTION,
-        nodeMeasurer: NO_ACTION_NODE_MEASURER,
         postSelectStabilizer: axis ? '+X' : '+Z',
     });
 
@@ -51,12 +43,8 @@ function* generatePostSelectionNodes(axis) {
         contentDrawer: concatDrawers(nodeDraw, piDrawer(textColor)),
         hotkeys: axis ? ['Z'] : ['X'],
         hotkeyShiftMask: true,
-        mouseHotkey: undefined,
         allowedDegrees: [1],
-        fixedPoints: NO_FIXED_POINTS,
         tensor: spiderTensor(Math.PI),
-        edgeAction: NO_EDGE_ACTION,
-        nodeMeasurer: NO_ACTION_NODE_MEASURER,
         postSelectStabilizer: axis ? '-X' : '-Z',
     });
 
@@ -67,12 +55,8 @@ function* generatePostSelectionNodes(axis) {
         contentDrawer: concatDrawers(nodeDraw, halfPiDrawer(textColor)),
         hotkeys: axis ? ['S'] : ['V'],
         hotkeyShiftMask: true,
-        mouseHotkey: undefined,
         allowedDegrees: [1],
-        fixedPoints: NO_FIXED_POINTS,
         tensor: spiderTensor(Math.PI / 2),
-        edgeAction: NO_EDGE_ACTION,
-        nodeMeasurer: NO_ACTION_NODE_MEASURER,
         postSelectStabilizer: axis ? '-Y' : '+Y',
     });
 
@@ -83,12 +67,8 @@ function* generatePostSelectionNodes(axis) {
         contentDrawer: concatDrawers(nodeDraw, negHalfPiDrawer(textColor)),
         hotkeys: axis ? ['A'] : ['W'],
         hotkeyShiftMask: true,
-        mouseHotkey: undefined,
         allowedDegrees: [1],
-        fixedPoints: NO_FIXED_POINTS,
         tensor: spiderTensor(-Math.PI / 2),
-        edgeAction: NO_EDGE_ACTION,
-        nodeMeasurer: NO_ACTION_NODE_MEASURER,
         postSelectStabilizer: axis ? '+Y' : '-Y',
     });
 }
