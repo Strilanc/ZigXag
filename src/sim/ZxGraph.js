@@ -1,7 +1,7 @@
 import {GeneralMap} from "src/base/GeneralMap.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
 import {Seq, seq} from "src/base/Seq.js";
-import {NODES} from "src/sim/ZxNodeKind.js";
+import {NODES} from "src/nodes/All.js";
 
 
 class ZxNode {

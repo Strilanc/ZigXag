@@ -14,7 +14,7 @@ import {popcnt} from "src/base/Util.js";
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 import {Controls} from "src/sim/Controls.js";
 import {Util} from "src/base/Util.js";
-import {zBasisEqualityMatrix, xBasisEqualityMatrix, NODES} from "src/sim/ZxNodeKind.js";
+import {zBasisEqualityMatrix, xBasisEqualityMatrix, NODES} from "src/nodes/All.js";
 
 
 class Tensor {

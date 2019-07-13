@@ -1,7 +1,7 @@
 import {Painter} from "src/Painter.js";
 import {Rect} from "src/base/Rect.js";
 import {Point} from "src/base/Point.js";
-import {NODES} from "src/sim/ZxNodeKind.js";
+import {NODES} from "src/nodes/All.js";
 
 class RingMenuEntry {
     /**

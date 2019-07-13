@@ -13,7 +13,7 @@ import {
     AmpsDisplay,
     PostSelection,
 } from "src/sim/QuantumProgram.js"
-import {NODES, EdgeActions} from "src/sim/ZxNodeKind.js";
+import {NODES, EdgeActions} from "src/nodes/All.js";
 
 /**
  * Determines products of Paulis that can be applied after EPR pairs are made, but before spider measurements

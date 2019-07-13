@@ -36,7 +36,7 @@ import {
     maybeDragNodeEdit,
     setElementKindEdit,
 } from "src/edit.js";
-import {NODES} from "src/sim/ZxNodeKind.js";
+import {NODES} from "src/nodes/All.js";
 import {makeNodeRingMenu} from "src/ui/RingMenu.js"
 
 /**

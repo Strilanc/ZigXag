@@ -9,7 +9,7 @@ import {Reader, Writer} from "src/base/Serialize.js";
 import {GeneralMap} from "src/base/GeneralMap.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
 import {ZxGraph, ZxEdge, ZxNode, ZxPort} from "src/sim/ZxGraph.js";
-import {NODES} from "src/sim/ZxNodeKind.js";
+import {NODES} from "src/nodes/All.js";
 import {evalZxGraph} from "src/sim/ZxGraphEval.js";
 import {Util} from "src/base/Util.js";
 import {MathPainter} from "src/MathPainter.js";
