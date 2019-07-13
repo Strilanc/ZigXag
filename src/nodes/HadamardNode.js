@@ -8,7 +8,7 @@ import {
 
 const HADAMARD_NODE = new ZxNodeKind({
     id: 'h',
-    description: 'Hadamard\n\nSelection:\nX0·Z1\nZ0·X1\n\nAction:\nH',
+    description: 'Hadamard\n\nFixed measures:\nX0·Z1\nZ0·X1\n\nAction:\nH',
     diagramReps: ['H', 'h'],
     contentDrawer: ctx => {
         ctx.fillStyle = 'yellow';
