@@ -87,6 +87,72 @@ const INVALID_EDGE_ACTION = {
 
 const NO_ACTION_NODE_MEASURER = (outProgram, totalQubits, qubitIds) => [];
 
+/**
+ * @param {!string} color
+ * @returns {!function(ctx: !CanvasRenderingContext2D)},
+ * @private
+ */
+function piDrawer(color) {
+    return ctx => {
+        ctx.fillStyle = color;
+        ctx.font = '12px monospace';
+        ctx.fillText('π', -3, 3);
+    }
+}
+
+/**
+ * @param {!string} color
+ * @returns {!function(ctx: !CanvasRenderingContext2D)},
+ * @private
+ */
+function halfPiDrawer(color) {
+    return ctx => {
+        ctx.fillStyle = color;
+        ctx.font = '10px monospace';
+        ctx.fillText('π', -3, -1);
+        ctx.fillText('2', -3, 7);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-4, 0);
+        ctx.lineTo(4, 0);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    }
+}
+
+/**
+ * @param {!string} color
+ * @returns {!function(ctx: !CanvasRenderingContext2D)},
+ * @private
+ */
+function negHalfPiDrawer(color) {
+    return ctx => {
+        ctx.fillStyle = color;
+        ctx.font = '10px monospace';
+        ctx.fillText('-π', -5, -1);
+        ctx.fillText('2', -3, 7);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-6, 0);
+        ctx.lineTo(6, 0);
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    }
+}
+
+/**
+ * @param {!function(ctx: !CanvasRenderingContext2D)} drawers
+ * @returns {!function(ctx: !CanvasRenderingContext2D)},
+ * @private
+ */
+function concatDrawers(...drawers) {
+    return ctx => {
+        for (let drawer of drawers) {
+            drawer(ctx);
+        }
+    }
+}
 
 export {
     zBasisEqualityMatrix,
@@ -96,4 +162,8 @@ export {
     NO_EDGE_ACTION,
     INVALID_EDGE_ACTION,
     NO_ACTION_NODE_MEASURER,
+    negHalfPiDrawer,
+    halfPiDrawer,
+    piDrawer,
+    concatDrawers,
 }

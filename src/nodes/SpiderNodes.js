@@ -1,91 +1,21 @@
-import {GeneralMap} from "src/base/GeneralMap.js";
 import {QubitAxis, PauliProduct} from "src/sim/PauliProduct.js";
 import {Matrix} from "src/base/Matrix.js";
 import {Complex} from "src/base/Complex.js";
-import {equate} from "src/base/Equate.js";
-import {popcnt} from "src/base/Util.js";
-import {padSetTo, QuantumStatement, MultiCnot} from "src/sim/QuantumProgram.js";
+import {MultiCnot} from "src/sim/QuantumProgram.js";
 import {ZxNodeKind, TransformedMeasurement} from "src/nodes/ZxNodeKind.js"
 import {
     nodeDrawer,
-    NO_FIXED_POINTS,
     xBasisEqualityMatrix,
     zBasisEqualityMatrix,
-    INVALID_EDGE_ACTION,
     NO_EDGE_ACTION,
-    NO_ACTION_NODE_MEASURER,
+    concatDrawers,
+    negHalfPiDrawer,
+    halfPiDrawer,
+    piDrawer,
 } from "src/nodes/Base.js";
 
 /**
- * @param {!string} color
- * @returns {!function(ctx: !CanvasRenderingContext2D)},
- * @private
- */
-function _piDrawer(color) {
-    return ctx => {
-        ctx.fillStyle = color;
-        ctx.font = '12px monospace';
-        ctx.fillText('π', -3, 3);
-    }
-}
-
-/**
- * @param {!string} color
- * @returns {!function(ctx: !CanvasRenderingContext2D)},
- * @private
- */
-function _halfPiDrawer(color) {
-    return ctx => {
-        ctx.fillStyle = color;
-        ctx.font = '10px monospace';
-        ctx.fillText('π', -3, -1);
-        ctx.fillText('2', -3, 7);
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(-4, 0);
-        ctx.lineTo(4, 0);
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = color;
-        ctx.stroke();
-    }
-}
-
-/**
- * @param {!string} color
- * @returns {!function(ctx: !CanvasRenderingContext2D)},
- * @private
- */
-function _negHalfPiDrawer(color) {
-    return ctx => {
-        ctx.fillStyle = color;
-        ctx.font = '10px monospace';
-        ctx.fillText('-π', -5, -1);
-        ctx.fillText('2', -3, 7);
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(-6, 0);
-        ctx.lineTo(6, 0);
-        ctx.strokeStyle = color;
-        ctx.stroke();
-    }
-}
-
-/**
- * @param {!function(ctx: !CanvasRenderingContext2D)} drawers
- * @returns {!function(ctx: !CanvasRenderingContext2D)},
- * @private
- */
-function _concatDrawers(...drawers) {
-    return ctx => {
-        for (let drawer of drawers) {
-            drawer(ctx);
-        }
-    }
-}
-
-/**
  * @param {!boolean} axis
- * @param {!boolean} post
  * @returns {!function(
  *     outProgram: !QuantumProgram,
  *     totalQubits: !int,
@@ -93,10 +23,7 @@ function _concatDrawers(...drawers) {
  * ): !Array.<!TransformedMeasurement>}
  * @private
  */
-function _spiderMeasurer(axis, post) {
-    if (post) {
-        return NO_ACTION_NODE_MEASURER;
-    }
+function _spiderMeasurer(axis) {
     return (outProgram, totalQubits, qubitIds) => {
         if (qubitIds.length === 0) {
             return [];
@@ -121,22 +48,18 @@ function _spiderMeasurer(axis, post) {
 /**
  * @yields {!ZxNodeKind}
  */
-function* _iterNodeKinds() {
-    let post = false;
+function* generateSpiderNodes() {
     for (let axis of [false, true]) {
         let nodeDraw = nodeDrawer(
-            post ? 'red' : 'black',
+            'black',
             axis ? 'black' : 'white',
-            post ? 3 : 1);
+            1);
         let textColor = axis ? 'white' : 'black';
         let axisPostChar = axis ? '+' : '0';
         let axisAntiPostChar = axis ? '-' : '1';
         let spider = axis ? 'Z' : 'X';
         let oppSpider = axis ? 'X' : 'Z';
         let desc = (selected, modifier, sign, gate) => {
-            if (post) {
-                return `postselect\n|${selected}⟩`;
-            }
             return [
                 `${spider} spider`,
                 modifier === '' ? [] : [`(${modifier})`],
@@ -150,69 +73,61 @@ function* _iterNodeKinds() {
             ].join('\n');
         };
 
+        let nodeMeasurer = _spiderMeasurer(!axis);
+
         let spiderTensor = phase => {
             let method = axis ? zBasisEqualityMatrix : xBasisEqualityMatrix;
             return dim => method(0, dim, phase);
         };
 
-        let spiderFixedPoints = rootY => {
-            if (post) {
-                return NO_FIXED_POINTS;
+        let spiderFixedPoints = rootY => deg => {
+            if (deg === 0) {
+                return [];
             }
-            return deg => {
-                if (deg === 0) {
-                    return [];
-                }
 
-                let globalParity = new PauliProduct(0, new Uint8Array(deg));
-                for (let i = 0; i < deg; i++) {
-                    globalParity.paulis[i] = axis ? 1 : 2;
-                }
-                if (rootY) {
-                    globalParity.paulis[0] = 3;
-                }
+            let globalParity = new PauliProduct(0, new Uint8Array(deg));
+            for (let i = 0; i < deg; i++) {
+                globalParity.paulis[i] = axis ? 1 : 2;
+            }
+            if (rootY) {
+                globalParity.paulis[0] = 3;
+            }
 
-                let result = [];
-                result.push(globalParity);
-                for (let i = 1; i < deg; i++) {
-                    result.push(PauliProduct.fromXzParity(deg, axis, [0, i]));
-                }
-                return result;
-            };
+            let result = [];
+            result.push(globalParity);
+            for (let i = 1; i < deg; i++) {
+                result.push(PauliProduct.fromXzParity(deg, axis, [0, i]));
+            }
+            return result;
         };
 
         yield new ZxNodeKind({
-            id: `${axis ? '@' : 'O'}${post ? '!' : ''}`,
+            id: `${axis ? '@' : 'O'}`,
             description: desc(axisPostChar, '', '', 'Identity'),
-            diagramReps: (axis ? ['@'] : ['O', 'o', '0']).map(e => post ? e + '!' : e),
+            diagramReps: axis ? ['@'] : ['O', 'o', '0'],
             contentDrawer: nodeDraw,
-            hotkeys: post
-                ? (axis ? ['@', '2'] : ['O', ')', '0'])
-                : (axis ? ['2'] : ['o', '0']),
-            hotkeyShiftMask: post,
+            hotkeys: axis ? ['2'] : ['o', '0'],
+            hotkeyShiftMask: false,
             mouseHotkey: undefined,
-            allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
+            allowedDegrees: [0, 1, 2, 3, 4],
             fixedPoints: spiderFixedPoints(false),
             tensor: spiderTensor(0),
             edgeAction: NO_EDGE_ACTION,
-            nodeMeasurer: _spiderMeasurer(!axis, post),
-            postSelectStabilizer: !post ? undefined : axis ? '+X' : '+Z',
+            nodeMeasurer: nodeMeasurer,
         });
 
         yield new ZxNodeKind({
-            id: `${axis ? 'z' : 'x'}${post ? '!' : ''}`,
+            id: `${axis ? 'z' : 'x'}`,
             description: desc(axisAntiPostChar, 'Flipped', '-', spider),
-            diagramReps: (axis ? ['Z', 'z'] : ['X', 'x']).map(e => post ? e + '!' : e),
-            contentDrawer: _concatDrawers(nodeDraw, _piDrawer(textColor)),
-            hotkeys: post
-                ? (axis ? ['Z'] : ['X'])
-                : (axis ? ['z'] : ['x']),
-            hotkeyShiftMask: post,
+            diagramReps: (axis ? ['Z', 'z'] : ['X', 'x']),
+            contentDrawer: concatDrawers(nodeDraw, piDrawer(textColor)),
+            hotkeys: axis ? ['z'] : ['x'],
+            hotkeyShiftMask: false,
             mouseHotkey: undefined,
-            allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
+            allowedDegrees: [0, 1, 2, 3, 4],
             fixedPoints: spiderFixedPoints(false),
             tensor: spiderTensor(Math.PI),
-            edgeAction: post ? NO_EDGE_ACTION : {
+            edgeAction: {
                 quirkGate: axis ? 'Z' : 'X',
                 qasmGates: axis ? ['z'] : ['x'],
                 sim: (sim, qubit) => {
@@ -228,24 +143,21 @@ function* _iterNodeKinds() {
                 },
                 matrix: axis ? Matrix.square(1, 0, 0, -1) : Matrix.square(0, 1, 1, 0),
             },
-            nodeMeasurer: _spiderMeasurer(!axis, post),
-            postSelectStabilizer: !post ? undefined : axis ? '-X' : '-Z',
+            nodeMeasurer: nodeMeasurer,
         });
 
         yield new ZxNodeKind({
-            id: `${axis ? 's' : 'f'}${post ? '!' : ''}`,
+            id: `${axis ? 's' : 'f'}`,
             description: desc(axis ? 'i' : '-i', 'Phased', `-i${spider}0·`, axis ? 'S' : 'H·S·H'),
-            diagramReps: (axis ? ['S', 's'] : ['F', 'f']).map(e => post ? e + '!' : e),
-            contentDrawer: _concatDrawers(nodeDraw, _halfPiDrawer(textColor)),
-            hotkeys: post
-                ? (axis ? ['S'] : ['V'])
-                : (axis ? ['s'] : ['v']),
-            hotkeyShiftMask: post,
+            diagramReps: axis ? ['S', 's'] : ['F', 'f'],
+            contentDrawer: concatDrawers(nodeDraw, halfPiDrawer(textColor)),
+            hotkeys: axis ? ['s'] : ['v'],
+            hotkeyShiftMask: false,
             mouseHotkey: undefined,
-            allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
+            allowedDegrees: [0, 1, 2, 3, 4],
             fixedPoints: spiderFixedPoints(true),
             tensor: spiderTensor(Math.PI / 2),
-            edgeAction: post ? NO_EDGE_ACTION : {
+            edgeAction: {
                 quirkGate: axis ? 'Z^½' : 'X^½',
                 qasmGates: axis ? ['s'] : ['h', 's', 'h'],
                 sim: (sim, qubit) => {
@@ -261,24 +173,21 @@ function* _iterNodeKinds() {
                     Matrix.square(1, 0, 0, Complex.I) :
                     Matrix.square(1, Complex.I.neg(), Complex.I.neg(), 1).times(new Complex(0.5, 0.5)),
             },
-            nodeMeasurer: _spiderMeasurer(!axis, post),
-            postSelectStabilizer: !post ? undefined : axis ? '-Y' : '+Y',
+            nodeMeasurer: nodeMeasurer,
         });
 
         yield new ZxNodeKind({
-            id: `${axis ? 'a' : 'w'}${post ? '!' : ''}`,
+            id: `${axis ? 'a' : 'w'}`,
             description: desc(axis ? '-i' : 'i', 'Backphased', `i${spider}0·`, axis ? 'S†' : 'H·S†·H'),
-            diagramReps: (axis ? ['A', 'a'] : ['W', 'w']).map(e => post ? e + '!' : e),
-            contentDrawer: _concatDrawers(nodeDraw, _negHalfPiDrawer(textColor)),
-            hotkeys: post
-                ? (axis ? ['A'] : ['W'])
-                : (axis ? ['a'] : ['w']),
-            hotkeyShiftMask: post,
+            diagramReps: axis ? ['A', 'a'] : ['W', 'w'],
+            contentDrawer: concatDrawers(nodeDraw, negHalfPiDrawer(textColor)),
+            hotkeys: axis ? ['a'] : ['w'],
+            hotkeyShiftMask: false,
             mouseHotkey: undefined,
-            allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
+            allowedDegrees: [0, 1, 2, 3, 4],
             fixedPoints: spiderFixedPoints(true),
             tensor: spiderTensor(-Math.PI / 2),
-            edgeAction: post ? NO_EDGE_ACTION : {
+            edgeAction: {
                 quirkGate: axis ? 'Z^-½' : 'X^-½',
                 qasmGates: axis ? ['z', 's'] : ['x', 'h', 's', 'h'],
                 sim: (sim, qubit) => {
@@ -298,12 +207,11 @@ function* _iterNodeKinds() {
                     Matrix.square(1, 0, 0, Complex.I.neg()) :
                     Matrix.square(1, Complex.I, Complex.I, 1).times(new Complex(0.5, -0.5)),
             },
-            nodeMeasurer: _spiderMeasurer(!axis, post),
-            postSelectStabilizer: !post ? undefined : axis ? '+Y' : '-Y',
+            nodeMeasurer: nodeMeasurer,
         });
     }
 }
 
-const SPIDER_NODES = [..._iterNodeKinds()];
+const SPIDER_NODES = [...generateSpiderNodes()];
 
 export {SPIDER_NODES}
