@@ -4,7 +4,7 @@ import {Matrix} from "src/base/Matrix.js"
 import {Complex} from "src/base/Complex.js"
 import {PauliProduct} from "src/sim/PauliProduct.js"
 
-import {zBasisEqualityMatrix, xBasisEqualityMatrix} from "src/nodes/All.js"
+import {zBasisEqualityMatrix, xBasisEqualityMatrix} from "src/nodes/Base.js"
 
 
 let suite = new Suite("ZxNodeKind");

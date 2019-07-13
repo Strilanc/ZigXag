@@ -5,6 +5,18 @@ import {Complex} from "src/base/Complex.js";
 import {equate} from "src/base/Equate.js";
 import {popcnt} from "src/base/Util.js";
 import {padSetTo, QuantumStatement, MultiCnot} from "src/sim/QuantumProgram.js";
+import {ZxNodeKind, TransformedMeasurement} from "src/nodes/ZxNodeKind.js"
+import {
+    nodeDrawer,
+    NO_FIXED_POINTS,
+    xBasisEqualityMatrix,
+    zBasisEqualityMatrix,
+    INVALID_EDGE_ACTION,
+    NO_EDGE_ACTION,
+    NO_ACTION_NODE_MEASURER,
+} from "src/nodes/Base.js";
+
+import {INPUT_NODE, OUTPUT_NODE} from "src/nodes/InputOutputNodes.js"
 
 
 class EdgeActions extends QuantumStatement {
@@ -64,154 +76,6 @@ class EdgeActions extends QuantumStatement {
             this._action(kind).sim(sim, qubit);
         }
     }
-}
-
-/**
- * @param {!int} inDim
- * @param {!int} outDim
- * @param {!number=0} phase
- * @returns {!Matrix}
- */
-function zBasisEqualityMatrix(inDim, outDim, phase=0) {
-    let result = Matrix.zero(1 << inDim, 1 << outDim);
-    let buf = result.rawBuffer();
-    buf[0] = 1;
-    let c = Complex.polar(1, phase);
-    buf[buf.length - 2] += c.real;
-    buf[buf.length - 1] += c.imag;
-    return result;
-}
-
-/**
- * @param {!int} inDim
- * @param {!int} outDim
- * @param {!number=0} phase
- * @returns {!Matrix}
- */
-function xBasisEqualityMatrix(inDim, outDim, phase=0) {
-    if (inDim + outDim === 0) {
-        return Matrix.solo(Complex.polar(1, phase).plus(1));
-    }
-
-    let m = Math.sqrt(4 / (1 << (inDim + outDim)));
-    let g = Complex.polar(m, phase / 2);
-    let even = g.times(Math.cos(phase / 2));
-    let odd = g.times(-Math.sin(phase / 2)).times(Complex.I);
-    let result = Matrix.zero(1 << inDim, 1 << outDim);
-    let buf = result.rawBuffer();
-    for (let k = 0; k < buf.length; k += 2) {
-        if (popcnt(k) % 2 === 0) {
-            buf[k] = even.real;
-            buf[k + 1] = even.imag;
-        } else {
-            buf[k] = odd.real;
-            buf[k + 1] = odd.imag;
-        }
-    }
-    return result;
-}
-
-class TransformedMeasurement {
-    /**
-     * @param {!PauliProduct} originalStabilizer
-     * @param {!QubitAxis} postselectionControlAxis
-     * @param {!QubitAxis} measurementAxis
-     */
-    constructor(originalStabilizer, measurementAxis, postselectionControlAxis) {
-        this.originalStabilizer = originalStabilizer;
-        this.measurementAxis = measurementAxis;
-        this.postselectionControlAxis = postselectionControlAxis;
-    }
-
-    /**
-     * @param {*} other
-     * @returns {!boolean}
-     */
-    isEqualTo(other) {
-        return (other instanceof TransformedMeasurement &&
-        this.measurementAxis.isEqualTo(other.measurementAxis) &&
-        this.originalStabilizer.isEqualTo(other.originalStabilizer) &&
-        this.postselectionControlAxis.isEqualTo(other.postselectionControlAxis));
-    }
-
-    /**
-     * @returns {!string}
-     */
-    toString() {
-        return `originalStabilizer: ${this.originalStabilizer}
-postselectionControlAxis: ${this.postselectionControlAxis}
-measurementAxis: ${this.measurementAxis}`;
-    }
-}
-
-class ZxNodeKind {
-    /**
-     * @param {!{
-     *     id: !string,
-     *     description: !string,
-     *     contentDrawer: !function(ctx: !CanvasRenderingContext2D),
-     *     diagramReps: (undefined|!Array.<!string>),
-     *     hotkeys: !Array.<!string>,
-     *     hotkeyShiftMask: (undefined|!boolean),
-     *     mouseHotkey: (undefined|!string),
-     *     allowedDegrees: !Array.<!int>,
-     *     fixedPoints: !function(degree: !int): !Array.<!PauliProduct>,
-     *     tensor: !function(dim: !int): !Matrix,
-     *     edgeAction: !{
-     *         quirkGate: null|!string,
-     *         qasmGates: null|!Array.<!string>,
-     *         sim: !function(sim: !ChpSimulator, qubit: !int),
-     *         matrix: null|!int|!Matrix,
-     *     },
-     *     nodeRootEdgeAction?: !{
-     *         quirkGate: null|!string,
-     *         qasmGates: null|!Array.<!string>,
-     *         sim: !function(sim: !ChpSimulator, qubit: !int),
-     *         matrix: null|!int|!Matrix,
-     *     },
-     *     nodeMeasurer: !function(
-     *         outProgram: !QuantumProgram,
-     *         totalQubits: !int,
-     *         qubitIds: !Array.<!int>,
-     *     ): !Array.<!TransformedMeasurement>,
-     *     postSelectStabilizer?: undefined|!string
-     * }} attributes
-     */
-    constructor(attributes) {
-        this.id = attributes.id;
-        this.description = attributes.description;
-        this.contentDrawer = attributes.contentDrawer;
-        this.diagramReps = attributes.diagramReps || [this.id];
-        this.hotkeys = attributes.hotkeys;
-        this.hotkeyShiftMask = attributes.hotkeyShiftMask;
-        this.mouseHotkey = attributes.mouseHotkey;
-        this.allowedDegrees = attributes.allowedDegrees;
-        this.fixedPoints = attributes.fixedPoints;
-        this.tensor = attributes.tensor;
-        this.edgeAction = attributes.edgeAction;
-        this.nodeRootEdgeAction = attributes.nodeRootEdgeAction || attributes.edgeAction;
-        this.nodeMeasurer = attributes.nodeMeasurer;
-        this.postSelectStabilizer = attributes.postSelectStabilizer || undefined;
-    }
-}
-
-/**
- * @param {!string} stroke
- * @param {!string} fill
- * @param {!number} lineWidth
- * @returns {!function(ctx: !CanvasRenderingContext2D)},
- * @private
- */
-function _nodeDrawer(stroke, fill, lineWidth) {
-    return ctx => {
-        ctx.beginPath();
-        ctx.arc(0, 0, 8, 0, 2 * Math.PI);
-        ctx.lineWidth = lineWidth;
-        ctx.strokeStyle = stroke;
-        ctx.fillStyle = fill;
-        ctx.fill();
-        ctx.stroke();
-    };
 }
 
 /**
@@ -281,8 +145,6 @@ function _concatDrawers(...drawers) {
     }
 }
 
-const NO_ACTION_NODE_MEASURER = (outProgram, totalQubits, qubitIds) => [];
-
 /**
  * @param {!boolean} axis
  * @param {!boolean} post
@@ -322,23 +184,9 @@ function _spiderMeasurer(axis, post) {
  * @yields {!ZxNodeKind}
  */
 function* _iterNodeKinds() {
-    let noFixedPoints = deg => [];
-    let noAction = {
-        quirkGate: '…',
-        qasmGates: [],
-        sim: (sim, qubit) => {},
-        matrix: 1,
-    };
-    let invalidAction = {
-        quirkGate: null,
-        qasmGates: null,
-        sim: (sim, qubit) => { throw new Error('No valid edge action.'); },
-        matrix: null,
-    };
-
     for (let post of [false, true]) {
         for (let axis of [false, true]) {
-            let nodeDraw = _nodeDrawer(
+            let nodeDraw = nodeDrawer(
                 post ? 'red' : 'black',
                 axis ? 'black' : 'white',
                 post ? 3 : 1);
@@ -371,7 +219,7 @@ function* _iterNodeKinds() {
 
             let spiderFixedPoints = rootY => {
                 if (post) {
-                    return noFixedPoints;
+                    return NO_FIXED_POINTS;
                 }
                 return deg => {
                     if (deg === 0) {
@@ -408,7 +256,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(false),
                 tensor: spiderTensor(0),
-                edgeAction: noAction,
+                edgeAction: NO_EDGE_ACTION,
                 nodeMeasurer: _spiderMeasurer(!axis, post),
                 postSelectStabilizer: !post ? undefined : axis ? '+X' : '+Z',
             });
@@ -426,7 +274,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(false),
                 tensor: spiderTensor(Math.PI),
-                edgeAction: post ? noAction : {
+                edgeAction: post ? NO_EDGE_ACTION : {
                     quirkGate: axis ? 'Z' : 'X',
                     qasmGates: axis ? ['z'] : ['x'],
                     sim: (sim, qubit) => {
@@ -459,7 +307,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(true),
                 tensor: spiderTensor(Math.PI / 2),
-                edgeAction: post ? noAction : {
+                edgeAction: post ? NO_EDGE_ACTION : {
                     quirkGate: axis ? 'Z^½' : 'X^½',
                     qasmGates: axis ? ['s'] : ['h', 's', 'h'],
                     sim: (sim, qubit) => {
@@ -492,7 +340,7 @@ function* _iterNodeKinds() {
                 allowedDegrees: post ? [1] : [0, 1, 2, 3, 4],
                 fixedPoints: spiderFixedPoints(true),
                 tensor: spiderTensor(-Math.PI / 2),
-                edgeAction: post ? noAction : {
+                edgeAction: post ? NO_EDGE_ACTION : {
                     quirkGate: axis ? 'Z^-½' : 'X^-½',
                     qasmGates: axis ? ['z', 's'] : ['x', 'h', 's', 'h'],
                     sim: (sim, qubit) => {
@@ -549,7 +397,7 @@ function* _iterNodeKinds() {
         tensor: () => {
             throw new Error('Crossing node tensor must be handled specially.');
         },
-        edgeAction: noAction,
+        edgeAction: NO_EDGE_ACTION,
         nodeMeasurer: () => {
             throw new Error('Crossing node tensor must be handled specially.');
         },
@@ -584,7 +432,7 @@ function* _iterNodeKinds() {
             },
             matrix: Matrix.square(1, 1, 1, -1).times(Math.sqrt(0.5)),
         },
-        nodeRootEdgeAction: noAction,
+        nodeRootEdgeAction: NO_EDGE_ACTION,
         tensor: dim => {
             if (dim !== 2) {
                 throw new Error(`Bad Hadamard dimension: ${dim}`);
@@ -607,55 +455,8 @@ function* _iterNodeKinds() {
         },
     });
 
-    yield new ZxNodeKind({
-        id: 'in',
-        description: 'Input node',
-        diagramReps: ['!'],
-        contentDrawer: ctx => {
-            _nodeDrawer('black', 'yellow', 1)(ctx);
-            ctx.fillStyle = 'black';
-            ctx.font = '12px monospace';
-            ctx.fillText('in', -7, +2);
-        },
-        hotkeys: ['i', 'I'],
-        hotkeyShiftMask: undefined,
-        mouseHotkey: undefined,
-        allowedDegrees: [1],
-        fixedPoints: noFixedPoints,
-        edgeAction: invalidAction,
-        tensor: dim => {
-            if (dim !== 1) {
-                throw new Error(`Bad input dimension: ${dim}`);
-            }
-            return zBasisEqualityMatrix(0, 2);
-        },
-        nodeMeasurer: NO_ACTION_NODE_MEASURER,
-    });
-
-    yield new ZxNodeKind({
-        id: 'out',
-        description: 'Output node',
-        diagramReps: ['?'],
-        contentDrawer: ctx => {
-            _nodeDrawer('black', 'yellow', 1)(ctx);
-            ctx.fillStyle = 'black';
-            ctx.font = '12px monospace';
-            ctx.fillText('out', -9, 2);
-        },
-        hotkeys: ['u', 'U'],
-        hotkeyShiftMask: undefined,
-        mouseHotkey: undefined,
-        allowedDegrees: [1],
-        fixedPoints: noFixedPoints,
-        edgeAction: invalidAction,
-        tensor: dim => {
-            if (dim !== 1) {
-                throw new Error(`Bad output dimension: ${dim}`);
-            }
-            return zBasisEqualityMatrix(0, 2);
-        },
-        nodeMeasurer: NO_ACTION_NODE_MEASURER,
-    });
+    yield INPUT_NODE;
+    yield OUTPUT_NODE;
 }
 
 let map = /** @type {!GeneralMap.<!string, !ZxNodeKind>} */ new GeneralMap();
@@ -675,4 +476,4 @@ const NODES = {
     h: map.get('h'),
 };
 
-export {zBasisEqualityMatrix, xBasisEqualityMatrix, ZxNodeKind, NODES, EdgeActions}
+export {NODES, EdgeActions}

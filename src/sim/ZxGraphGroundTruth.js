@@ -1,20 +1,11 @@
 import {GeneralMap} from "src/base/GeneralMap.js";
-import {GeneralSet} from "src/base/GeneralSet.js";
-import {seq, Seq} from "src/base/Seq.js";
-import {SimulatorSpec} from "src/sim/SimulatorSpec.js"
-import {ChpSimulator} from "src/sim/ChpSimulator.js"
-import {VectorSimulator} from "src/sim/VectorSimulator.js"
-import {Measurement} from "src/sim/Measurement.js"
+import {seq} from "src/base/Seq.js";
 import {Complex} from "src/base/Complex.js"
 import {Matrix} from "src/base/Matrix.js"
 import {ZxPort, ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js"
-import {BitTable} from "src/sim/BitTable.js"
-import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
-import {popcnt} from "src/base/Util.js";
-import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
 import {Controls} from "src/sim/Controls.js";
-import {Util} from "src/base/Util.js";
-import {zBasisEqualityMatrix, xBasisEqualityMatrix, NODES} from "src/nodes/All.js";
+import {zBasisEqualityMatrix, xBasisEqualityMatrix} from "src/nodes/Base.js";
+import {NODES} from "src/nodes/All.js";
 
 
 class Tensor {
