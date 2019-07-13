@@ -380,11 +380,25 @@ function drawResults(ctx) {
         undefined,
         undefined,
         results.satisfiable ? undefined : 'red');
+
     let groundTruth = evalZxGraphGroundTruth(curGraph);
-    groundTruth = groundTruth.phaseMatchedTo(results.wavefunction);
-    ctx.globalAlpha *= 0.5;
-    MathPainter.paintMatrix(painter, groundTruth, s, 'yellow', 'black', '#00000000', '#00000000');
-    ctx.globalAlpha *= 2;
+    let groundSatisfiable = !groundTruth.isZero(1e-8);
+    let detectedBadSimulationResult = false;
+    if (groundSatisfiable && results.satisfiable) {
+        let matchedGround = groundTruth.phaseMatchedTo(results.wavefunction, true);
+        if (!matchedGround.isApproximatelyEqualTo(results.wavefunction, 1e-8)) {
+            // Disagreed about satisfiable result.
+            detectedBadSimulationResult = true;
+        }
+    } else if (groundSatisfiable !== results.satisfiable) {
+        // Disagreed about satisfiability.
+        detectedBadSimulationResult = true;
+    }
+    if (detectedBadSimulationResult) {
+        ctx.globalAlpha *= 0.5;
+        MathPainter.paintMatrix(painter, groundTruth, s, 'red', 'black', '#00000000', '#FFFF00A0');
+        ctx.globalAlpha *= 2;
+    }
 }
 
 /**
