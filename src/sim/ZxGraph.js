@@ -751,14 +751,30 @@ class ZxGraph {
     }
 
     /**
-     * @param {!ZxPort} startPort
+     * @param {!ZxPort|!ZxNode} start
      * @param {!ZxNode} endNode
      * @returns {undefined|!Array.<!ZxEdge>}
      */
-    tryFindFreePath(startPort, endNode) {
+    tryFindFreePath(start, endNode) {
         let prevMap = new GeneralMap();
-        prevMap.set(startPort.edge, undefined);
-        let queue = /** @type {!Array.<!ZxPort>} */ [startPort];
+        let queue = /** @type {!Array.<!ZxPort>} */ [];
+        let startX;
+        let startY;
+        if (start instanceof ZxNode) {
+            startX = start.x;
+            startY = start.y;
+            for (let port of start.unitPorts()) {
+                if (!this.edges.has(port.edge)) {
+                    prevMap.set(port.edge, undefined);
+                    queue.push(port);
+                }
+            }
+        } else if (start instanceof ZxPort) {
+            startX = start.node.x;
+            startY = start.node.y;
+            prevMap.set(start.edge, undefined);
+            queue.push(start);
+        }
 
         function trace(edge) {
             let path = [];
@@ -777,10 +793,10 @@ class ZxGraph {
         };
 
         let box = this.boundingBox();
-        let minX = Math.min(box.x, endNode.x, startPort.node.x) - 4;
-        let maxX = Math.max(box.x + box.w - 4, endNode.x, startPort.node.x) + 4;
-        let minY = Math.min(box.y, endNode.y, startPort.node.y) - 4;
-        let maxY = Math.max(box.y + box.h - 4, endNode.y, startPort.node.y) + 4;
+        let minX = Math.min(box.x, endNode.x, startX) - 4;
+        let maxX = Math.max(box.x + box.w - 4, endNode.x, startX) + 4;
+        let minY = Math.min(box.y, endNode.y, startY) - 4;
+        let maxY = Math.max(box.y + box.h - 4, endNode.y, startY) + 4;
 
         while (queue.length > 0) {
             let prevPort = queue.shift();

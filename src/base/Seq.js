@@ -1023,6 +1023,18 @@ class Seq {
     }
 
     /**
+     * Returns all possible permutations of the items in the sequence.
+     * @returns {!Seq.<!Array.<T>>}
+     * @template T
+     */
+    permutations() {
+        let seq = this;
+        return Seq.fromGenerator(function*() {
+            yield* _permutations(seq.toArray());
+        });
+    }
+
+    /**
      * Conditionally applies a transformation to the sequence.
      * If the given condition is false, the original sequence is returned.
      * If the given condition is true, the sequence is run through the given transformation and the result is returned.
@@ -1158,6 +1170,23 @@ class Seq {
                 yield e;
             }
         });
+    }
+}
+
+/**
+ * @param {!Array.<T>} items
+ * @yield {!Array.<!T>}
+ * @template
+ */
+function* _permutations(items) {
+    if (items.length === 0) {
+        yield [];
+        return;
+    }
+    for (let sub of _permutations(items.slice(1))) {
+        for (let i = 0; i < items.length; i++) {
+            yield [...sub.slice(0, i), items[0], ...sub.slice(i)];
+        }
     }
 }
 

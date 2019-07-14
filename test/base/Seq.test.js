@@ -867,3 +867,18 @@ suite.test("segmentBy", () => {
     assertThat(seq([1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3]).segmentBy(e => e >> 2)).
         iteratesAs([1, 2, 3], [4, 5, 6, 7], [8, 9], [1, 2, 3]);
 });
+
+suite.test('permutations', () => {
+    assertThat(seq([]).permutations()).iteratesAs([]);
+    assertThat(seq(['a']).permutations()).iteratesAs(['a']);
+    assertThat(seq(['a', 'b']).permutations()).iteratesAs(['a', 'b'], ['b', 'a']);
+    assertThat(seq(['a', 'b', 'c']).permutations()).iteratesAs(
+        ['a', 'b', 'c'],
+        ['b', 'a', 'c'],
+        ['b', 'c', 'a'],
+        ['a', 'c', 'b'],
+        ['c', 'a', 'b'],
+        ['c', 'b', 'a'],
+    );
+    assertThat(seq(['a', 'b', 'c', 'd']).permutations().count()).isEqualTo(4 * 3 * 2);
+});

@@ -400,8 +400,18 @@ O---O---@---@
     let e = new ZxNode(3, 2);
     let f = new ZxNode(4, 2);
     let ab = new ZxEdge(a, b);
-    let path = graph.tryFindFreePath(new ZxPort(ab, a), f);
-    assertThat(path).isEqualTo([
+
+    let portPath = graph.tryFindFreePath(new ZxPort(ab, a), f);
+    assertThat(portPath).isEqualTo([
+        new ZxEdge(f, e),
+        new ZxEdge(e, d),
+        new ZxEdge(d, c),
+        new ZxEdge(c, b),
+        ab,
+    ]);
+
+    let nodePath = graph.tryFindFreePath(a, f);
+    assertThat(nodePath).isEqualTo([
         new ZxEdge(f, e),
         new ZxEdge(e, d),
         new ZxEdge(d, c),

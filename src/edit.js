@@ -242,6 +242,98 @@ function edgePathToEdge(edgePath) {
 }
 
 /**
+ * @param {!ZxGraph} graph
+ * @param {!ZxNode} start
+ * @param {!Array.<!ZxNode>} ends
+ * @returns {undefined|!{newGraph: !ZxGraph, newPaths: !Array.<!Array.<!ZxEdge>>}
+ * @private
+ */
+function _multiPath_allOrders(graph, start, ends) {
+    // Ensure tie breakers always go the same way.
+    ends = [...ends];
+    ends.sort((a, b) => a.orderVal() - b.orderVal());
+
+    // Optimize over all orderings.
+    let result = seq(ends).
+        permutations().
+        map(ordering => _multiPath_fixedOrder(graph, start, ordering)).
+        filter(result => result !== undefined).
+        minBy(e => e.newPathLen, null);
+
+    // Package result.
+    if (result === null) {
+        return undefined;
+    }
+    return result;
+}
+
+/**
+ * @param {!ZxGraph} graph
+ * @param {!ZxNode} start
+ * @param {!Array.<!ZxNode>} ends
+ * @returns {undefined|!{newGraph: !ZxGraph, newPaths: !Array.<!Array.<!ZxEdge>>}
+ * @private
+ */
+function _multiPath_fixedOrder(graph, start, ends) {
+    let newGraph = graph.copy();
+    let newPaths = /* @type {!Array.<!Array.<!ZxEdge>>} */ [];
+    let newPathLen = 0;
+    for (let oppNode of ends) {
+        let path = newGraph.tryFindFreePath(start, oppNode);
+        if (path === undefined) {
+            return undefined;
+        }
+        newPaths.push(path);
+        newPathLen += path.length;
+
+        for (let edge of path) {
+            if (newGraph.has(edge)) {
+                throw new Error('Double edged.');
+            }
+            newGraph.edges.set(edge, '-');
+            for (let node of edge.nodes()) {
+                if (!newGraph.has(node)) {
+                    newGraph.nodes.set(node, '+');
+                }
+            }
+        }
+    }
+    return {
+        newPathLen,
+        newPaths,
+        newGraph,
+    };
+}
+
+/**
+ * @param {!ZxGraph} graph
+ * @param {!ZxNode} node
+ * @returns {!{newGraph: !ZxGraph, endOfRemovedPathNodes: !Array.<!ZxNode>, removedEdges: !Array.<!ZxEdge>}}
+ * @private
+ */
+function _deleteNodeAndAttachedEdges(graph, node) {
+    let ports = graph.activePortsOf(node);
+    let newGraph = graph.copy();
+    if (graph.kind(node) === '+') {
+        newGraph.nodes.set(node, 'O'); // Temporarily change to a normal node to avoid double-deletes.
+    }
+    let endOfRemovedPathNodes = /* @type {!Array.<!ZxNode>} */ [];
+    let removedEdges = /* @type {!Array.<!ZxEdge>} */ [];
+    for (let port of ports) {
+        if (!newGraph.has(port.edge)) {
+            return undefined;
+        }
+        let extended = newGraph.extendedUnblockedPath(port.edge);
+        newGraph.deletePath(extended);
+        let oppNode = edgePathToEdge(extended).opposite(port.node);
+        endOfRemovedPathNodes.push(oppNode);
+        removedEdges.push(...extended);
+    }
+    newGraph.nodes.delete(node);
+    return {newGraph, endOfRemovedPathNodes, removedEdges}
+}
+
+/**
  * Removes a node from the graph, along with its edges.
  * @param {!ZxGraph} graphAtFocusTime
  * @param {!ZxNode} oldPos
@@ -257,74 +349,38 @@ function maybeDragNodeEdit(graphAtFocusTime, oldPos, newPos) {
         return undefined;
     }
 
-    let ports = graphAtFocusTime.activePortsOf(oldPos);
-    let copy = graphAtFocusTime.copy();
-    if (nodeKind === '+') {
-        copy.nodes.set(oldPos, 'O'); // Temporarily change to a normal node to avoid double-deletes.
-    }
-    let tasks = [];
-    let dx = newPos.x - oldPos.x;
-    let dy = newPos.y - oldPos.y;
-    let oldPaths = [];
-    for (let port of ports) {
-        if (!copy.has(port.edge)) {
-            return undefined;
-        }
-        let extended = copy.extendedUnblockedPath(port.edge);
-        copy.deletePath(extended);
-        let oppNode = edgePathToEdge(extended).opposite(port.node);
-        tasks.push([port.translate(dx, dy), oppNode]);
-        oldPaths.push(extended);
-    }
-    if (copy.has(newPos)) {
+    let del = _deleteNodeAndAttachedEdges(graphAtFocusTime, oldPos);
+    if (del.newGraph.has(newPos)) {
         return undefined;
     }
-    copy.nodes.delete(oldPos);
-    copy.nodes.set(newPos, nodeKind);
+    del.newGraph.nodes.set(newPos, nodeKind);
 
-    let newPaths = [];
-    for (let [port, oppNode] of tasks) {
-        let path = copy.tryFindFreePath(port, oppNode);
-        if (path === undefined) {
-            return undefined;
-        }
-        for (let edge of path) {
-            if (copy.has(edge)) {
-                throw new Error('Double edged.');
-            }
-            copy.edges.set(edge, '-');
-            for (let node of edge.nodes()) {
-                if (!copy.has(node)) {
-                    copy.nodes.set(node, '+');
-                }
-            }
-        }
-        newPaths.push(path);
+    let result = _multiPath_allOrders(del.newGraph, newPos, del.endOfRemovedPathNodes);
+    if (result === undefined) {
+        return undefined;
     }
 
     return new Edit(
         () => `move ${oldPos} to ${newPos}.`,
         graph => {
-            graph.nodes = copy.nodes;
-            graph.edges = copy.edges;
+            graph.nodes = result.newGraph.nodes;
+            graph.edges = result.newGraph.edges;
         },
         (graph, ctx) => {
-            for (let p of oldPaths) {
-                for (let e of p) {
-                    let [n1, n2] = e.nodes();
-                    let [x1, y1] = nodeToXy(n1);
-                    let [x2, y2] = nodeToXy(n2);
-                    ctx.beginPath();
-                    ctx.moveTo(x1, y1);
-                    ctx.lineTo(x2, y2);
-                    ctx.globalAlpha *= 0.5;
-                    ctx.strokeStyle = 'red';
-                    ctx.lineWidth = 3;
-                    ctx.globalAlpha *= 2;
-                    ctx.stroke();
-                }
+            for (let e of del.removedEdges) {
+                let [n1, n2] = e.nodes();
+                let [x1, y1] = nodeToXy(n1);
+                let [x2, y2] = nodeToXy(n2);
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.globalAlpha *= 0.5;
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 3;
+                ctx.globalAlpha *= 2;
+                ctx.stroke();
             }
-            for (let p of newPaths) {
+            for (let p of result.newPaths) {
                 for (let e of p) {
                     let [n1, n2] = e.nodes();
                     let [x1, y1] = nodeToXy(n1);
