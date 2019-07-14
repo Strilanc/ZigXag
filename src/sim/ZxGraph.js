@@ -400,6 +400,18 @@ class ZxGraph {
     }
 
     /**
+     * @param {!ZxNode|!ZxEdge} nodeOrEdge
+     * @returns {undefined|!ZxNodeKind}
+     */
+    nodeKind(nodeOrEdge) {
+        let kind = this.kind(nodeOrEdge);
+        if (kind === undefined) {
+            return undefined;
+        }
+        return NODES.map.get(kind);
+    }
+
+    /**
      * @param {!ZxNode|!ZxEdge} element
      * @param {!string} kind
      */
@@ -829,15 +841,23 @@ class ZxGraph {
 
     /**
      * @param {!Iterable.<!ZxEdge>|!GeneralSet<!ZxEdge>} edgePath
+     * @param {!boolean=true} includingOrphansThatCannotBeSingletons
      */
-    deletePath(edgePath) {
+    deletePath(edgePath, includingOrphansThatCannotBeSingletons=true) {
         for (let e of edgePath) {
             this.edges.delete(e);
         }
 
         for (let e of edgePath) {
             for (let n of e.nodes()) {
-                if (this.kind(n) === '+' && this.activeUnitEdgesOf(n).length === 0) {
+                let kind = this.kind(n);
+                if (kind === undefined) {
+                    continue;
+                }
+                let degree = this.activeUnitEdgesOf(n).length;
+                let allowedDegrees = NODES.map.get(kind).allowedDegrees;
+                let remove = includingOrphansThatCannotBeSingletons || kind === '+';
+                if (remove && degree === 0 && allowedDegrees.indexOf(0) === -1) {
                     this.nodes.delete(n);
                 }
             }

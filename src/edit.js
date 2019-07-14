@@ -308,10 +308,11 @@ function _multiPath_fixedOrder(graph, start, ends) {
 /**
  * @param {!ZxGraph} graph
  * @param {!ZxNode} node
+ * @param {!boolean} includingOrphansThatCannotBeSingletons
  * @returns {!{newGraph: !ZxGraph, endOfRemovedPathNodes: !Array.<!ZxNode>, removedEdges: !Array.<!ZxEdge>}}
  * @private
  */
-function _deleteNodeAndAttachedEdges(graph, node) {
+function _deleteNodeAndAttachedEdges(graph, node, includingOrphansThatCannotBeSingletons) {
     let ports = graph.activePortsOf(node);
     let newGraph = graph.copy();
     if (graph.kind(node) === '+') {
@@ -324,10 +325,18 @@ function _deleteNodeAndAttachedEdges(graph, node) {
             return undefined;
         }
         let extended = newGraph.extendedUnblockedPath(port.edge);
-        newGraph.deletePath(extended);
-        let oppNode = edgePathToEdge(extended).opposite(port.node);
-        endOfRemovedPathNodes.push(oppNode);
         removedEdges.push(...extended);
+        newGraph.deletePath(extended, false);
+        let oppNode = edgePathToEdge(extended).opposite(port.node);
+        let newDegree = newGraph.activeUnitEdgesOf(oppNode).length;
+        let oppNodeKind = newGraph.nodeKind(oppNode);
+        let allowedDegrees = oppNodeKind === undefined ? [0] : oppNodeKind.allowedDegrees;
+
+        if (includingOrphansThatCannotBeSingletons && newDegree === 0 && allowedDegrees.indexOf(0) === -1) {
+            newGraph.nodes.delete(oppNode);
+        } else {
+            endOfRemovedPathNodes.push(oppNode);
+        }
     }
     newGraph.nodes.delete(node);
     return {newGraph, endOfRemovedPathNodes, removedEdges}
@@ -349,7 +358,7 @@ function maybeDragNodeEdit(graphAtFocusTime, oldPos, newPos) {
         return undefined;
     }
 
-    let del = _deleteNodeAndAttachedEdges(graphAtFocusTime, oldPos);
+    let del = _deleteNodeAndAttachedEdges(graphAtFocusTime, oldPos, false);
     if (del.newGraph.has(newPos)) {
         return undefined;
     }
@@ -405,11 +414,13 @@ function removeNodeEdit(node) {
     return new Edit(
         () => `delete ${node} and its edges.`,
         graph => {
-            for (let e of graph.activeUnitEdgesOf(node)) {
-                removeEdgeEdit(e).action(graph);
-            }
+            let result = _deleteNodeAndAttachedEdges(graph, node, true);
+            graph.nodes = result.newGraph.nodes;
+            graph.edges = result.newGraph.edges;
         },
         (graph, ctx) => {
+            let result = _deleteNodeAndAttachedEdges(graph, node, true);
+
             ctx.beginPath();
             ctx.arc(...nodeToXy(node), 4, 0, 2*Math.PI);
             ctx.fillStyle = 'red';
@@ -417,7 +428,7 @@ function removeNodeEdit(node) {
             ctx.fill();
             ctx.globalAlpha *= 2;
 
-            for (let e of graph.activeUnitEdgesOf(node)) {
+            for (let e of result.removedEdges) {
                 let [n1, n2] = e.nodes();
                 let [x1, y1] = nodeToXy(n1);
                 let [x2, y2] = nodeToXy(n2);
