@@ -1,29 +1,15 @@
-/**
- * Entry point for the whole program.
- */
-
-import {DetailedError} from 'src/base/DetailedError.js'
-import {describe} from "src/base/Describe.js";
-import {Revision} from "src/base/Revision.js";
-import {Reader, Writer} from "src/base/Serialize.js";
-import {GeneralMap} from "src/base/GeneralMap.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
 import {ZxGraph, ZxEdge, ZxNode, ZxPort} from "src/sim/ZxGraph.js";
 import {ZxNodeDrawArgs} from "src/nodes/ZxNodeKind.js";
 import {NODES} from "src/nodes/All.js";
-import {evalZxGraph} from "src/sim/ZxGraphEval.js";
-import {Util} from "src/base/Util.js";
-import {MathPainter} from "src/MathPainter.js";
-import {Painter} from "src/Painter.js";
-import {Rect} from "src/base/Rect.js";
-import {Seq, seq} from "src/base/Seq.js";
+import {seq} from "src/base/Seq.js";
 
 
 class Edit {
     /**
      * @param {!function() : !string} describe
      * @param {!function(!ZxGraph)} action
-     * @param {!function(!ZxGraph, !CanvasRenderingContext2D)} preview
+     * @param {!function(!DisplayedZxGraph, !CanvasRenderingContext2D)} preview
      */
     constructor(describe, action, preview) {
         this.describe = describe;
@@ -36,29 +22,6 @@ class Edit {
     }
 }
 
-
-/**
- * @param {!ZxNode} n
- * @returns {![!number, !number]}
- */
-function nodeToXy(n) {
-    return [-100 + n.x * 50, -100 + n.y * 50];
-}
-
-/**
- * @param {!ZxNode|!ZxEdge} element
- * @returns {![!number, !number]}
- */
-function graphElementToCenterXy(element) {
-    if (element instanceof ZxNode) {
-        return nodeToXy(element);
-    } else {
-        let [n1, n2] = element.nodes();
-        let [x1, y1] = nodeToXy(n1);
-        let [x2, y2] = nodeToXy(n2);
-        return [(x1 + x2) / 2, (y1 + y2) / 2];
-    }
-}
 
 /**
  * Removes an edge from the graph, along with its leaf nodes.
@@ -76,10 +39,10 @@ function removeEdgeEdit(edge) {
                 }
             }
         },
-        (graph, ctx) => {
+        (displayed, ctx) => {
             let [n1, n2] = edge.nodes();
-            let [x1, y1] = nodeToXy(n1);
-            let [x2, y2] = nodeToXy(n2);
+            let [x1, y1] = displayed.nodeToXy(n1);
+            let [x2, y2] = displayed.nodeToXy(n2);
             ctx.beginPath();
             ctx.moveTo(x1, y1);
             ctx.lineTo(x2, y2);
@@ -90,9 +53,9 @@ function removeEdgeEdit(edge) {
             ctx.stroke();
 
             for (let n of [n1, n2]) {
-                if (graph.activeUnitEdgesOf(n).length === 1) {
+                if (displayed.graph.activeUnitEdgesOf(n).length === 1) {
                     ctx.beginPath();
-                    ctx.arc(...nodeToXy(n), 4, 0, 2*Math.PI);
+                    ctx.arc(...displayed.nodeToXy(n), 4, 0, 2*Math.PI);
                     ctx.fillStyle = 'red';
                     ctx.globalAlpha *= 0.5;
                     ctx.fill();
@@ -119,10 +82,10 @@ function maybeRemoveEdgeModifier(graphAtFocusTime, edge) {
         graph => {
             graph.edges.set(edge, '-');
         },
-        (graph, ctx) => {
+        (displayed, ctx) => {
             let [n1, n2] = edge.nodes();
-            let [x1, y1] = nodeToXy(n1);
-            let [x2, y2] = nodeToXy(n2);
+            let [x1, y1] = displayed.nodeToXy(n1);
+            let [x2, y2] = displayed.nodeToXy(n2);
             let [cx, cy] = [(x1+x2)/2, (y1+y2)/2];
 
             ctx.beginPath();
@@ -144,10 +107,10 @@ function setElementKindEdit(element, kind) {
     return new Edit(
         () => `set ${element} kind to ${kind}`,
         graph => graph.setKind(element, kind),
-        (graph, ctx) => {
+        (displayed, ctx) => {
             let nodeKind = NODES.map.get(kind);
             ctx.save();
-            ctx.translate(...graphElementToCenterXy(element));
+            ctx.translate(...displayed.graphElementToCenterXy(element));
             if (nodeKind !== undefined) {
                 nodeKind.contentDrawer(ctx, new ZxNodeDrawArgs(graph, element));
             }
@@ -170,11 +133,11 @@ function maybeRemoveConnectingPathEdit(graphAtFocusTime, elementOnPath) {
     return new Edit(
         () => `delete connecting path touching ${elementOnPath}`,
         graph => graph.deletePath(path),
-        (graph, ctx) => {
+        (displayed, ctx) => {
             for (let edge of path) {
                 let [n1, n2] = edge.nodes();
-                let [x1, y1] = nodeToXy(n1);
-                let [x2, y2] = nodeToXy(n2);
+                let [x1, y1] = displayed.nodeToXy(n1);
+                let [x2, y2] = displayed.nodeToXy(n2);
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
@@ -209,9 +172,9 @@ function maybeContractNodeEdit(graphAtFocusTime, node) {
                 graph.nodes.set(node, '+');
             }
         },
-        (graph, ctx) => {
+        (displayed, ctx) => {
             ctx.beginPath();
-            ctx.arc(...nodeToXy(node), 4, 0, 2*Math.PI);
+            ctx.arc(...displayed.nodeToXy(node), 4, 0, 2*Math.PI);
             ctx.fillStyle = 'red';
             ctx.globalAlpha *= 0.5;
             ctx.fill();
@@ -327,7 +290,7 @@ function _deleteNodeAndAttachedEdges(graph, node, includingOrphans) {
         }
         let extended = newGraph.extendedUnblockedPath(port.edge);
         removedEdges.push(...extended);
-        newGraph.deletePath(extended, false, false);
+        newGraph.deletePath(extended, false);
         let oppNode = edgePathToEdge(extended).opposite(port.node);
         let newDegree = newGraph.activeUnitEdgesOf(oppNode).length;
         if (includingOrphans && newDegree === 0) {
@@ -373,11 +336,11 @@ function maybeDragNodeEdit(graphAtFocusTime, oldPos, newPos) {
             graph.nodes = result.newGraph.nodes;
             graph.edges = result.newGraph.edges;
         },
-        (graph, ctx) => {
+        (displayed, ctx) => {
             for (let e of del.removedEdges) {
                 let [n1, n2] = e.nodes();
-                let [x1, y1] = nodeToXy(n1);
-                let [x2, y2] = nodeToXy(n2);
+                let [x1, y1] = displayed.nodeToXy(n1);
+                let [x2, y2] = displayed.nodeToXy(n2);
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);
@@ -390,8 +353,8 @@ function maybeDragNodeEdit(graphAtFocusTime, oldPos, newPos) {
             for (let p of result.newPaths) {
                 for (let e of p) {
                     let [n1, n2] = e.nodes();
-                    let [x1, y1] = nodeToXy(n1);
-                    let [x2, y2] = nodeToXy(n2);
+                    let [x1, y1] = displayed.nodeToXy(n1);
+                    let [x2, y2] = displayed.nodeToXy(n2);
                     ctx.beginPath();
                     ctx.moveTo(x1, y1);
                     ctx.lineTo(x2, y2);
@@ -416,11 +379,11 @@ function removeNodeEdit(node) {
             graph.nodes = result.newGraph.nodes;
             graph.edges = result.newGraph.edges;
         },
-        (graph, ctx) => {
-            let result = _deleteNodeAndAttachedEdges(graph, node, true);
+        (displayed, ctx) => {
+            let result = _deleteNodeAndAttachedEdges(displayed.graph, node, true);
 
             ctx.beginPath();
-            ctx.arc(...nodeToXy(node), 4, 0, 2*Math.PI);
+            ctx.arc(...displayed.nodeToXy(node), 4, 0, 2*Math.PI);
             ctx.fillStyle = 'red';
             ctx.globalAlpha *= 0.5;
             ctx.fill();
@@ -428,8 +391,8 @@ function removeNodeEdit(node) {
 
             for (let e of result.removedEdges) {
                 let [n1, n2] = e.nodes();
-                let [x1, y1] = nodeToXy(n1);
-                let [x2, y2] = nodeToXy(n2);
+                let [x1, y1] = displayed.nodeToXy(n1);
+                let [x2, y2] = displayed.nodeToXy(n2);
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
                 ctx.lineTo(x2, y2);

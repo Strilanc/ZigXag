@@ -14,18 +14,13 @@ window.onerror = function(msg, url, line, col, error) {
 };
 
 import {Revision} from "src/base/Revision.js";
-import {Reader, Writer} from "src/base/Serialize.js";
-import {GeneralMap} from "src/base/GeneralMap.js";
-import {equate} from "src/base/Equate.js";
-import {GeneralSet} from "src/base/GeneralSet.js";
 import {ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js";
 import {evalZxGraph} from "src/sim/ZxGraphEval.js";
 import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js";
-import {Util} from "src/base/Util.js";
 import {MathPainter} from "src/MathPainter.js";
 import {Painter} from "src/Painter.js";
 import {Rect} from "src/base/Rect.js";
-import {Seq, seq} from "src/base/Seq.js";
+import {seq} from "src/base/Seq.js";
 import {
     Edit,
     removeEdgeEdit,
@@ -39,6 +34,8 @@ import {
 import {NODES} from "src/nodes/All.js";
 import {makeNodeRingMenu} from "src/ui/RingMenu.js"
 import {ZxNodeDrawArgs} from "src/nodes/ZxNodeKind.js";
+import {Point} from "src/base/Point.js";
+import {floodFillNodeAndUnitEdgeSpace, DisplayedZxGraph} from "src/ui/DisplayedZxGraph.js";
 
 /**
  * @returns {!string}
@@ -73,114 +70,26 @@ let curMouseButton = undefined;
 let mouseDownX = undefined;
 let mouseDownY = undefined;
 let menuNode = undefined;
+let currentlyDisplayedZxGraph = new DisplayedZxGraph();
 
 
-let curGraph = /** @type {undefined|!ZxGraph} */ undefined;
 let revision = new Revision([initialCommit()], 0, false);
-
-
-/**
- * @param {!ZxNode} n
- * @returns {![!number, !number]}
- */
-function nodeToXy(n) {
-    return [-100 + n.x * 50, -100 + n.y * 50];
-}
-
-/**
- * @param {!ZxNode|!ZxEdge} element
- * @yields {!ZxNodePos|!ZxEdgePos}
- */
-function* floodFillNodeAndUnitEdgeSpace(element) {
-    let queue = [element];
-    let seen = new GeneralSet();
-    while (queue.length >= 0) {
-        let next = queue.shift();
-        if (seen.has(next)) {
-            continue;
-        }
-        seen.add(next);
-        yield next;
-        if (next instanceof ZxNode) {
-            queue.push(...next.unitEdges())
-        } else {
-            queue.push(...next.nodes())
-        }
-    }
-}
-
-/**
- * @param {!ZxNode|!ZxEdge} element
- * @returns {![!number, !number]}
- */
-function graphElementToCenterXy(element) {
-    if (element instanceof ZxNode) {
-        return nodeToXy(element);
-    } else {
-        let [n1, n2] = element.nodes();
-        let [x1, y1] = nodeToXy(n1);
-        let [x2, y2] = nodeToXy(n2);
-        return [(x1 + x2) / 2, (y1 + y2) / 2];
-    }
-}
-
-/**
- * @param {!number} x
- * @param {!number} y
- * @param {!ZxNode|!ZxEdge} element
- */
-function xyDistanceToGraphElement(x, y, element) {
-    let [cx, cy] = graphElementToCenterXy(element);
-    let dx = x - cx;
-    let dy = y - cy;
-    return Math.sqrt(dx*dx + dy*dy);
-}
-
-/**
- * @param {!number|undefined} x
- * @param {!number|undefined} y
- * @returns {undefined|!ZxNode|!ZxEdge}
- */
-function xyToNode(x, y) {
-    if (x === undefined || y === undefined) {
-        return undefined;
-    }
-    let nx = Math.floor((x + 100) / 50 + 0.5);
-    let ny = Math.floor((y + 100) / 50 + 0.5);
-    return new ZxNode(nx, ny);
-}
-
-/**
- * @param {!number|undefined} x
- * @param {!number|undefined} y
- * @returns {undefined|!ZxNode|!ZxEdge}
- */
-function xyToGraphElement(x, y) {
-    if (x === undefined || y === undefined) {
-        return undefined;
-    }
-    let nx = Math.floor((x + 100) / 50 + 0.25);
-    let ny = Math.floor((y + 100) / 50 + 0.25);
-    let region = seq(floodFillNodeAndUnitEdgeSpace(new ZxNode(nx, ny))).take(20);
-    region = region.filter(e => e instanceof ZxEdge || curGraph.has(e));
-    return region.minBy(e => xyDistanceToGraphElement(x, y, e));
-}
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
- * @param {!ZxGraph} graph
+ * @param {!DisplayedZxGraph} displayed
  * @param {!ZxNode} node
  * @param {!number=} radius
  * @param {!string=} fill
  * @param {!string=} stroke
  */
-function drawNode(ctx, graph, node, radius=8, fill=undefined, stroke=undefined) {
-    let kind = graph.nodes.get(node);
+function drawNode(ctx, displayed, node, radius=8, fill=undefined, stroke=undefined) {
+    let kind = displayed.graph.nodes.get(node);
     let nodeKind = NODES.map.get(kind);
     if (nodeKind !== undefined) {
         ctx.save();
-        ctx.translate(...nodeToXy(node));
-        nodeKind.contentDrawer(ctx, new ZxNodeDrawArgs(graph, node));
+        ctx.translate(...displayed.nodeToXy(node));
+        nodeKind.contentDrawer(ctx, new ZxNodeDrawArgs(displayed.graph, node));
         ctx.restore();
         return;
     }
@@ -194,7 +103,7 @@ function drawNode(ctx, graph, node, radius=8, fill=undefined, stroke=undefined) 
         ctx.fillStyle = 'red';
     }
     ctx.beginPath();
-    ctx.arc(...nodeToXy(node), radius, 0, 2*Math.PI);
+    ctx.arc(...displayed.nodeToXy(node), radius, 0, 2*Math.PI);
     ctx.fill();
     ctx.stroke();
     ctx.lineWidth = 1;
@@ -202,17 +111,18 @@ function drawNode(ctx, graph, node, radius=8, fill=undefined, stroke=undefined) 
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
+ * @param {!DisplayedZxGraph} displayed
  * @param {!ZxEdge} edge
  * @param {!number=} thickness
  * @param {!string=} color
  * @param {!boolean} showKind
  */
-function drawEdge(ctx, edge, thickness=1, color='black', showKind=true) {
-    let kind = curGraph.edges.get(edge);
+function drawEdge(ctx, displayed, edge, thickness=1, color='black', showKind=true) {
+    let kind = displayed.graph.edges.get(edge);
     let [n1, n2] = edge.nodes();
     ctx.beginPath();
-    let [x1, y1] = nodeToXy(n1);
-    let [x2, y2] = nodeToXy(n2);
+    let [x1, y1] = displayed.nodeToXy(n1);
+    let [x2, y2] = displayed.nodeToXy(n2);
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.strokeStyle = color;
@@ -221,15 +131,15 @@ function drawEdge(ctx, edge, thickness=1, color='black', showKind=true) {
 
     if (showKind) {
         let nodeKind = NODES.map.get(kind);
-        let [cx, cy] = graphElementToCenterXy(edge);
+        let [cx, cy] = displayed.graphElementToCenterXy(edge);
         if (nodeKind !== undefined) {
             ctx.save();
-            ctx.translate(...graphElementToCenterXy(edge));
+            ctx.translate(...displayed.graphElementToCenterXy(edge));
             let fakeGraph = new ZxGraph();
             let fakeNode = new ZxNode(cx*2, cy*2);
-            fakeGraph.nodes.set(new ZxNode(x1*2, y1*2), curGraph.kind(n1));
+            fakeGraph.nodes.set(new ZxNode(x1*2, y1*2), displayed.graph.kind(n1));
             fakeGraph.nodes.set(fakeNode, kind);
-            fakeGraph.nodes.set(new ZxNode(x2*2, y2*2), curGraph.kind(n2));
+            fakeGraph.nodes.set(new ZxNode(x2*2, y2*2), displayed.graph.kind(n2));
             nodeKind.contentDrawer(ctx, new ZxNodeDrawArgs(fakeGraph, fakeNode));
             ctx.restore();
             return;
@@ -247,53 +157,55 @@ function drawEdge(ctx, edge, thickness=1, color='black', showKind=true) {
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
+ * @param {!DisplayedZxGraph} displayed
  */
-function drawFadedNearbyRegion(ctx) {
-    let element = xyToGraphElement(mouseX, mouseY);
+function drawFadedNearbyRegion(ctx, displayed) {
+    let element = displayed.xyToGraphElement(mouseX, mouseY);
     if (element === undefined) {
         return;
     }
 
     ctx.globalAlpha *= 0.25;
     let nearby = seq(floodFillNodeAndUnitEdgeSpace(element)).take(150);
-    let [cx, cy] = graphElementToCenterXy(element);
+    let [cx, cy] = displayed.graphElementToCenterXy(element);
     for (let e of nearby) {
-        if (curGraph.has(e) || !(e instanceof ZxEdge)) {
+        if (displayed.graph.has(e) || !(e instanceof ZxEdge)) {
             continue;
         }
 
-        let [ex, ey] = graphElementToCenterXy(e);
+        let [ex, ey] = displayed.graphElementToCenterXy(e);
         if (Math.abs(ex - cx) >= 100 || Math.abs(ey - cy) >= 100) {
             continue;
         }
 
-        drawEdge(ctx, e, undefined, 'gray', false);
+        drawEdge(ctx, displayed, e, undefined, 'gray', false);
     }
     ctx.globalAlpha *= 4;
 }
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
+ * @param {!DisplayedZxGraph} displayed
  */
-function drawFocus(ctx) {
+function drawFocus(ctx, displayed) {
     ctx.globalAlpha *= 0.5;
-    let element = xyToGraphElement(mouseX, mouseY);
+    let element = displayed.xyToGraphElement(mouseX, mouseY);
     if (element !== undefined) {
         // Draw connecting path.
         let drewPath = false;
-        if (curGraph.has(element)) {
-            let path = curGraph.extendedUnblockedPath(element, false);
+        if (displayed.graph.has(element)) {
+            let path = displayed.graph.extendedUnblockedPath(element, false);
             for (let e of path) {
                 drewPath = true;
-                drawEdge(ctx, e, 7, 'gray', false);
+                drawEdge(ctx, displayed, e, 7, 'gray', false);
             }
         }
 
         if (element instanceof ZxNode) {
-            drawNode(ctx, curGraph, element, curGraph.has(element) ? 12 : 7, 'gray', '#00000000');
+            drawNode(ctx, displayed, element, displayed.graph.has(element) ? 12 : 7, 'gray', '#00000000');
         } else if (element instanceof ZxEdge) {
             if (!drewPath) {
-                drawEdge(ctx, element, 7, 'gray', false);
+                drawEdge(ctx, displayed, element, 7, 'gray', false);
             }
         }
     }
@@ -302,8 +214,9 @@ function drawFocus(ctx) {
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
+ * @param{!DisplayedZxGraph} displayed
  */
-function drawPossibleEdit(ctx) {
+function drawPossibleEdit(ctx, displayed) {
     let deletePref = curWantDeleteEdit();
     let choices = deletePref === undefined ? [false, true] : [deletePref];
 
@@ -313,9 +226,9 @@ function drawPossibleEdit(ctx) {
 
     let drewEdit = false;
     for (let choice of choices) {
-        let edit = pickEdit(choice, mouseX, mouseY);
+        let edit = pickEdit(displayed, choice, mouseX, mouseY);
         if (edit !== undefined) {
-            edit.drawPreview(curGraph, ctx);
+            edit.drawPreview(displayed, ctx);
             drewEdit = true;
         }
     }
@@ -341,14 +254,17 @@ let prevResults = undefined;
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
+ * @param {!DisplayedZxGraph} displayed
+ * @param {!boolean=} checkGroundTruth
  */
-function drawResults(ctx) {
-    if (!curGraph.isEqualTo(prevGraph)) {
-        prevResults = evalZxGraph(curGraph);
-        prevGraph = curGraph;
+function drawResults(ctx, displayed, checkGroundTruth=false) {
+    let graph = displayed.graph;
+    if (!graph.isEqualTo(prevGraph)) {
+        prevResults = evalZxGraph(graph);
+        prevGraph = graph;
     }
     let results = prevResults;
-    let numIn = curGraph.inputNodes().length;
+    let numIn = graph.inputNodes().length;
     function descStabilizer(s) {
         let r = s.toString();
         return `${r.slice(0, 1)}${r.slice(1, numIn+1)}→${r.slice(numIn+1)}`;
@@ -369,7 +285,7 @@ function drawResults(ctx) {
     setIfDiffers(
         textDiagramPre,
         'innerText',
-        curGraph.toString(true));
+        graph.toString(true));
     setIfDiffers(
         satisfiablePre,
         'innerText',
@@ -378,64 +294,98 @@ function drawResults(ctx) {
             `Chance of post-selection succeeding: ${results.successProbability * 100}%`
         ].join('\n'));
 
-    let s = new Rect(canvas.clientWidth - 300, 0, 300, 300);
+    let waveRect = new Rect(canvas.clientWidth - 300, 0, 300, 300);
     let painter = new Painter(ctx);
     MathPainter.paintMatrix(
         painter,
         results.wavefunction,
-        s,
+        waveRect,
         undefined,
         undefined,
         results.satisfiable ? undefined : 'red');
 
-    let groundTruth = evalZxGraphGroundTruth(curGraph);
-    let groundSatisfiable = !groundTruth.isZero(1e-8);
-    let detectedBadSimulationResult = false;
-    if (groundSatisfiable && results.satisfiable) {
-        let matchedGround = groundTruth.phaseMatchedTo(results.wavefunction, true);
-        if (!matchedGround.isApproximatelyEqualTo(results.wavefunction, 1e-8)) {
-            // Disagreed about satisfiable result.
+    if (checkGroundTruth) {
+        let groundTruth = evalZxGraphGroundTruth(graph);
+        let groundSatisfiable = !groundTruth.isZero(1e-8);
+        let detectedBadSimulationResult = false;
+        if (groundSatisfiable && results.satisfiable) {
+            let matchedGround = groundTruth.phaseMatchedTo(results.wavefunction, true);
+            if (!matchedGround.isApproximatelyEqualTo(results.wavefunction, 1e-8)) {
+                // Disagreed about satisfiable result.
+                detectedBadSimulationResult = true;
+            }
+        } else if (groundSatisfiable !== results.satisfiable) {
+            // Disagreed about satisfiability.
             detectedBadSimulationResult = true;
         }
-    } else if (groundSatisfiable !== results.satisfiable) {
-        // Disagreed about satisfiability.
-        detectedBadSimulationResult = true;
+        if (detectedBadSimulationResult) {
+            ctx.globalAlpha *= 0.5;
+            MathPainter.paintMatrix(painter, groundTruth, waveRect, 'red', 'black', '#00000000', '#FFFF00A0');
+            ctx.globalAlpha *= 2;
+        }
     }
-    if (detectedBadSimulationResult) {
-        ctx.globalAlpha *= 0.5;
-        MathPainter.paintMatrix(painter, groundTruth, s, 'red', 'black', '#00000000', '#FFFF00A0');
-        ctx.globalAlpha *= 2;
+
+    if (results.successProbability !== 1) {
+        let loss = Math.log2(results.successProbability);
+        painter.printParagraph(
+            [
+                `Chance of success: ${Math.round(results.successProbability*100)}%`,
+                `(${Math.round(-loss)} coin flips)`
+            ].join('\n'),
+            waveRect.takeBottom(100).proportionalShiftedBy(0, 1),
+            new Point(0.5, 0.5),
+            'red',
+            20);
     }
+}
+
+/**
+ * @param {!DisplayedZxGraph} displayed
+ * @param {!ZxNode} node
+ * @returns {![!number, !number]}
+ */
+function nodeToMenuXy(displayed, node) {
+    let [x, y] = displayed.nodeToXy(node);
+    x = Math.max(x, 170);
+    y = Math.max(y, 140);
+    return [x, y];
 }
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
+ * @param {!DisplayedZxGraph} displayed
  */
-function drawGraph(ctx) {
-    for (let edge of curGraph.edges.keys()) {
-        drawEdge(ctx, edge);
+function drawGraph(ctx, displayed) {
+    let graph = displayed.graph;
+    for (let edge of graph.edges.keys()) {
+        drawEdge(ctx, displayed, edge);
     }
-    for (let node of curGraph.nodes.keys()) {
-        if (curGraph.kind(node) !== '+') {
-            drawNode(ctx, curGraph, node);
+    for (let node of graph.nodes.keys()) {
+        if (graph.kind(node) !== '+') {
+            drawNode(ctx, displayed, node);
         }
     }
 }
 
-/**
- * @param {!ZxNode} node
- * @returns {![!number, !number]}
- */
-function nodeToMenuXy(node) {
-    let [x, y] = nodeToXy(node);
-    x = Math.max(x, 150);
-    y = Math.max(y, 135);
-    return [x, y];
-}
-
+let _drawRequested = false;
 function draw() {
-    canvas.width = canvasDiv.clientWidth;
-    canvas.height = 600;
+    let displayed = currentlyDisplayedZxGraph;
+
+    //noinspection JSUnresolvedVariable
+    let t = performance.now();
+    if (!_drawRequested && t < displayed.interpolateEndTime) {
+        _drawRequested = true;
+        requestAnimationFrame(() => {
+            _drawRequested = false;
+            draw();
+        });
+
+    }
+    displayed.interpolateTick(t);
+
+    let drawBox = displayed.boundingDrawBox(true);
+    canvas.width = Math.max(canvasDiv.clientWidth, drawBox.x + drawBox.w);
+    canvas.height = Math.max(400, drawBox.y + drawBox.h);
 
     let ctx = /** @type {!CanvasRenderingContext2D} */ canvas.getContext('2d');
     ctx.clearRect(0, 0, 10000, 10000);
@@ -443,15 +393,15 @@ function draw() {
     ctx.save();
     try {
         if (menuNode === undefined) {
-            drawFocus(ctx);
+            drawFocus(ctx, displayed);
         }
         try {
-            drawResults(ctx);
-            drawFadedNearbyRegion(ctx);
+            drawResults(ctx, displayed);
+            drawFadedNearbyRegion(ctx, displayed);
         } finally {
-            drawGraph(ctx);
+            drawGraph(ctx, displayed);
             if (menuNode === undefined) {
-                drawPossibleEdit(ctx);
+                drawPossibleEdit(ctx, displayed);
             }
         }
 
@@ -459,14 +409,14 @@ function draw() {
             ctx.save();
             ctx.globalAlpha *= 0.85;
             ctx.beginPath();
-            let [nx, ny] = nodeToXy(menuNode);
+            let [nx, ny] = displayed.nodeToXy(menuNode);
             ctx.arc(nx, ny, 1000, 0, 2*Math.PI);
             ctx.lineWidth = 1950;
             ctx.strokeStyle = 'white';
             ctx.stroke();
             ctx.restore();
 
-            let [x, y] = nodeToMenuXy(menuNode);
+            let [x, y] = nodeToMenuXy(displayed, menuNode);
             makeNodeRingMenu().draw(ctx, x, y, curShiftKey, mouseX, mouseY);
         }
     } finally {
@@ -477,7 +427,7 @@ function draw() {
 let keyListeners = /** @type {!Map.<!int, !Array.<!function(!KeyboardEvent)>>} */ new Map();
 
 /**
- * @param {!MouseEvent|!Touch} ev
+ * @param {!MouseEvent} ev
  * @param {!HTMLElement} element
  * @returns {![!number, !number]}
  */
@@ -488,17 +438,19 @@ function eventPosRelativeTo(ev, element) {
 
 
 /**
+ * @param {!DisplayedZxGraph} displayedAtCreationTime
  * @param {!ZxEdge} edge
  * @returns {undefined|!Edit}
  */
-function maybeExtendAlongEdgeEdit(edge) {
-    if (curGraph.edges.has(edge)) {
+function maybeExtendAlongEdgeEdit(displayedAtCreationTime, edge) {
+    let graph = displayedAtCreationTime.graph;
+    if (graph.edges.has(edge)) {
         return undefined;
     }
 
     let [n1, n2] = edge.nodes();
-    let b1 = curGraph.nodes.has(n1);
-    let b2 = curGraph.nodes.has(n2);
+    let b1 = graph.nodes.has(n1);
+    let b2 = graph.nodes.has(n2);
     if (b1 === b2) {
         return undefined;
     }
@@ -516,9 +468,9 @@ function maybeExtendAlongEdgeEdit(edge) {
             graph.nodes.set(n2, kind);
             graph.edges.set(edge, '-');
         },
-        (graph, ctx) => {
-            let [x1, y1] = nodeToXy(n1);
-            let [x2, y2] = nodeToXy(n2);
+        (displayed, ctx) => {
+            let [x1, y1] = displayed.nodeToXy(n1);
+            let [x2, y2] = displayed.nodeToXy(n2);
             let dx = x2 - x1;
             let dy = y2 - y1;
             let d = Math.sqrt(dx * dx + dy * dy);
@@ -538,13 +490,14 @@ function maybeExtendAlongEdgeEdit(edge) {
 }
 
 
-    /**
+/**
+ * @param {!DisplayedZxGraph} displayed
  * @param {!ZxNode} node
  * @returns {undefined|!Edit}
  */
-function maybeExtendToNodeEdit(node) {
+function maybeExtendToNodeEdit(displayed, node) {
     for (let edge of node.unitEdges()) {
-        let edit = maybeExtendAlongEdgeEdit(edge);
+        let edit = maybeExtendAlongEdgeEdit(displayed, edge);
         if (edit !== undefined) {
             return edit;
         }
@@ -553,19 +506,21 @@ function maybeExtendToNodeEdit(node) {
 }
 
 /**
+ * @param {!DisplayedZxGraph} displayed
  * @param {!ZxNode} node
  * @returns {undefined|!Edit}
  */
-function maybeRetractNodeEdit(node) {
-    let edges = curGraph.activeUnitEdgesOf(node);
+function maybeRetractNodeEdit(displayed, node) {
+    let graph = displayed.graph;
+    let edges = graph.activeUnitEdgesOf(node);
     if (edges.length !== 1) {
         return undefined;
     }
     let edge = edges[0];
     let opp = edge.opposite(node);
-    let oppDeg = curGraph.activeUnitEdgesOf(opp).length;
-    let kind = curGraph.nodes.get(node);
-    let oppKind = curGraph.nodes.get(opp);
+    let oppDeg = graph.activeUnitEdgesOf(opp).length;
+    let kind = graph.nodes.get(node);
+    let oppKind = graph.nodes.get(opp);
     let acceptableOverwrites = ['@', 'O'];
 
     if (oppDeg !== 2) {
@@ -583,9 +538,9 @@ function maybeRetractNodeEdit(node) {
             graph.nodes.delete(node);
             graph.nodes.set(opp, kind);
         },
-        (graph, ctx) => {
-            let [x1, y1] = nodeToXy(node);
-            let [x2, y2] = nodeToXy(opp);
+        (displayed, ctx) => {
+            let [x1, y1] = displayed.nodeToXy(node);
+            let [x2, y2] = displayed.nodeToXy(opp);
             let dx = x2 - x1;
             let dy = y2 - y1;
             let d = Math.sqrt(dx*dx + dy*dy);
@@ -611,12 +566,13 @@ function maybeRetractNodeEdit(node) {
 
 
 /**
+ * @param {!DisplayedZxGraph} displayed
  * @param {!ZxEdge} edge
  * @returns {undefined|!Edit}
  */
-function maybeContractEdgeEdit(edge) {
+function maybeContractEdgeEdit(displayed, edge) {
     for (let node of edge.nodes()) {
-        let edit = maybeRetractNodeEdit(node);
+        let edit = maybeRetractNodeEdit(displayed, node);
         if (edit !== undefined) {
             return edit;
         }
@@ -626,64 +582,27 @@ function maybeContractEdgeEdit(edge) {
 
 
 /**
+ * @param {!DisplayedZxGraph} displayed
  * @param {!ZxNode|!ZxEdge} element
  * @returns {undefined|!Edit}
  */
-function maybeDeleteElementEdit(element) {
-    if (!curGraph.has(element)) {
+function maybeDeleteElementEdit(displayed, element) {
+    let graph = displayed.graph;
+    if (!graph.has(element)) {
         return undefined;
     }
 
     if (element instanceof ZxNode) {
-        return (maybeRemoveConnectingPathEdit(curGraph, element) ||
-            maybeContractNodeEdit(curGraph, element) ||
-            maybeRetractNodeEdit(element) ||
+        return (maybeRemoveConnectingPathEdit(graph, element) ||
+            maybeContractNodeEdit(graph, element) ||
+            maybeRetractNodeEdit(displayed, element) ||
             removeNodeEdit(element));
     } else if (element instanceof ZxEdge) {
-        return (maybeRemoveEdgeModifier(curGraph, element) ||
-            maybeRemoveConnectingPathEdit(curGraph, element) ||
-            maybeContractEdgeEdit(element) ||
+        return (maybeRemoveEdgeModifier(graph, element) ||
+            maybeRemoveConnectingPathEdit(graph, element) ||
+            maybeContractEdgeEdit(displayed, element) ||
             removeEdgeEdit(element));
     }
-}
-
-
-
-/**
- * @param {!ZxNode} node
- * @returns {!Edit}
- */
-function changeNodeKindEdit(node) {
-    return new Edit(
-        () => `cycle ${node}`,
-        graph => {
-            let cycle = ['O', '@', '+', 'x', 'z', 'f', 's', 'w', 'a', 'in', 'out', 'O!', '@!'];
-            let kind = graph.nodes.get(node);
-            let i = cycle.indexOf(kind);
-            i++;
-            i %= cycle.length;
-            let degree = graph.activeUnitEdgesOf(node).length;
-            if (i === 2 && degree !== 2 && degree !== 4) {
-                i++;
-            }
-            if (i >= 9 && degree !== 1) {
-                i = 0;
-            }
-            graph.nodes.set(node, cycle[i]);
-        },
-        (graph, ctx) => {
-            let [x, y] = nodeToXy(node);
-            x += 15;
-            y += 15;
-            ctx.beginPath();
-            ctx.arc(x, y, 8, Math.PI/2, 0);
-            ctx.strokeStyle = 'blue';
-            ctx.lineWidth = 3;
-            ctx.stroke();
-            new Painter(ctx).trace(tracer => {
-                tracer.arrowHead(x + 8, y, 4, Math.PI/2, Math.PI/2, 'stem');
-            }).thenStroke('blue').thenFill('blue');
-        });
 }
 
 
@@ -696,16 +615,16 @@ function changeEdgeKindEdit(edge) {
         () => `cycle ${edge}`,
         graph => {
             let cycle = ['-', 'h', 'x', 'z', 'f', 's', 'w', 'a'];
-            let kind = curGraph.edges.get(edge);
+            let kind = graph.edges.get(edge);
             let i = cycle.indexOf(kind);
             i++;
             i %= cycle.length;
             graph.edges.set(edge, cycle[i]);
         },
-        (graph, ctx) => {
-            let [x, y] = graphElementToCenterXy(edge);
-            x += edge.horizontal ? 0 : 15;
-            y += edge.horizontal ? 15 : 0;
+        (displayed, ctx) => {
+            let [x, y] = displayed.graphElementToCenterXy(edge);
+            x += edge.n1.x !== edge.n2.x ? 0 : 15;
+            y += edge.n1.x !== edge.n2.x ? 15 : 0;
             ctx.beginPath();
             ctx.arc(x, y, 8, Math.PI/2, 0);
             ctx.strokeStyle = 'blue';
@@ -719,14 +638,15 @@ function changeEdgeKindEdit(edge) {
 
 
 /**
+ * @param {!DisplayedZxGraph} displayed
  * @param {!ZxEdge} edge
  * @returns {undefined|!Edit}
  */
-function maybeIntroduceEdgeEdit(edge) {
+function maybeIntroduceEdgeEdit(displayed, edge) {
     // Check for blocking neighbor.
     let blockKinds = ['in', 'out'];
     for (let node of edge.nodes()) {
-        let kind = curGraph.nodes.get(node);
+        let kind = displayed.graph.nodes.get(node);
         if (blockKinds.indexOf(kind) !== -1) {
             return undefined;
         }
@@ -742,32 +662,33 @@ function maybeIntroduceEdgeEdit(edge) {
                 }
             }
         },
-        (graph, ctx) => {});
+        (displayed, ctx) => {});
 }
 
 
 /**
+ * @param {!DisplayedZxGraph} displayed
  * @param {!boolean} wantDelete
  * @param {!number|undefined} x
  * @param {!number|undefined} y
  * @returns {undefined|!Edit}
  */
-function pickEdit(wantDelete, x, y) {
+function pickEdit(displayed, wantDelete, x, y) {
     if (menuNode !== undefined) {
-        let [cx, cy] = nodeToMenuXy(menuNode);
+        let [cx, cy] = nodeToMenuXy(displayed, menuNode);
         let selection = makeNodeRingMenu().entryAt(cx, cy, x, y);
         if (selection !== undefined) {
             if (selection.id === 'del') {
-                return maybeDeleteElementEdit(menuNode);
+                return maybeDeleteElementEdit(displayed, menuNode);
             }
             return setElementKindEdit(menuNode, selection.id);
         }
         return undefined;
     }
 
-    let oldElement = xyToGraphElement(mouseDownX, mouseDownY);
-    let element = xyToGraphElement(x, y);
-    let nearestNode = xyToNode(x, y);
+    let oldElement = displayed.xyToGraphElement(mouseDownX, mouseDownY);
+    let element = displayed.xyToGraphElement(x, y);
+    let nearestNode = displayed.xyToNode(x, y);
 
     if (element === undefined) {
         return undefined;
@@ -776,8 +697,8 @@ function pickEdit(wantDelete, x, y) {
             curMouseButton === 1 &&
             oldElement instanceof ZxNode &&
             nearestNode instanceof ZxNode &&
-            curGraph.has(oldElement)) {
-        let result = maybeDragNodeEdit(curGraph, oldElement, nearestNode);
+            displayed.graph.has(oldElement)) {
+        let result = maybeDragNodeEdit(displayed.graph, oldElement, nearestNode);
         if (result !== undefined) {
             return result;
         }
@@ -788,23 +709,19 @@ function pickEdit(wantDelete, x, y) {
     }
 
     if (wantDelete) {
-        return maybeDeleteElementEdit(element);
+        return maybeDeleteElementEdit(displayed, element);
     }
 
     if (element instanceof ZxNode) {
-        if (curGraph.has(element)) {
-            return changeNodeKindEdit(element);
-        }
-
-        return maybeExtendToNodeEdit(element);
+        return maybeExtendToNodeEdit(displayed, element);
     }
 
     if (element instanceof ZxEdge) {
-        if (curGraph.has(element)) {
+        if (displayed.graph.has(element)) {
             return changeEdgeKindEdit(element);
         }
 
-        return maybeExtendAlongEdgeEdit(element) || maybeIntroduceEdgeEdit(element);
+        return maybeExtendAlongEdgeEdit(displayed, element) || maybeIntroduceEdgeEdit(displayed, element);
     }
 }
 
@@ -831,6 +748,7 @@ canvasDiv.addEventListener('mousedown', ev => {
 });
 
 canvasDiv.addEventListener('mouseup', ev => {
+    let displayed = currentlyDisplayedZxGraph;
     if (ev.which !== 1 && ev.which !== 2) {
         return;
     }
@@ -841,18 +759,19 @@ canvasDiv.addEventListener('mouseup', ev => {
     curShiftKey = ev.shiftKey;
 
     if (menuNode === undefined) {
-        let startNode = xyToGraphElement(mouseDownX, mouseDownY);
-        let endNode = xyToGraphElement(x, y);
+        let startNode = displayed.xyToGraphElement(mouseDownX, mouseDownY);
+        let endNode = displayed.xyToGraphElement(x, y);
         if (startNode instanceof ZxNode && startNode.isEqualTo(endNode) && ev.which === 1) {
+            //noinspection JSUnusedAssignment
             menuNode = startNode;
             draw();
             return;
         }
     }
 
-    let edit = pickEdit(curWantDeleteEdit(), x, y);
+    let edit = pickEdit(displayed, curWantDeleteEdit(), x, y);
     if (edit !== undefined) {
-        let g = curGraph.copy();
+        let g = displayed.graph.copy();
         edit.action(g);
         revision.commit(g.serialize());
     }
@@ -911,20 +830,21 @@ addKeyListener('Y', ev => {
     }
 });
 
-addKeyListener(27, ev => {
+addKeyListener(27, () => {
     menuNode = undefined;
 });
 
 document.addEventListener('keydown', ev => {
+    let displayed = currentlyDisplayedZxGraph;
     curCtrlKey = ev.ctrlKey;
     curAltKey = ev.altKey;
     curShiftKey = ev.shiftKey;
 
     if (!curAltKey && !curCtrlKey) {
         let entry = makeNodeRingMenu().entryForKey(ev.keyCode, curShiftKey);
-        let targetNode = menuNode || xyToGraphElement(mouseX, mouseY);
+        let targetNode = menuNode || displayed.xyToGraphElement(mouseX, mouseY);
         if (entry !== undefined && targetNode instanceof ZxNode) {
-            let copy = curGraph.copy();
+            let copy = displayed.graph.copy();
             copy.nodes.set(targetNode, entry.id);
             revision.commit(copy.serialize());
             menuNode = undefined;
@@ -958,11 +878,16 @@ document.addEventListener('keyup', ev => {
 });
 
 revision.latestActiveCommit().subscribe(text => {
-    curGraph = ZxGraph.deserialize(text);
+    let graph = ZxGraph.deserialize(text);
+    currentlyDisplayedZxGraph.graph = graph;
     document.location.hash = text;
+
+    currentlyDisplayedZxGraph.startCenteringInterpolation();
+
+    //noinspection EmptyCatchBlockJS,UnusedCatchParameterJS
     try {
         draw();
-    } catch (ex) {
+    } catch (_) {
         // Ensure subscription starts. Will be rethrown on next draw anyways.
     }
 });
