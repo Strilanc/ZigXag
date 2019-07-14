@@ -308,11 +308,11 @@ function _multiPath_fixedOrder(graph, start, ends) {
 /**
  * @param {!ZxGraph} graph
  * @param {!ZxNode} node
- * @param {!boolean} includingOrphansThatCannotBeSingletons
+ * @param {!boolean} includingOrphans
  * @returns {!{newGraph: !ZxGraph, endOfRemovedPathNodes: !Array.<!ZxNode>, removedEdges: !Array.<!ZxEdge>}}
  * @private
  */
-function _deleteNodeAndAttachedEdges(graph, node, includingOrphansThatCannotBeSingletons) {
+function _deleteNodeAndAttachedEdges(graph, node, includingOrphans) {
     let ports = graph.activePortsOf(node);
     let newGraph = graph.copy();
     if (graph.kind(node) === '+') {
@@ -326,13 +326,10 @@ function _deleteNodeAndAttachedEdges(graph, node, includingOrphansThatCannotBeSi
         }
         let extended = newGraph.extendedUnblockedPath(port.edge);
         removedEdges.push(...extended);
-        newGraph.deletePath(extended, false);
+        newGraph.deletePath(extended, false, false);
         let oppNode = edgePathToEdge(extended).opposite(port.node);
         let newDegree = newGraph.activeUnitEdgesOf(oppNode).length;
-        let oppNodeKind = newGraph.nodeKind(oppNode);
-        let allowedDegrees = oppNodeKind === undefined ? [0] : oppNodeKind.allowedDegrees;
-
-        if (includingOrphansThatCannotBeSingletons && newDegree === 0 && allowedDegrees.indexOf(0) === -1) {
+        if (includingOrphans && newDegree === 0) {
             newGraph.nodes.delete(oppNode);
         } else {
             endOfRemovedPathNodes.push(oppNode);

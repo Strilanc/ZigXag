@@ -841,9 +841,9 @@ class ZxGraph {
 
     /**
      * @param {!Iterable.<!ZxEdge>|!GeneralSet<!ZxEdge>} edgePath
-     * @param {!boolean=true} includingOrphansThatCannotBeSingletons
+     * @param {!boolean=true} includingOrphans
      */
-    deletePath(edgePath, includingOrphansThatCannotBeSingletons=true) {
+    deletePath(edgePath, includingOrphans=true) {
         for (let e of edgePath) {
             this.edges.delete(e);
         }
@@ -856,8 +856,8 @@ class ZxGraph {
                 }
                 let degree = this.activeUnitEdgesOf(n).length;
                 let allowedDegrees = NODES.map.get(kind).allowedDegrees;
-                let remove = includingOrphansThatCannotBeSingletons || kind === '+';
-                if (remove && degree === 0 && allowedDegrees.indexOf(0) === -1) {
+                let remove = includingOrphans || (kind === '+' && allowedDegrees.indexOf(0) === -1);
+                if (remove && degree === 0) {
                     this.nodes.delete(n);
                 }
             }
