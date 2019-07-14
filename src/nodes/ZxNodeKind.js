@@ -3,7 +3,7 @@ class ZxNodeKind {
      * @param {!{
      *     id: !string,
      *     description: !string,
-     *     contentDrawer: !function(ctx: !CanvasRenderingContext2D),
+     *     contentDrawer: !function(ctx: !CanvasRenderingContext2D, args: !ZxNodeDrawArgs),
      *     diagramReps: (undefined|!Array.<!string>),
      *     hotkeys: !Array.<!string>,
      *     hotkeyShiftMask: (undefined|!boolean),
@@ -68,6 +68,17 @@ const INVALID_EDGE_ACTION = {
     matrix: null,
 };
 
+class ZxNodeDrawArgs {
+    /**
+     * @param {!ZxGraph} graph
+     * @param {!ZxNode} pos
+     */
+    constructor(graph, pos) {
+        this.graph = graph;
+        this.pos = pos;
+    }
+}
+
 class TransformedMeasurement {
     /**
      * @param {!PauliProduct} originalStabilizer
@@ -101,4 +112,4 @@ measurementAxis: ${this.measurementAxis}`;
     }
 }
 
-export {TransformedMeasurement, ZxNodeKind, IDENTITY_EDGE_ACTION}
+export {TransformedMeasurement, ZxNodeKind, IDENTITY_EDGE_ACTION, ZxNodeDrawArgs}

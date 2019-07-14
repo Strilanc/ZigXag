@@ -38,6 +38,7 @@ import {
 } from "src/edit.js";
 import {NODES} from "src/nodes/All.js";
 import {makeNodeRingMenu} from "src/ui/RingMenu.js"
+import {ZxNodeDrawArgs} from "src/nodes/ZxNodeKind.js";
 
 /**
  * @returns {!string}
@@ -167,18 +168,19 @@ function xyToGraphElement(x, y) {
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
+ * @param {!ZxGraph} graph
  * @param {!ZxNode} node
  * @param {!number=} radius
  * @param {!string=} fill
  * @param {!string=} stroke
  */
-function drawNode(ctx, node, radius=8, fill=undefined, stroke=undefined) {
-    let kind = curGraph.nodes.get(node);
+function drawNode(ctx, graph, node, radius=8, fill=undefined, stroke=undefined) {
+    let kind = graph.nodes.get(node);
     let nodeKind = NODES.map.get(kind);
     if (nodeKind !== undefined) {
         ctx.save();
         ctx.translate(...nodeToXy(node));
-        nodeKind.contentDrawer(ctx);
+        nodeKind.contentDrawer(ctx, new ZxNodeDrawArgs(graph, node));
         ctx.restore();
         return;
     }
@@ -219,15 +221,20 @@ function drawEdge(ctx, edge, thickness=1, color='black', showKind=true) {
 
     if (showKind) {
         let nodeKind = NODES.map.get(kind);
+        let [cx, cy] = graphElementToCenterXy(edge);
         if (nodeKind !== undefined) {
             ctx.save();
             ctx.translate(...graphElementToCenterXy(edge));
-            nodeKind.contentDrawer(ctx);
+            let fakeGraph = new ZxGraph();
+            let fakeNode = new ZxNode(cx*2, cy*2);
+            fakeGraph.nodes.set(new ZxNode(x1*2, y1*2), curGraph.kind(n1));
+            fakeGraph.nodes.set(fakeNode, kind);
+            fakeGraph.nodes.set(new ZxNode(x2*2, y2*2), curGraph.kind(n2));
+            nodeKind.contentDrawer(ctx, new ZxNodeDrawArgs(fakeGraph, fakeNode));
             ctx.restore();
             return;
         }
 
-        let [cx, cy] = graphElementToCenterXy(edge);
         let r = [cx - 4, cy - 4, 8, 8];
         if (kind !== '-') {
             ctx.fillStyle = 'red';
@@ -283,7 +290,7 @@ function drawFocus(ctx) {
         }
 
         if (element instanceof ZxNode) {
-            drawNode(ctx, element, curGraph.has(element) ? 12 : 7, 'gray', '#00000000');
+            drawNode(ctx, curGraph, element, curGraph.has(element) ? 12 : 7, 'gray', '#00000000');
         } else if (element instanceof ZxEdge) {
             if (!drewPath) {
                 drawEdge(ctx, element, 7, 'gray', false);
@@ -410,7 +417,7 @@ function drawGraph(ctx) {
     }
     for (let node of curGraph.nodes.keys()) {
         if (curGraph.kind(node) !== '+') {
-            drawNode(ctx, node);
+            drawNode(ctx, curGraph, node);
         }
     }
 }

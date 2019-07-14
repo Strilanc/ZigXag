@@ -9,6 +9,7 @@ import {Reader, Writer} from "src/base/Serialize.js";
 import {GeneralMap} from "src/base/GeneralMap.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
 import {ZxGraph, ZxEdge, ZxNode, ZxPort} from "src/sim/ZxGraph.js";
+import {ZxNodeDrawArgs} from "src/nodes/ZxNodeKind.js";
 import {NODES} from "src/nodes/All.js";
 import {evalZxGraph} from "src/sim/ZxGraphEval.js";
 import {Util} from "src/base/Util.js";
@@ -148,7 +149,7 @@ function setElementKindEdit(element, kind) {
             ctx.save();
             ctx.translate(...graphElementToCenterXy(element));
             if (nodeKind !== undefined) {
-                nodeKind.contentDrawer(ctx);
+                nodeKind.contentDrawer(ctx, new ZxNodeDrawArgs(graph, element));
             }
             ctx.restore();
         });

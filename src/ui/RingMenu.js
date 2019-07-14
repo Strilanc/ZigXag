@@ -2,12 +2,14 @@ import {Painter} from "src/Painter.js";
 import {Rect} from "src/base/Rect.js";
 import {Point} from "src/base/Point.js";
 import {NODES} from "src/nodes/All.js";
+import {ZxNode, ZxGraph} from "src/sim/ZxGraph.js";
+import {ZxNodeDrawArgs} from "src/nodes/ZxNodeKind.js";
 
 class RingMenuEntry {
     /**
      * @param {!string} id
      * @param {!string} description
-     * @param {!function(ctx: !CanvasRenderingContext2D, x: !number, y: !number, r: !number)} contentDrawer
+     * @param {!function(ctx: !CanvasRenderingContext2D, args: !ZxNodeDrawArgs)} contentDrawer
      * @param {!number} centerAngle
      * @param {!number} centerRadius
      * @param {!number} angleSpan
@@ -181,6 +183,9 @@ class RingMenuEntry {
             ctx.restore();
         }
 
+        let graph = new ZxGraph();
+        let node = new ZxNode(0, 0);
+        let args = new ZxNodeDrawArgs(graph, node);
         ctx.save();
         try {
             ctx.translate(cx, cy);
@@ -188,7 +193,8 @@ class RingMenuEntry {
             ctx.translate((r0 + r1) / 2, 0);
             ctx.rotate(-this.centerAngle);
             ctx.rotate(normalizedQuarterAngleOffset(this.centerAngle));
-            this.contentDrawer(ctx, 0, 0);
+            graph.nodes.set(node, graph);
+            this.contentDrawer(ctx, args);
         } finally {
             ctx.restore();
         }
@@ -342,10 +348,10 @@ function makeNodeRingMenu() {
     result.entries.push(new RingMenuEntry(
         'del',
         'Delete node',
-        (ctx, x, y) => {
+        ctx => {
             ctx.fillStyle = 'red';
             ctx.font = '20px monospace';
-            ctx.fillText('DEL', x - 15, y + 5);
+            ctx.fillText('DEL', -15, +5);
         },
         Math.PI / 2 - Math.PI / 16 * 1.2,
         baseRadius + radiusStep / 2,
@@ -358,10 +364,10 @@ function makeNodeRingMenu() {
     result.entries.push(new RingMenuEntry(
         'edge',
         'Start edge',
-        (ctx, x, y) => {
+        ctx => {
             ctx.fillStyle = 'black';
             ctx.font = '18px monospace';
-            ctx.fillText('edge', x - 20, y + 5);
+            ctx.fillText('edge', -20, +5);
         },
         Math.PI / 2 + Math.PI / 16 * 1.2,
         baseRadius + radiusStep / 2,
