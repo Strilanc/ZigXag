@@ -36,31 +36,16 @@ import {makeNodeRingMenu} from "src/ui/RingMenu.js"
 import {ZxNodeDrawArgs} from "src/nodes/ZxNodeKind.js";
 import {Point} from "src/base/Point.js";
 import {floodFillNodeAndUnitEdgeSpace, DisplayedZxGraph} from "src/ui/DisplayedZxGraph.js";
-
-/**
- * @returns {!string}
- */
-function initialCommit() {
-    if (document.location.hash.length > 1) {
-        return document.location.hash.substr(1);
-    }
-
-    let g = new ZxGraph();
-    let x = 4;
-    let y = 4;
-    g.add_line(new ZxNode(x, y), new ZxNode(x+2, y), ['in', '@', 'out']);
-    g.add_line(new ZxNode(x, y+1), new ZxNode(x+2, y+1), ['in', 'O', 'out']);
-    g.add_line(new ZxNode(x+1, y), new ZxNode(x+1, y+1));
-    return g.serialize();
-}
+import {ObservableValue} from "src/base/Obs.js";
+import {initUndoRedo} from "src/ui/UndoRedo.js";
+import {initUrlSync} from "src/ui/Url.js";
+import {initClear} from "src/ui/Clear.js";
+import {initExports, obsExportsIsShowing} from "src/ui/Export.js";
 
 const canvas = /** @type {!HTMLCanvasElement} */ document.getElementById('main-canvas');
 const canvasDiv = /** @type {!HTMLDivElement} */ document.getElementById('main-canvas-div');
 const stabilizersDiv = /** @type {!HTMLDivElement} */ document.getElementById('stabilizers-div');
-const quirkAnchor = /** @type {!HTMLDivElement} */ document.getElementById('quirk-link-anchor');
-const qasmPre = /** @type {!HTMLPreElement} */ document.getElementById('qasm-pre');
-const satisfiablePre = /** @type {!HTMLPreElement} */ document.getElementById('satisfiable-pre');
-const textDiagramPre = /** @type {!HTMLPreElement} */ document.getElementById('text-diagram-pre');
+
 let mouseX = undefined;
 let mouseY = undefined;
 let curCtrlKey = false;
@@ -72,8 +57,19 @@ let mouseDownY = undefined;
 let menuNode = undefined;
 let currentlyDisplayedZxGraph = new DisplayedZxGraph();
 
+let revision = new Revision([new ZxGraph().serialize()], 0, false);
 
-let revision = new Revision([initialCommit()], 0, false);
+let obsIsAnyOverlayShowing = new ObservableValue(false);
+initUrlSync(revision);
+initExports(revision, obsIsAnyOverlayShowing.observable());
+initUndoRedo(revision, obsIsAnyOverlayShowing);
+initClear(revision, obsIsAnyOverlayShowing.observable());
+obsExportsIsShowing.
+    whenDifferent().
+    subscribe(e => {
+        obsIsAnyOverlayShowing.set(e);
+        canvasDiv.tabIndex = e ? -1 : 0;
+    });
 
 /**
  * @param {!CanvasRenderingContext2D} ctx
@@ -274,35 +270,10 @@ function drawResults(ctx, displayed, checkGroundTruth=false) {
         stabilizersDiv,
         'innerText',
         results.stabilizers.map(descStabilizer).join('\n'));
-    setIfDiffers(
-        quirkAnchor,
-        'href',
-        results.quirkUrl);
-    setIfDiffers(
-        qasmPre,
-        'innerText',
-        results.qasm);
-    setIfDiffers(
-        textDiagramPre,
-        'innerText',
-        graph.toString(true));
-    setIfDiffers(
-        satisfiablePre,
-        'innerText',
-        [
-            results.satisfiable ? 'Graph is satisfiable' : 'GRAPH IS NOT SATISFIABLE',
-            `Chance of post-selection succeeding: ${results.successProbability * 100}%`
-        ].join('\n'));
 
     let waveRect = new Rect(canvas.clientWidth - 300, 0, 300, 300);
     let painter = new Painter(ctx);
-    MathPainter.paintMatrix(
-        painter,
-        results.wavefunction,
-        waveRect,
-        undefined,
-        undefined,
-        results.satisfiable ? undefined : 'red');
+    MathPainter.paintMatrix(painter, results.wavefunction, waveRect);
 
     if (checkGroundTruth) {
         let groundTruth = evalZxGraphGroundTruth(graph);
@@ -332,7 +303,15 @@ function drawResults(ctx, displayed, checkGroundTruth=false) {
                 `Chance of success: ${Math.round(results.successProbability*100)}%`,
                 `(${Math.round(-loss)} coin flips)`
             ].join('\n'),
-            waveRect.takeBottom(100).proportionalShiftedBy(0, 1),
+            waveRect.takeBottom(50).proportionalShiftedBy(0, 1),
+            new Point(0.5, 0.5),
+            'black',
+            20);
+    }
+    if (!results.satisfiable) {
+        painter.printParagraph(
+            `Graph is not satisfiable. (Output may be path dependent.)`,
+            waveRect.takeBottom(50).proportionalShiftedBy(0, 2),
             new Point(0.5, 0.5),
             'red',
             20);
@@ -815,21 +794,6 @@ function addKeyListener(keyOrCode, func) {
     keyListeners.get(keyOrCode).push(func);
 }
 
-addKeyListener('Z', ev => {
-    if (ev.ctrlKey && !ev.shiftKey) {
-        revision.cancelCommitBeingWorkedOn();
-        revision.undo();
-    } else if (ev.ctrlKey && ev.shiftKey) {
-        revision.redo();
-    }
-});
-
-addKeyListener('Y', ev => {
-    if (ev.ctrlKey && !ev.shiftKey) {
-        revision.redo();
-    }
-});
-
 addKeyListener(27, () => {
     menuNode = undefined;
 });
@@ -880,8 +844,6 @@ document.addEventListener('keyup', ev => {
 revision.latestActiveCommit().subscribe(text => {
     let graph = ZxGraph.deserialize(text);
     currentlyDisplayedZxGraph.graph = graph;
-    document.location.hash = text;
-
     currentlyDisplayedZxGraph.startCenteringInterpolation();
 
     //noinspection EmptyCatchBlockJS,UnusedCatchParameterJS

@@ -421,6 +421,14 @@ class ZxGraph {
     }
 
     /**
+     * @returns {!ZxGraph}
+     */
+    movedToOrigin() {
+        let {x, y} = this.boundingBox();
+        return this.shifted(-x, -y);
+    }
+
+    /**
      * @returns {!string}
      */
     serialize() {

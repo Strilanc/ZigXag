@@ -111,8 +111,10 @@ module.exports = function(grunt) {
     grunt.registerTask('inject-js-into-html', function(htmlSrc, jsSrc, dst) {
         var html = grunt.file.read(htmlSrc);
         var js = grunt.file.read(jsSrc);
+        var exportPart = grunt.file.read('html/export.partial.html');
         var output = html;
         output = output.split("<!-- INCLUDE SOURCE PART -->").join(js);
+        output = output.split("<!-- INCLUDE EXPORT PART -->").join(exportPart);
         grunt.file.write(dst, output);
     });
 
