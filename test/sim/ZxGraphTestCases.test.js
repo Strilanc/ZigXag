@@ -152,18 +152,19 @@ function graphTestCase(attrs) {
 
 /**
  * @param {!string} diagram
+ * @param {!Complex|!number} gain
  */
-function identityGraphTestCase(diagram) {
+function identityGraphTestCase(diagram, gain=Math.sqrt(2)) {
     graphTestCase({
         name: `IdentityTestCase_${_nextTestCaseId}`,
-        diagram: diagram,
+        diagram,
         satisfiable: true,
         stabilizers: [
             '+XX',
             '+ZZ'
         ],
-        tensor: Matrix.identity(2),
-        gain: Math.sqrt(2),
+        wavefunction: Matrix.identity(2).times(Math.sqrt(0.5)),
+        gain,
     });
 }
 
@@ -256,6 +257,29 @@ identityGraphTestCase(`
         |   |
         O---O
 `);
+identityGraphTestCase(`
+        +-S-+
+        |   |
+        |   |
+        |   |
+    !---O   O---?
+        |   |
+        |   |
+        |   |
+        +---+
+`, new Complex(Math.sqrt(0.5), Math.sqrt(0.5)));
+identityGraphTestCase(`
+        +-F-+
+        |   |
+        |   |
+        |   |
+    !---@   @---?
+        |   |
+        |   |
+        |   |
+        +---+
+`, new Complex(Math.sqrt(0.5), Math.sqrt(0.5)));
+
 graphTestCase({
     name: 'inputIdentity',
     diagram: `
@@ -792,6 +816,122 @@ graphTestCase({
         [1, 0],
     ]).times(Math.sqrt(0.5)),
     gain: Math.sqrt(2),
+});
+
+graphTestCase({
+    name: 'commutingPhaseBiPath',
+    diagram: `
+            +-S-+
+            |   |
+            |   |
+            |   |
+        !---@   @---?
+            |   |
+            |   |
+            |   |
+            +-S-+
+    `,
+    stabilizers: [
+        '-XX',
+        '+ZZ',
+    ],
+    wavefunction: Matrix.fromRows([
+        [1, 0],
+        [0, -1],
+    ]).times(Math.sqrt(0.5)),
+    gain: Math.sqrt(2),
+});
+graphTestCase({
+    name: 'nonCommutingPhaseBiPathMeasurement',
+    diagram: `
+            +-S-+
+            |   |
+            |   |
+            |   |
+        !---O   O---?
+            |   |
+            |   |
+            |   |
+            +-S-+
+    `,
+    stabilizers: [
+        '-Z.',
+        '-.Z',
+    ],
+    wavefunction: Matrix.fromRows([
+        [0, 0],
+        [0, 1],
+    ]),
+    gain: Complex.I,
+});
+graphTestCase({
+    name: 'nonCommutingPhaseBiPathMeasurement2',
+    diagram: `
+            +-S-+
+            |   |
+            |   |
+            |   |
+        !---O   O---?
+            |   |
+            |   |
+            |   |
+            +-A-+
+    `,
+    stabilizers: [
+        '+Z.',
+        '+.Z',
+    ],
+    wavefunction: Matrix.fromRows([
+        [1, 0],
+        [0, 0],
+    ]),
+    gain: 1,
+});
+graphTestCase({
+    name: 'nonCommutingXPhaseBiPathMeasurement',
+    diagram: `
+            +-F-+
+            |   |
+            |   |
+            |   |
+        !---@   @---?
+            |   |
+            |   |
+            |   |
+            +-F-+
+    `,
+    stabilizers: [
+        '-X.',
+        '-.X',
+    ],
+    wavefunction: Matrix.fromRows([
+        [0.5, -0.5],
+        [-0.5, 0.5],
+    ]),
+    gain: Complex.I,
+});
+graphTestCase({
+    name: 'nonCommutingXPhaseBiPathMeasurement2',
+    diagram: `
+            +-F-+
+            |   |
+            |   |
+            |   |
+        !---@   @---?
+            |   |
+            |   |
+            |   |
+            +-W-+
+    `,
+    stabilizers: [
+        '+X.',
+        '+.X',
+    ],
+    wavefunction: Matrix.fromRows([
+        [0.5, 0.5],
+        [0.5, 0.5],
+    ]),
+    gain: 1,
 });
 
 graphTestCase({
