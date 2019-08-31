@@ -1,6 +1,6 @@
 import {Suite, assertThat, assertThrows, assertTrue} from 'test/TestUtil.js'
 import {ZxGraph, ZxNode, ZxEdge, ZxPort} from 'src/sim/ZxGraph.js'
-import {evalZxGraph, graphToPortQubitMapping, fixedPointsOfGraph} from 'src/sim/ZxGraphEval.js'
+import {evalZxGraph_ep} from 'src/sim/ZxGraphEval_EprEdge_ParityNode.js'
 import {evalZxGraphGroundTruth} from 'src/sim/ZxGraphGroundTruth.js'
 import {Matrix} from 'src/base/Matrix.js'
 import {Complex} from 'src/base/Complex.js'
@@ -67,7 +67,7 @@ function graphTestCase(attrs) {
         }
 
         let graph = ZxGraph.fromDiagram(diagram);
-        let result = evalZxGraph(graph);
+        let result = evalZxGraph_ep(graph);
         let ground = evalZxGraphGroundTruth(graph);
         let groundSatisfiable = !ground.isZero(1.0e-8);
 
@@ -124,7 +124,7 @@ function graphTestCase(attrs) {
         // Compare to alt diagrams.
         for (let altDiagram of attrs.alternates || []) {
             let altGraph = ZxGraph.fromDiagram(altDiagram);
-            let altResult = evalZxGraph(altGraph);
+            let altResult = evalZxGraph_ep(altGraph);
             let altGround = evalZxGraphGroundTruth(altGraph);
             if (groundSatisfiable) {
                 assertThat(altResult.wavefunction).withInfo(

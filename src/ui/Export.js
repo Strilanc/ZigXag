@@ -15,7 +15,7 @@
 import {ObservableValue} from "src/base/Obs.js"
 import {selectAndCopyToClipboard} from "src/browser/Clipboard.js"
 import {ZxGraph} from "src/sim/ZxGraph.js";
-import {evalZxGraph} from "src/sim/ZxGraphEval.js";
+import {evalZxGraph_ep} from "src/sim/ZxGraphEval_EprEdge_ParityNode.js";
 
 const exportsIsVisible = new ObservableValue(false);
 const obsExportsIsShowing = exportsIsVisible.observable().whenDifferent();
@@ -92,7 +92,7 @@ function initExports(revision, obsIsAnyOverlayShowing) {
         return ZxGraph.deserialize(revision.peekActiveCommit());
     }
     function currentEval() {
-        return evalZxGraph(currentGraph());
+        return evalZxGraph_ep(currentGraph());
     }
 
     setupTextExport('diagram', () => currentGraph().movedToOrigin().toString());

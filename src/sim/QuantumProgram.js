@@ -159,6 +159,83 @@ class InitEprPairs extends QuantumStatement {
     }
 }
 
+class InitPlusStates extends QuantumStatement {
+    /**
+     * @param {!int} qubits
+     */
+    constructor(...qubits) {
+        super();
+        this.qubits = qubits;
+    }
+
+    /**
+     * @param {*} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return other instanceof InitPlusStates && equate(this.qubits, other.qubits);
+    }
+
+    writeQasm(statements) {
+        for (let q of this.qubits) {
+            statements.push(`h q[${q}];`);
+        }
+    }
+
+    writeQuirk(init, cols) {
+        for (let q of this.qubits) {
+            while (init.length <= q) {
+                init.push(0);
+            }
+            init[q] = '+';
+        }
+    }
+
+    interpret(sim, out) {
+        for (let q of this.qubits) {
+            sim.hadamard(q);
+        }
+    }
+}
+
+class Hadamards extends QuantumStatement {
+    /**
+     * @param {!int} qubits
+     */
+    constructor(...qubits) {
+        super();
+        this.qubits = qubits;
+    }
+
+    /**
+     * @param {*} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return other instanceof Hadamards && equate(this.qubits, other.qubits);
+    }
+
+    writeQasm(statements) {
+        for (let q of this.qubits) {
+            statements.push(`h q[${q}];`);
+        }
+    }
+
+    writeQuirk(init, cols) {
+        let col = [];
+        for (let qubit of this.qubits) {
+            padSetTo(col, 1, qubit, 'H');
+        }
+        cols.push(col);
+    }
+
+    interpret(sim, out) {
+        for (let q of this.qubits) {
+            sim.hadamard(q);
+        }
+    }
+}
+
 class MultiCnot extends QuantumStatement {
     /**
      * @param {!int} control
@@ -605,4 +682,6 @@ export {
     MultiCnot,
     AmpsDisplay,
     PostSelection,
+    InitPlusStates,
+    Hadamards,
 }

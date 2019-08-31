@@ -15,7 +15,7 @@ window.onerror = function(msg, url, line, col, error) {
 
 import {Revision} from "src/base/Revision.js";
 import {ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js";
-import {evalZxGraph} from "src/sim/ZxGraphEval.js";
+import {evalZxGraph_ep} from "src/sim/ZxGraphEval_EprEdge_ParityNode.js";
 import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js";
 import {MathPainter} from "src/MathPainter.js";
 import {Painter} from "src/Painter.js";
@@ -256,7 +256,7 @@ let prevResults = undefined;
 function drawResults(ctx, displayed, checkGroundTruth=false) {
     let graph = displayed.graph;
     if (!graph.isEqualTo(prevGraph)) {
-        prevResults = evalZxGraph(graph);
+        prevResults = evalZxGraph_ep(graph);
         prevGraph = graph;
     }
     let results = prevResults;
