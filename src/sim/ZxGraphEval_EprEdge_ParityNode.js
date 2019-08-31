@@ -7,7 +7,7 @@ import {
     PortQubitMapping,
     analyzeQuantumProgram,
 } from "src/sim/ZxGraphAnalysis.js"
-import {QubitAxis,PauliProduct} from "src/sim/PauliProduct.js"
+import {QubitAxis, PauliProduct} from "src/sim/PauliProduct.js"
 import {
     QuantumProgram,
     Comment,
@@ -19,26 +19,6 @@ import {
 } from "src/sim/QuantumProgram.js"
 import {NODES} from "src/nodes/All.js";
 import {EdgeActions} from "src/sim/EdgeActions.js";
-
-/**
- * @param {!ZxGraph} graph
- * @param {!PortQubitMapping} portQubitMapping
- * @param {!Array.<TransformedMeasurement>} transMeasurements
- * @returns {!GeneralMap<!int, !Array.<!QubitAxis>>} Map from in/out axis to measurement qubits that flip it.
- */
-function _transformedMeasurementToFeedbackMap(graph, portQubitMapping, transMeasurements) {
-    let fixedPoints = fixedPointsOfGraph(graph, portQubitMapping.map);
-    let externalMap = internalToExternalMapFromFixedPoints(fixedPoints, portQubitMapping.numInternal);
-    let out = new GeneralMap();
-    for (let transMeasure of transMeasurements) {
-        if (!externalMap.has(transMeasure.postselectionControlAxis)) {
-            throw new Error('Uncontrollable measurement.');
-        }
-        let externalFlips = externalMap.get(transMeasure.postselectionControlAxis) || [];
-        out.set(transMeasure.measurementAxis.qubit, externalFlips);
-    }
-    return out;
-}
 
 /**
  * @param {!ZxGraph} graph
@@ -241,6 +221,26 @@ function _performNodeMeasurements(outProgram, graph, portQubitMapping) {
     if (postSelections.size > 0) {
         outProgram.statements.push(new PostSelection(postSelections));
     }
+}
+
+/**
+ * @param {!ZxGraph} graph
+ * @param {!PortQubitMapping} portQubitMapping
+ * @param {!Array.<TransformedMeasurement>} transMeasurements
+ * @returns {!GeneralMap<!int, !Array.<!QubitAxis>>} Map from in/out axis to measurement qubits that flip it.
+ */
+function _transformedMeasurementToFeedbackMap(graph, portQubitMapping, transMeasurements) {
+    let fixedPoints = fixedPointsOfGraph(graph, portQubitMapping.map);
+    let externalMap = internalToExternalMapFromFixedPoints(fixedPoints, portQubitMapping.numInternal);
+    let out = new GeneralMap();
+    for (let transMeasure of transMeasurements) {
+        if (!externalMap.has(transMeasure.postselectionControlAxis)) {
+            throw new Error('Uncontrollable measurement.');
+        }
+        let externalFlips = externalMap.get(transMeasure.postselectionControlAxis) || [];
+        out.set(transMeasure.measurementAxis.qubit, externalFlips);
+    }
+    return out;
 }
 
 export {evalZxGraph_ep, graphToPortQubitMapping_ep}

@@ -143,6 +143,7 @@ class AssertionSubject {
      * @returns {!AssertionSubject}
      */
     withInfo(newInfo) {
+        assertionSubjectIndexForNextTest -= 1;
         return new AssertionSubject(this.subject, this.id, newInfo);
     }
 

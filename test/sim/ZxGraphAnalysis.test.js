@@ -24,7 +24,7 @@ import {
 } from "src/sim/ZxGraphAnalysis.js"
 
 
-let suite = new Suite("ZxGraphEval");
+let suite = new Suite("ZxGraphAnalysis");
 
 
 suite.test('fixedPointsOfGraph', () => {
