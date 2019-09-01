@@ -13,12 +13,21 @@ import {seq} from "src/base/Seq.js";
 class Node {
     /**
      * @param {!Graph} parent
+     * @param {!int} id
      * @param {*} data
      */
-    constructor(parent, data) {
+    constructor(parent, id, data) {
         this.parent = parent;
         this.data = data;
+        this._id = id;
         this._es = /** @type {!Array.<!Edge>} */ [];
+    }
+
+    /**
+     * @returns {!int}
+     */
+    get id() {
+        return this._id;
     }
 
     /**
@@ -48,7 +57,7 @@ class Node {
      * @returns {!Edge}
      */
     addEdgeTo(other, edgeData=undefined) {
-        let edge = new Edge(this, other, edgeData);
+        let edge = new Edge(this.parent._nextId++, this, other, edgeData);
         this._es.push(edge);
         other._es.push(edge);
         return edge;
@@ -173,7 +182,7 @@ class Node {
      * @returns {!string}
      */
     toString() {
-        return `GraphNode(degree=${this._es.length}, data=<${this.data}>)`;
+        return `Node(id=${this._id}, degree=${this._es.length}, data=<${this.data}>)`;
     }
 }
 
@@ -184,12 +193,21 @@ class Edge {
     /**
      * @param {!Node} n1
      * @param {!Node} n2
+     * @param {!int} id;
      * @param {*} data
      */
-    constructor(n1, n2, data) {
+    constructor(id, n1, n2, data) {
         this._n1 = n1;
         this._n2 = n2;
+        this._id = id;
         this.data = data;
+    }
+
+    /**
+     * @returns {!int}
+     */
+    get id() {
+        return this._id;
     }
 
     /**
@@ -366,7 +384,7 @@ class Edge {
      * @returns {!string}
      */
     toString() {
-        return `GraphEdge(${this.data}, ${this._n1.data}:${this._n2.data})`;
+        return `Edge(id=${this._id}, nodes=${this._n1.data}:${this._n2.data}, data=${this.data})`;
     }
 }
 
@@ -378,6 +396,13 @@ class Port {
     constructor(node, edge) {
         this._n = node;
         this._e = edge;
+    }
+
+    /**
+     * @returns {!string}
+     */
+    get id() {
+        return `${this.node._id}:${this.edge._id}`;
     }
 
     /**
@@ -454,6 +479,7 @@ class Graph {
      */
     constructor() {
         this._ns = [];
+        this._nextId = 0;
     }
 
     /**
@@ -514,7 +540,7 @@ class Graph {
      * @returns {!Node}
      */
     addNode(nodeData=undefined) {
-        let node = new Node(this, nodeData);
+        let node = new Node(this, this._nextId++, nodeData);
         this._ns.push(node);
         return node;
     }
@@ -527,7 +553,7 @@ class Graph {
      */
     static fromJson(json, nodeJsonToData = e => e, edgeJsonToData = e => e) {
         let graph = new Graph();
-        graph._ns = json.nodes.map(e => new Node(graph, nodeJsonToData(e)));
+        graph._ns = json.nodes.map(e => graph.addNode(nodeJsonToData(e)));
         for (let {n1, n2, data} of json.edges) {
             graph._ns[n1].addEdgeTo(graph._ns[n2], edgeJsonToData(data));
         }

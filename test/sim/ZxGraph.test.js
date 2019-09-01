@@ -419,3 +419,70 @@ O---O---@---@
         ab,
     ]);
 });
+
+suite.test("toAdjGraph", () => {
+    let graph = ZxGraph.fromDiagram(`
+@---@---+
+        |
+        H
+        |
+O---+---+---O
+        |
+        |
+        |
+        +
+        |
+        |
+        |
+O---O---@---@
+    `);
+
+
+    let n00 = new ZxNode(0, 0);
+    let n10 = new ZxNode(1, 0);
+    let n20 = new ZxNode(2, 0);
+    let n01 = new ZxNode(0, 1);
+    let n11 = new ZxNode(1, 1);
+    let n21 = new ZxNode(2, 1);
+    let v21 = n21.upPort();
+    let h21 = n21.leftPort();
+    let n31 = new ZxNode(3, 1);
+    let n22 = new ZxNode(2, 2);
+    let n03 = new ZxNode(0, 3);
+    let n13 = new ZxNode(1, 3);
+    let n23 = new ZxNode(2, 3);
+    let n33 = new ZxNode(3, 3);
+
+    let json = graph.toAdjGraph().toJson();
+    assertThat(json.nodes).isEqualTo([
+        {source: n00, kind: '@'},
+        {source: n10, kind: '@'},
+        {source: n20, kind: '+'},
+
+        {source: n01, kind: 'O'},
+        {source: n11, kind: '+'},
+        {source: h21, kind: '+'},
+        {source: v21, kind: '+'},
+        {source: n31, kind: 'O'},
+
+        {source: n22, kind: '+'},
+
+        {source: n03, kind: 'O'},
+        {source: n13, kind: 'O'},
+        {source: n23, kind: '@'},
+        {source: n33, kind: '@'},
+    ]);
+    assertThat(seq(json.edges).sortedBy(e => e.data.source.orderVal()).toArray()).isEqualTo([
+        {n1: 0, n2: 1, data: {source: new ZxEdge(n00, n10), kind: '-'}},
+        {n1: 1, n2: 2, data: {source: new ZxEdge(n10, n20), kind: '-'}},
+        {n1: 2, n2: 6, data: {source: new ZxEdge(n20, n21), kind: 'h'}},
+        {n1: 3, n2: 4, data: {source: new ZxEdge(n01, n11), kind: '-'}},
+        {n1: 4, n2: 5, data: {source: new ZxEdge(n11, n21), kind: '-'}},
+        {n1: 5, n2: 7, data: {source: new ZxEdge(n21, n31), kind: '-'}},
+        {n1: 6, n2: 8, data: {source: new ZxEdge(n21, n22), kind: '-'}},
+        {n1: 8, n2: 11, data: {source: new ZxEdge(n22, n23), kind: '-'}},
+        {n1: 9, n2: 10, data: {source: new ZxEdge(n03, n13), kind: '-'}},
+        {n1: 10, n2: 11, data: {source: new ZxEdge(n13, n23), kind: '-'}},
+        {n1: 11, n2: 12, data: {source: new ZxEdge(n23, n33), kind: '-'}},
+    ]);
+});

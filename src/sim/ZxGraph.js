@@ -2,6 +2,7 @@ import {GeneralMap} from "src/base/GeneralMap.js";
 import {GeneralSet} from "src/base/GeneralSet.js";
 import {Seq, seq} from "src/base/Seq.js";
 import {NODES} from "src/nodes/All.js";
+import {Graph} from "src/base/Graph.js";
 
 
 class ZxNode {
@@ -449,6 +450,39 @@ class ZxGraph {
      */
     copy() {
         return ZxGraph.deserialize(this.serialize());
+    }
+
+    /**
+     * @returns {!Graph}
+     */
+    toAdjGraph() {
+        let g = new Graph();
+        let nodeMap = /** @type {!GeneralMap.<!ZxPort, Node>} */ new GeneralMap();
+        for (let node of this.sortedNodes()) {
+            let kind = this.kind(node);
+            if (kind !== '+') {
+                let n = g.addNode({source: node, kind});
+                for (let port of this.activePortsOf(node)) {
+                    nodeMap.set(port, n);
+                }
+            } else {
+                let pairs = this.activeCrossingPortPairs(node);
+                for (let [a, b] of pairs) {
+                    let source = pairs.length === 1 ? node : a;
+                    let n = g.addNode({source, kind});
+                    nodeMap.set(a, n);
+                    nodeMap.set(b, n);
+                }
+            }
+        }
+        for (let edge of this.sortedEdges()) {
+            let kind = this.kind(edge);
+            let [p1, p2] = edge.ports();
+            let n1 = nodeMap.get(p1);
+            let n2 = nodeMap.get(p2);
+            n1.addEdgeTo(n2, {source: edge, kind});
+        }
+        return g;
     }
 
     /**

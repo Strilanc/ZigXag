@@ -65,7 +65,7 @@ suite.test("exploration_and_intersection", () => {
     assertThat(b.edgeTo(c)).isEqualTo(bc);
     assertThat(b.portTo(c)).isEqualTo(new Port(b, bc));
     assertThat(b.portsTo(c)).isEqualTo([new Port(b, bc)]);
-    assertThat(a.adjacentEdges()).isEqualTo([ab, da, ac, ac]);
+    assertThat(a.adjacentEdges()).isEqualTo([ab, da, ac, ac2]);
     assertThat(a.adjacentNodes()).isEqualTo([b, d, c]);
     assertThat(b.adjacentNodes()).isEqualTo([a, c]);
     assertThat(b.adjacentEdges()).isEqualTo([ab, bc]);
