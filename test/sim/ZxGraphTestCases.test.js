@@ -67,7 +67,7 @@ function graphTestCase(attrs) {
         }
 
         let graph = ZxGraph.fromDiagram(diagram);
-        let result = evalZxGraph_ep(graph);
+        let result = evalZxGraph_ep(graph.toAdjGraph());
         let ground = evalZxGraphGroundTruth(graph);
         let groundSatisfiable = !ground.isZero(1.0e-8);
 
@@ -124,7 +124,7 @@ function graphTestCase(attrs) {
         // Compare to alt diagrams.
         for (let altDiagram of attrs.alternates || []) {
             let altGraph = ZxGraph.fromDiagram(altDiagram);
-            let altResult = evalZxGraph_ep(altGraph);
+            let altResult = evalZxGraph_ep(altGraph.toAdjGraph());
             let altGround = evalZxGraphGroundTruth(altGraph);
             if (groundSatisfiable) {
                 assertThat(altResult.wavefunction).withInfo(

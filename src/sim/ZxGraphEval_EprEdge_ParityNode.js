@@ -1,3 +1,7 @@
+/**
+ * Analyzes a ZX graph by interpreting edges as EPR pairs and nodes as parity measurements.
+ */
+
 import {GeneralMap} from "src/base/GeneralMap.js";
 import {Matrix} from "src/base/Matrix.js"
 import {ZxPort, ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js"
@@ -19,90 +23,97 @@ import {
 } from "src/sim/QuantumProgram.js"
 import {NODES} from "src/nodes/All.js";
 import {EdgeActions} from "src/sim/EdgeActions.js";
+import {seq} from "src/base/Seq.js";
+import {Graph} from "src/base/Graph.js";
 
 /**
- * @param {!ZxGraph} graph
+ * @param {!Graph} graph
  * @returns {!PortQubitMapping}
  */
 function graphToPortQubitMapping_ep(graph) {
-    let portToQubitMap = /** @type {!GeneralMap<!ZxPort, !int>} */ new GeneralMap();
+    if (!(graph instanceof Graph)) {
+        throw new Error(`Not a Graph: ${graph}`);
+    }
+
+    let portToQubitMap = /** @type {!Map<!string, !int>} */ new Map();
 
     // Sort and classify nodes.
-    let inputNodes = graph.inputNodes();
-    let outputNodes = graph.outputNodes();
-    let postNodes = graph.postselectionNodesWithAxis();
-    let measurementNodes = graph.spiderNodesWithAxis();
-    let crossingNodes = graph.crossingNodes();
-    let hadamardNodes = graph.hadamardNodes();
-    if (inputNodes.length +
-            outputNodes.length +
-            measurementNodes.length +
-            crossingNodes.length +
-            hadamardNodes.length +
-            postNodes.length !== graph.nodes.size) {
-        throw new Error('Unrecognized node(s).');
+    let inputPorts = _sortedNodePortsOfKinds(graph, ['in']);
+    let outputPorts = _sortedNodePortsOfKinds(graph, ['out']);
+    let postPorts = _sortedNodePortsOfKinds(graph, ['O!', 'w!', 'f!', 'x!', '@!', 's!', 'a!', 'z!']);
+    let spiderPorts = _sortedNodePortsOfKinds(graph, ['O', 'w', 'f', 'x', '@', 's', 'a', 'z']);
+    let crossingPorts = _sortedNodePortsOfKinds(graph, ['+']);
+    let hadamardPorts = _sortedNodePortsOfKinds(graph, ['h']);
+    let recognizedLength =
+        inputPorts.length +
+        outputPorts.length +
+        spiderPorts.length +
+        crossingPorts.length +
+        hadamardPorts.length +
+        postPorts.length;
+    let actualLength = seq(graph.nodes).flatMap(e => e.ports).count();
+    if (recognizedLength !== actualLength) {
+        throw new Error(`Unrecognized node(s). ${recognizedLength} vs ${actualLength}`);
     }
 
     // CAREFUL: The order of the nodes' qubits matters!
     // Earlier qubits are isolated by Gaussian eliminations, expressing them in terms of later qubits.
     // Therefore it is important that qubits for nodes we want to eliminate to have qubits that come first.
 
-    // Internal nodes go first.
-    for (let node of crossingNodes) {
-        for (let p of graph.activePortsOf(node)) {
-            portToQubitMap.set(p, portToQubitMap.size);
-        }
-    }
-    for (let node of hadamardNodes) {
-        for (let p of graph.activePortsOf(node)) {
-            portToQubitMap.set(p, portToQubitMap.size);
-        }
-    }
-    for (let {node} of measurementNodes) {
-        for (let p of graph.activePortsOf(node)) {
-            portToQubitMap.set(p, portToQubitMap.size);
-        }
-    }
+    let orderedPorts = [
+        // Internal nodes go first.
+        ...crossingPorts,
+        ...hadamardPorts,
+        ...spiderPorts,
+        // Then input nodes.
+        ...inputPorts,
+        // Then output nodes.
+        ...outputPorts,
+        // And lastly post-selection.
+        ...postPorts,
+    ];
 
-    // Then input nodes.
-    for (let node of inputNodes) {
-        let ports = graph.activePortsOf(node);
-        if (ports.length !== 1) {
-            throw new Error('ports.length !== 1')
-        }
-        portToQubitMap.set(ports[0], portToQubitMap.size);
-    }
-
-    // Then output nodes.
-    for (let node of outputNodes) {
-        let ports = graph.activePortsOf(node);
-        if (ports.length !== 1) {
-            throw new Error('ports.length !== 1')
-        }
-        portToQubitMap.set(ports[0], portToQubitMap.size);
-    }
-
-    // And lastly post-selection.
-    for (let {node} of postNodes) {
-        let ports = graph.activePortsOf(node);
-        if (ports.length !== 1) {
-            throw new Error('ports.length !== 1')
-        }
-        portToQubitMap.set(ports[0], portToQubitMap.size);
+    for (let port of orderedPorts) {
+        portToQubitMap.set(port.id, portToQubitMap.size);
     }
 
     return new PortQubitMapping(
         portToQubitMap,
-        inputNodes.length,
-        outputNodes.length,
-        postNodes.length);
+        inputPorts.length,
+        outputPorts.length,
+        postPorts.length);
 }
 
 /**
- * @param {!ZxGraph} graph
+ * @param {!Graph} graph
+ * @param {!Array.<!string>} kinds
+ * @param {undefined|!Array.<!int>} allowedDegrees
+ * @returns {!Array.<!Node>}
+ * @private
+ */
+function _sortedNodePortsOfKinds(graph, kinds, allowedDegrees=undefined) {
+    let ports = [];
+    for (let node of graph.nodes) {
+        if (kinds.indexOf(node.data.kind) !== -1) {
+            if (allowedDegrees !== undefined && allowedDegrees.indexOf(node.degree) === -1) {
+                throw Error(`Bad state. Invalid degree ${node.degree} for kind ${kinds}`);
+            }
+            ports.push(...node.ports);
+        }
+    }
+    ports.sort((a, b) => (a.node.id - b.node.id) || (a.edge.id - b.edge.id));
+    return ports;
+}
+
+/**
+ * @param {!Graph} graph
  * @returns {!AnalyzedQuantumProgram}
  */
 function evalZxGraph_ep(graph) {
+    if (!(graph instanceof Graph)) {
+        throw new Error(`Not a Graph: ${graph}`);
+    }
+
     // Prepare simulator.
     let portQubitMapping = graphToPortQubitMapping_ep(graph);
     let outProgram = new QuantumProgram();
@@ -121,19 +132,18 @@ function evalZxGraph_ep(graph) {
 
 /**
  * @param {!QuantumProgram} outProgram
- * @param {!ZxGraph} graph
- * @param {!GeneralMap.<!ZxPort, !int>} portToQubitMap
+ * @param {!Graph} graph
+ * @param {!GeneralMap.<!string, !int>} portToQubitMap
  * @private
  */
 function _initEdgeEprPairs(outProgram, graph, portToQubitMap) {
     outProgram.statements.push(new Comment('', 'Init per-edge EPR pairs.'));
 
     // Identify edge qubit pairs.
-    let pairs = [...graph.edges.entries()].map(ek => {
-        let [e, kind] = ek;
-        let qs = e.ports().map(p => portToQubitMap.get(p));
+    let pairs = graph.edges.map(edge => {
+        let qs = edge.ports.map(p => portToQubitMap.get(p.id));
         qs.sort((a, b) => a - b);
-        return {qs, kind};
+        return {qs, kind: edge.data.kind};
     });
     pairs.sort((a, b) => (a.qs[0] - b.qs[0])*10000 + (a.qs[1] - b.qs[1]));
 
@@ -155,19 +165,19 @@ function _initEdgeEprPairs(outProgram, graph, portToQubitMap) {
 
 /**
  * @param {!QuantumProgram} outProgram
- * @param {!ZxGraph} graph
+ * @param {!Graph} graph
  * @param {!PortQubitMapping} portQubitMapping
  * @private
  */
 function _performNodeMeasurements(outProgram, graph, portQubitMapping) {
     // Apply single-qubit basis changes.
     let nodeBasisChanges = new GeneralMap();
-    for (let node of graph.nodes.keys()) {
-        let nodeKind = NODES.map.get(graph.kind(node));
-        let ports = graph.activePortsOf(node);
+    for (let node of graph.nodes) {
+        let nodeKind = NODES.map.get(node.data.kind);
+        let ports = node.ports;
         let mat = nodeKind.nodeRootEdgeAction.matrix;
         if (ports.length > 0 && mat !== 1 && mat !== null) {
-            nodeBasisChanges.set(portQubitMapping.map.get(ports[0]), nodeKind.id);
+            nodeBasisChanges.set(portQubitMapping.map.get(ports[0].id), nodeKind.id);
         }
     }
     if (nodeBasisChanges.size > 0) {
@@ -178,19 +188,19 @@ function _performNodeMeasurements(outProgram, graph, portQubitMapping) {
     // Multi-qubit basis changes and transformed measurement collection.
     outProgram.statements.push(new Comment('', 'Perform per-node measurements.'));
     let transMeasurements = /** @type {!Array.<TransformedMeasurement>} */ [];
-    for (let [node, kind] of graph.nodes.entries()) {
-        if (kind !== '+') {
-            let nodeKind = NODES.map.get(kind);
-            let qubits = graph.activePortsOf(node).map(p => portQubitMapping.map.get(p));
-            transMeasurements.push(
-                ...nodeKind.nodeMeasurer(outProgram, portQubitMapping.numQubits, qubits));
-        } else {
-            for (let pair of graph.activeCrossingPortPairs(node)) {
-                let qubits = pair.map(p => portQubitMapping.map.get(p));
-                transMeasurements.push(
-                    ...NODES.black.nodeMeasurer(outProgram, portQubitMapping.numQubits, qubits, false));
+    for (let node of graph.nodes) {
+        let kind = node.data.kind;
+        let ports = node.ports;
+        if (kind === '+') {
+            if (ports.length !== 2) {
+                throw new Error(`Invalid graph. Mapped crossing node with degree other than 2: ${node}`);
             }
+            kind = '@';
         }
+        let nodeKind = NODES.map.get(kind);
+        let qubits = ports.map(p => portQubitMapping.map.get(p.id));
+        transMeasurements.push(
+            ...nodeKind.nodeMeasurer(outProgram, portQubitMapping.numQubits, qubits));
     }
 
     // Group transformed measurements by basis.
@@ -205,17 +215,17 @@ function _performNodeMeasurements(outProgram, graph, portQubitMapping) {
     outProgram.statements.push(new MeasurementsWithPauliFeedback(measurementToFeedback));
 
     // Post-selections.
-    let postSelections = new GeneralMap();
-    for (let [node, kind] of graph.nodes.entries()) {
-        let nodeKind = NODES.map.get(kind);
+    let postSelections = new Map();
+    for (let node of graph.nodes) {
+        let nodeKind = NODES.map.get(node.data.kind);
         if (nodeKind.postSelectStabilizer === undefined) {
             continue;
         }
-        let ports = graph.activePortsOf(node);
+        let ports = node.ports;
         if (ports.length !== 1) {
             throw new Error('Postselection node must have degree 1.');
         }
-        let qubit = portQubitMapping.map.get(ports[0]);
+        let qubit = portQubitMapping.map.get(ports[0].id);
         postSelections.set(qubit, nodeKind.postSelectStabilizer);
     }
     if (postSelections.size > 0) {
@@ -224,7 +234,7 @@ function _performNodeMeasurements(outProgram, graph, portQubitMapping) {
 }
 
 /**
- * @param {!ZxGraph} graph
+ * @param {!Graph} graph
  * @param {!PortQubitMapping} portQubitMapping
  * @param {!Array.<TransformedMeasurement>} transMeasurements
  * @returns {!GeneralMap<!int, !Array.<!QubitAxis>>} Map from in/out axis to measurement qubits that flip it.

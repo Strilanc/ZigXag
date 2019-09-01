@@ -34,7 +34,7 @@ suite.test('fixedPointsOfGraph', () => {
             |
             |
         !---O---?
-    `);
+    `).toAdjGraph();
     let qubitMapping = graphToPortQubitMapping_ep(graph);
     let fixedPoints = fixedPointsOfGraph(graph, qubitMapping.map);
     assertThat(fixedPoints).isEqualTo([
@@ -44,12 +44,12 @@ suite.test('fixedPointsOfGraph', () => {
         '+...ZZZ....',
         '+...XX.....',
         '+...X.X....',
-        '+..XX......',
-        '+..ZZ......',
         '+X.....X...',
         '+Z.....Z...',
         '+.X......X.',
         '+.Z......Z.',
+        '+..XX......',
+        '+..ZZ......',
         '+....X..X..',
         '+....Z..Z..',
         '+.....X...X',
@@ -64,23 +64,47 @@ suite.test('internalToExternalMapFromFixedPoints', () => {
             |
             |
         !---O---?
-    `);
+    `).toAdjGraph();
     let qubitMapping = graphToPortQubitMapping_ep(graph);
+    let expectedBeforeId = [
+        [new ZxNode(1, 0).leftPort(), 0],
+        [new ZxNode(1, 0).rightPort(), 1],
+        [new ZxNode(1, 0).downPort(), 2],
+
+        [new ZxNode(1, 1).upPort(), 3],
+        [new ZxNode(1, 1).leftPort(), 4],
+        [new ZxNode(1, 1).rightPort(), 5],
+
+        [new ZxNode(0, 0).rightPort(), 6],
+        [new ZxNode(0, 1).rightPort(), 7],
+        [new ZxNode(2, 0).leftPort(), 8],
+        [new ZxNode(2, 1).leftPort(), 9],
+    ];
+
+    function nodeIndex(zxNode) {
+        for (let node of graph.nodes) {
+            if (zxNode.isEqualTo(node.data.source)) {
+                return node.id;
+            }
+        }
+        throw new Error('Not found');
+    }
+
+    function edgeIndex(zxEdge) {
+        for (let edge of graph.edges) {
+            if (zxEdge.isEqualTo(edge.data.source)) {
+                return edge.id;
+            }
+        }
+        throw new Error('Not found');
+    }
+
+    let expected = new Map();
+    for (let [port, index] of expectedBeforeId) {
+        expected.set(nodeIndex(port.node) + ':' + edgeIndex(port.edge), index);
+    }
     assertThat(qubitMapping).isEqualTo(new PortQubitMapping(
-        new GeneralMap(
-            [new ZxNode(1, 0).leftPort(), 0],
-            [new ZxNode(1, 0).rightPort(), 1],
-            [new ZxNode(1, 0).downPort(), 2],
-
-            [new ZxNode(1, 1).upPort(), 3],
-            [new ZxNode(1, 1).leftPort(), 4],
-            [new ZxNode(1, 1).rightPort(), 5],
-
-            [new ZxNode(0, 0).rightPort(), 6],
-            [new ZxNode(0, 1).rightPort(), 7],
-            [new ZxNode(2, 0).leftPort(), 8],
-            [new ZxNode(2, 1).leftPort(), 9],
-        ),
+        expected,
         2,
         2,
         0,
@@ -117,7 +141,7 @@ suite.test('internalToExternalMapFromFixedPoints', () => {
 
 suite.test('analyzeQuantumProgram', () => {
     let mapping = new PortQubitMapping(
-        new GeneralMap(
+        new Map([
             ['0', 0],
             ['1', 1],
             ['2', 2],
@@ -125,7 +149,7 @@ suite.test('analyzeQuantumProgram', () => {
             ['4', 4],
             ['5', 5],
             ['6', 6],
-        ), 2, 2, 0);
+        ]), 2, 2, 0);
     let out = analyzeQuantumProgram(
         new QuantumProgram([
             new HeaderAlloc(mapping),

@@ -256,7 +256,7 @@ let prevResults = undefined;
 function drawResults(ctx, displayed, checkGroundTruth=false) {
     let graph = displayed.graph;
     if (!graph.isEqualTo(prevGraph)) {
-        prevResults = evalZxGraph_ep(graph);
+        prevResults = evalZxGraph_ep(graph.toAdjGraph());
         prevGraph = graph;
     }
     let results = prevResults;

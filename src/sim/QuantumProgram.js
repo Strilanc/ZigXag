@@ -354,7 +354,7 @@ class HeaderAlloc extends QuantumStatement {
 
 class PostSelection extends QuantumStatement {
     /**
-     * @param {!GeneralMap.<!int, !string>} qubitStabilizerMap
+     * @param {!Map.<!int, !string>} qubitStabilizerMap
      */
     constructor(qubitStabilizerMap) {
         super();

@@ -3,6 +3,7 @@ import {ZxPort, ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js"
 import {QubitAxis, PauliProduct} from "src/sim/PauliProduct.js"
 import {ChpSimulator} from "src/sim/ChpSimulator.js"
 import {stabilizerStateToWavefunction} from "src/sim/StabilizerToWave.js";
+import {equate_Maps} from "src/base/Equate.js"
 import {Matrix} from "src/base/Matrix.js"
 import {NODES} from "src/nodes/All.js";
 
@@ -12,21 +13,21 @@ import {NODES} from "src/nodes/All.js";
  * that are no-ops because they are stabilizers of the EPR pairs as well as products that are no-ops because they
  * exactly match a measurement that is about to be performed.
  *
- * @param {!ZxGraph} graph
- * @param {!GeneralMap.<!ZxPort, !int>} qubitMap
+ * @param {!Graph} graph
+ * @param {!GeneralMap.<!string, !int>} portToQubitMap
  * @returns {!Array.<!PauliProduct>}
  */
-function fixedPointsOfGraph(graph, qubitMap) {
+function fixedPointsOfGraph(graph, portToQubitMap) {
     let fixedPoints = [];
 
     // Pauli products that are about to be measured are fixed points.
-    for (let node of graph.nodes.keys()) {
-        fixedPoints.push(..._nodeFixedPoints(graph, node, qubitMap));
+    for (let node of graph.nodes) {
+        fixedPoints.push(..._nodeFixedPoints(node, portToQubitMap));
     }
 
     // Stabilizers of the input state are fixed points.
-    for (let edge of graph.edges.keys()) {
-        fixedPoints.push(..._edgeEprFixedPoints(graph, edge, qubitMap));
+    for (let edge of graph.edges) {
+        fixedPoints.push(..._edgeEprFixedPoints(edge, portToQubitMap));
     }
 
     return fixedPoints;
@@ -48,39 +49,36 @@ function _scatterPauliProduct(product, newLen, newSparseIndices) {
 }
 
 /**
- * @param {!ZxGraph} graph
- * @param {!ZxNode} node
- * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
+ * @param {!Node} node
+ * @param {!GeneralMap.<!string, !int>} portToQubitMap
  * @private
  */
-function _nodeFixedPoints(graph, node, qubit_map) {
-    let ports = graph.activePortsOf(node);
-    let kind = graph.kind(node);
+function _nodeFixedPoints(node, portToQubitMap) {
+    let kind = node.data.kind;
 
     let nodeKind = NODES.map.get(kind);
     if (nodeKind === undefined) {
         throw new Error(`Unrecognized node kind ${kind} for fixed points.`);
     }
-    let qs = ports.map(p => qubit_map.get(p));
+    let qs = node.ports.map(p => portToQubitMap.get(p.id));
     let products = nodeKind.fixedPoints(qs.length);
-    return products.map(e => _scatterPauliProduct(e, qubit_map.size, qs));
+    return products.map(e => _scatterPauliProduct(e, portToQubitMap.size, qs));
 }
 
 /**
- * @param {!ZxGraph} graph
- * @param {!ZxEdge} edge
- * @param {!GeneralMap.<!ZxPort, !int>} qubit_map
+ * @param {!Edge} edge
+ * @param {!GeneralMap.<!string, !int>} portToQubitMap
  * @private
  */
-function _edgeEprFixedPoints(graph, edge, qubit_map) {
-    let qubits = edge.ports().map(p => qubit_map.get(p));
-    let kind = graph.kind(edge);
+function _edgeEprFixedPoints(edge, portToQubitMap) {
+    let qubits = edge.ports.map(p => portToQubitMap.get(p.id));
+    let kind = edge.data.kind;
     let nodeKind = NODES.map.get(kind === '-' ? '@' : kind);
     if (nodeKind === undefined) {
         throw new Error(`Unrecognized edge kind ${kind} for fixed points.`);
     }
     let products = nodeKind.fixedPoints(2);
-    return products.map(e => _scatterPauliProduct(e, qubit_map.size, qubits));
+    return products.map(e => _scatterPauliProduct(e, portToQubitMap.size, qubits));
 }
 
 /**
@@ -128,7 +126,7 @@ function internalToExternalMapFromFixedPoints(fixedPoints, numInternalDegreesOfF
 
 class PortQubitMapping {
     /**
-     * @param {!GeneralMap.<!ZxPort, !int>} map
+     * @param {!Map.<!string, !int>} map
      * @param {!int} numIn
      * @param {!int} numOut
      * @param {!int} numPost
@@ -146,10 +144,10 @@ class PortQubitMapping {
      */
     isEqualTo(other) {
         return (other instanceof PortQubitMapping &&
-        this.map.isEqualTo(other.map) &&
-        this.numIn === other.numIn &&
-        this.numOut === other.numOut &&
-        this.numPost === other.numPost);
+            equate_Maps(this.map, other.map) &&
+            this.numIn === other.numIn &&
+            this.numOut === other.numOut &&
+            this.numPost === other.numPost);
     }
 
     get numQubits() {

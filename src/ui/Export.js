@@ -88,11 +88,18 @@ function initExports(revision, obsIsAnyOverlayShowing) {
             outputFunc);
     };
 
+    /**
+     * @returns {!ZxGraph}
+     */
     function currentGraph() {
         return ZxGraph.deserialize(revision.peekActiveCommit());
     }
+
+    /**
+     * @returns {!AnalyzedQuantumProgram}
+     */
     function currentEval() {
-        return evalZxGraph_ep(currentGraph());
+        return evalZxGraph_ep(currentGraph().toAdjGraph());
     }
 
     setupTextExport('diagram', () => currentGraph().movedToOrigin().toString());

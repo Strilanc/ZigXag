@@ -458,6 +458,7 @@ class ZxGraph {
     toAdjGraph() {
         let g = new Graph();
         let nodeMap = /** @type {!GeneralMap.<!ZxPort, Node>} */ new GeneralMap();
+
         for (let node of this.sortedNodes()) {
             let kind = this.kind(node);
             if (kind !== '+') {
@@ -534,36 +535,6 @@ class ZxGraph {
     }
 
     /**
-     * @returns {!Array.<!ZxNode>}
-     */
-    outputNodes() {
-        let result = [];
-        for (let node of this.sortedNodes()) {
-            let kind = this.nodes.get(node);
-            if (kind === 'out') {
-                result.push(node);
-            }
-        }
-        return result;
-    }
-
-    /**
-     * @returns {!Array.<!{node: !ZxNode, axis: !boolean}>}
-     */
-    postselectionNodesWithAxis() {
-        let result = [];
-        for (let node of this.sortedNodes()) {
-            let kind = this.nodes.get(node);
-            if (kind === 'O!' || kind === 'w!' || kind === 'f!' || kind === 'x!') {
-                result.push({node, axis: true});
-            } else if (kind === '@!' || kind === 's!' || kind === 'a!' || kind === 'z!') {
-                result.push({node, axis: false});
-            }
-        }
-        return result;
-    }
-
-    /**
      * @returns {!Array.<!{node: !ZxNode, axis: !boolean}>}
      */
     spiderNodesWithAxis() {
@@ -574,34 +545,6 @@ class ZxGraph {
                 result.push({node, axis: true});
             } else if (kind === '@' || kind === 's' || kind === 'a' || kind === 'z') {
                 result.push({node, axis: false});
-            }
-        }
-        return result;
-    }
-
-    /**
-     * @returns {!Array.<!ZxNode>}
-     */
-    hadamardNodes() {
-        let result = [];
-        for (let node of this.sortedNodes()) {
-            let kind = this.nodes.get(node);
-            if (kind === 'h') {
-                result.push(node);
-            }
-        }
-        return result;
-    }
-
-    /**
-     * @returns {!Array.<!ZxNode>}
-     */
-    crossingNodes() {
-        let result = [];
-        for (let node of this.sortedNodes()) {
-            let kind = this.nodes.get(node);
-            if (kind === '+') {
-                result.push(node);
             }
         }
         return result;
