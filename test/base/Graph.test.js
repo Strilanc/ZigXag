@@ -53,18 +53,18 @@ suite.test("exploration_and_intersection", () => {
     let ac = a.addEdgeTo(c);
     let ac2 = a.addEdgeTo(c);
 
-    let pac = new Port(a, ac);
-    let pca = new Port(c, ac);
-    let pab = new Port(a, ab);
-    let pcd = new Port(c, cd);
-    let pda = new Port(c, da);
+    let pac = new Port(false, ac);
+    let pca = new Port(true, ac);
+    let pab = new Port(false, ab);
+    let pcd = new Port(false, cd);
+    let pda = new Port(false, da);
 
     assertThat(a.edges).isEqualTo([ab, da, ac, ac2]);
     assertThat(a.edgesTo(c)).isEqualTo([ac, ac2]);
     assertThrows(() => a.edgeTo(c));
     assertThat(b.edgeTo(c)).isEqualTo(bc);
-    assertThat(b.portTo(c)).isEqualTo(new Port(b, bc));
-    assertThat(b.portsTo(c)).isEqualTo([new Port(b, bc)]);
+    assertThat(b.portTo(c)).isEqualTo(new Port(false, bc));
+    assertThat(b.portsTo(c)).isEqualTo([new Port(false, bc)]);
     assertThat(a.adjacentEdges()).isEqualTo([ab, da, ac, ac2]);
     assertThat(a.adjacentNodes()).isEqualTo([b, d, c]);
     assertThat(b.adjacentNodes()).isEqualTo([a, c]);
@@ -79,7 +79,7 @@ suite.test("exploration_and_intersection", () => {
     assertThat(ac.adjacentEdges()).isEqualTo([ab, da, ac2, bc, cd]);
     assertThat(bc.adjacentEdges()).isEqualTo([ab, cd, ac, ac2]);
     assertThat(ac.nodes).isEqualTo([a, c]);
-    assertThat(ac.ports).isEqualTo([new Port(a, ac), new Port(c, ac)]);
+    assertThat(ac.ports).isEqualTo([new Port(false, ac), new Port(true, ac)]);
     assertThat(ac.endsOn(a)).isEqualTo(true);
     assertThat(ac.endsOn(b)).isEqualTo(false);
     assertThat(ac.endsOn(c)).isEqualTo(true);
@@ -225,4 +225,45 @@ suite.test('contract_graph_deadNodes', () => {
             {n1: 2, n2: 3, data: 7 + 11},
         ]
     });
+});
+
+suite.test("contract_edge_look", () => {
+    let g = new Graph();
+    let a = g.addNode();
+    let b = g.addNode();
+    let c = g.addNode();
+    let d = g.addNode();
+    let e = g.addNode();
+    let f = g.addNode();
+    a.addEdgeTo(b);
+    let r = b.addEdgeTo(c);
+    b.addEdgeTo(e);
+    c.addEdgeTo(d);
+    c.addEdgeTo(f);
+    e.addEdgeTo(f);
+
+    assertThat(g.toString(true)).isEqualTo(`
+Graph:
+  nodes:
+    0, 1, 2, 3, 4, 5
+  edges:
+    6: 0--1
+    7: 1--2
+    8: 1--4
+    9: 2--3
+    10: 2--5
+    11: 4--5`.trim());
+
+    r.contract(undefined);
+
+    assertThat(g.toString(true)).isEqualTo(`
+Graph:
+  nodes:
+    0, 1, 3, 4, 5
+  edges:
+    6: 0--1
+    8: 1--4
+    9: 1--3
+    10: 1--5
+    11: 4--5`.trim());
 });

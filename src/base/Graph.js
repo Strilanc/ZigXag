@@ -41,7 +41,21 @@ class Node {
      * @returns {!Array.<!Port>}
      */
     get ports() {
-        return this._es.map(e => new Port(this, e));
+        let seen = new Set();
+        let result = [];
+        for (let edge of this._es) {
+            if (seen.has(edge)) {
+                continue;
+            }
+            seen.add(edge);
+            if (edge._n1 === this) {
+                result.push(new Port(false, edge));
+            }
+            if (edge._n2 === this) {
+                result.push(new Port(true, edge));
+            }
+        }
+        return result;
     }
 
     /**
@@ -92,7 +106,7 @@ class Node {
      * @returns {!Array.<!Port>}
      */
     portsTo(other) {
-        return this.edgesTo(other).map(e => new Port(this, e));
+        return this.ports.filter(port => port.edge.opposite(this) === other);
     }
 
     /**
@@ -112,7 +126,11 @@ class Node {
      * @returns {!Port}
      */
     portTo(other) {
-        return new Port(this, this.edgeTo(other));
+        let results = this.portsTo(other);
+        if (results.length !== 1) {
+            throw new Error(`${results.length} ports from <${this}> to <${other}>. Expected 1.`)
+        }
+        return results[0];
     }
 
     /**
@@ -182,7 +200,7 @@ class Node {
      * @returns {!string}
      */
     toString() {
-        return `Node(id=${this._id}, degree=${this._es.length}, data=<${this.data}>)`;
+        return `Node(id=${this._id}, degree=${this._es.length}, data=<${describe(this.data)}>)`;
     }
 }
 
@@ -235,18 +253,7 @@ class Edge {
      * @returns {!Array.<!Port>}
      */
     get ports() {
-        return [new Port(this._n1, this), new Port(this._n2, this)];
-    }
-
-    /**
-     * @param {!Node} node
-     * @returns {!Port}
-     */
-    portFrom(node) {
-        if (!this.endsOn(node)) {
-            throw new Error(`Node <${node}> is not an endpoint of <${this}>.`);
-        }
-        return new Port(node, this);
+        return [new Port(false, this), new Port(true, this)];
     }
 
     del() {
@@ -296,7 +303,7 @@ class Edge {
     contract(newNodeData) {
         this.del();
         if (this._n1 !== this._n2) {
-            for (let e of this._n2._es) {
+            for (let e of this._n2.edges) {
                 e._switchNode(this._n2, this._n1);
             }
             this._n2.del();
@@ -341,7 +348,7 @@ class Edge {
      */
     opposite(endpoint) {
         if (endpoint instanceof Port) {
-            return new Port(this.opposite(endpoint._n), this);
+            return new Port(this.opposite(endpoint.node) === this._n2, this);
         }
         if (endpoint === this._n1) {
             return this._n2;
@@ -384,32 +391,32 @@ class Edge {
      * @returns {!string}
      */
     toString() {
-        return `Edge(id=${this._id}, nodes=${this._n1.data}:${this._n2.data}, data=${this.data})`;
+        return `Edge(id=${this._id}, nodes=${describe(this._n1.data)}:${describe(this._n2.data)}, data=${describe(this.data)})`;
     }
 }
 
 class Port {
     /**
-     * @param {!Node} node
+     * @param {!boolean} side
      * @param {!Edge} edge
      */
-    constructor(node, edge) {
-        this._n = node;
+    constructor(side, edge) {
+        this._side = side;
         this._e = edge;
     }
 
     /**
-     * @returns {!string}
+     * @returns {!int}
      */
     get id() {
-        return `${this.node._id}:${this.edge._id}`;
+        return this._side ? ~this.edge._id : this.edge._id;
     }
 
     /**
      * @returns {!Node}
      */
     get node() {
-        return this._n;
+        return this._side ? this._e._n2 : this._e._n1;
     }
 
     /**
@@ -425,28 +432,28 @@ class Port {
      */
     intersection(element) {
         if (element instanceof Node) {
-            return this._n === element ? element : undefined;
+            return this.node === element ? element : undefined;
         }
 
         if (element instanceof Edge) {
             if (this._e === element) {
                 return this._e;
             }
-            if (element.endsOn(this._n)) {
-                return this._n;
+            if (element.endsOn(this.node)) {
+                return this.node;
             }
             return undefined;
         }
 
         if (element instanceof Port) {
-            if (this._e === element._e && this._n === element._n) {
+            if (this._e === element._e && this.node === element.node) {
                 return this;
             }
             if (this._e === element._e) {
                 return this._e;
             }
-            if (this._n === element._n) {
-                return this._n;
+            if (this.node === element.node) {
+                return this.node;
             }
             return undefined;
         }
@@ -459,14 +466,14 @@ class Port {
      * @returns {!boolean}
      */
     isEqualTo(other) {
-        return other instanceof Port && this._n === other._n && this._e === other._e;
+        return other instanceof Port && this._side === other._side && this._e === other._e;
     }
 
     /**
      * @returns {!string}
      */
     toString() {
-        return `GraphPort(${this._n} towards ${this._e.opposite(this._n)})`;
+        return `GraphPort(${this._side ? 'end' : 'start'} of ${this._e})`;
     }
 }
 
@@ -590,7 +597,7 @@ class Graph {
             }
 
             if (binaryNodeCondition !== undefined) {
-                for (let node of this._ns) {
+                for (let node of this.nodes) {
                     if (node.degree === 2 && node._es[0] !== node._es[1] && binaryNodeCondition(node)) {
                         node.contract(binaryNodeDataReplacer(node));
                         moreWork = true;
@@ -613,8 +620,16 @@ class Graph {
     /**
      * @returns {!string}
      */
-    toString() {
-        return describe(this.toJson());
+    toString(simplified=false) {
+        if (!simplified) {
+            return describe(this.toJson());
+        }
+        let nodes = seq(this.nodes).sortedBy(n => n.id).
+            map(n => `${n.id}`).join(', ');
+        let edges = seq(this.edges).sortedBy(e => e.id).
+            map(e => `\n    ${e.id}: ${e.node1.id}--${e.node2.id}`).
+            join('');
+        return `Graph:\n  nodes:\n    ${nodes}\n  edges:${edges}`
     }
 }
 

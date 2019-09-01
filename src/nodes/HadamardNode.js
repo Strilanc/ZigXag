@@ -2,6 +2,7 @@ import {QubitAxis, PauliProduct} from "src/sim/PauliProduct.js";
 import {Matrix} from "src/base/Matrix.js";
 import {MultiCnot} from "src/sim/QuantumProgram.js";
 import {ZxNodeKind, TransformedMeasurement, IDENTITY_EDGE_ACTION} from "src/nodes/ZxNodeKind.js"
+import {CliffordRotation} from "src/sim/CliffordRotation.js";
 
 const HADAMARD_NODE = new ZxNodeKind({
     id: 'h',
@@ -26,6 +27,7 @@ const HADAMARD_NODE = new ZxNodeKind({
     edgeAction: {
         quirkGate: 'H',
         qasmGates: ['h'],
+        clifford: CliffordRotation.H,
         sim: (sim, qubit) => {
             sim.hadamard(qubit);
         },

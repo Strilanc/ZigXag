@@ -25,6 +25,7 @@ import {NODES} from "src/nodes/All.js";
 import {EdgeActions} from "src/sim/EdgeActions.js";
 import {seq} from "src/base/Seq.js";
 import {Graph} from "src/base/Graph.js";
+import {describe} from "src/base/Describe.js";
 
 /**
  * @param {!Graph} graph
@@ -244,11 +245,10 @@ function _transformedMeasurementToFeedbackMap(graph, portQubitMapping, transMeas
     let externalMap = internalToExternalMapFromFixedPoints(fixedPoints, portQubitMapping.numInternal);
     let out = new GeneralMap();
     for (let transMeasure of transMeasurements) {
-        if (!externalMap.has(transMeasure.postselectionControlAxis)) {
-            throw new Error('Uncontrollable measurement.');
+        if (externalMap.has(transMeasure.postselectionControlAxis)) {
+            let externalFlips = externalMap.get(transMeasure.postselectionControlAxis) || [];
+            out.set(transMeasure.measurementAxis.qubit, externalFlips);
         }
-        let externalFlips = externalMap.get(transMeasure.postselectionControlAxis) || [];
-        out.set(transMeasure.measurementAxis.qubit, externalFlips);
     }
     return out;
 }

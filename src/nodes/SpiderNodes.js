@@ -3,6 +3,7 @@ import {Matrix} from "src/base/Matrix.js";
 import {Complex} from "src/base/Complex.js";
 import {MultiCnot} from "src/sim/QuantumProgram.js";
 import {ZxNodeKind, TransformedMeasurement} from "src/nodes/ZxNodeKind.js"
+import {CliffordRotation} from "src/sim/CliffordRotation.js";
 import {
     nodeDrawer,
     xBasisEqualityMatrix,
@@ -148,6 +149,7 @@ function* generateSpiderNodes(axis) {
         edgeAction: {
             quirkGate: axis ? 'Z' : 'X',
             qasmGates: axis ? ['z'] : ['x'],
+            clifford: axis ? CliffordRotation.Z : CliffordRotation.X,
             sim: simAxisPhase(axis, 2),
             matrix: axis ? Matrix.square(1, 0, 0, -1) : Matrix.square(0, 1, 1, 0),
         },
@@ -167,6 +169,7 @@ function* generateSpiderNodes(axis) {
         edgeAction: {
             quirkGate: axis ? 'Z^½' : 'X^½',
             qasmGates: axis ? ['s'] : ['h', 's', 'h'],
+            clifford: axis ? CliffordRotation.S : CliffordRotation.Sx,
             sim: simAxisPhase(axis, 1),
             matrix: axis ?
                 Matrix.square(1, 0, 0, Complex.I) :
@@ -188,6 +191,7 @@ function* generateSpiderNodes(axis) {
         edgeAction: {
             quirkGate: axis ? 'Z^-½' : 'X^-½',
             qasmGates: axis ? ['z', 's'] : ['x', 'h', 's', 'h'],
+            clifford: axis ? CliffordRotation.S.inv() : CliffordRotation.Sx.inv(),
             sim: simAxisPhase(axis, 3),
             matrix: axis ?
                 Matrix.square(1, 0, 0, Complex.I.neg()) :

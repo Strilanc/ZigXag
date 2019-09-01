@@ -1188,8 +1188,72 @@ class ZxGraph {
     }
 }
 
+/**
+ * @param {!Node} node
+ * @returns {boolean|*}
+ * @private
+ */
+function _contractConvertedNode(node) {
+    if (['O', '@', '+'].indexOf(node.data.kind) === -1) {
+        return false;
+    }
+
+    let [e1, e2] = node.edges;
+    if (e1.data.kind === '-') {
+        return {source: [node.data.source, e1.data.source, e2.data.source], kind: e2.data.kind};
+    }
+    if (e2.data.kind === '-') {
+        return {source: [node.data.source, e2.data.source, e1.data.source], kind: e1.data.kind};
+    }
+
+    return false;
+}
+
+/**
+ * @param {!Edge} edge
+ * @returns {boolean|*}
+ * @private
+ */
+function _contractConvertedEdge(edge) {
+    if (edge.data.kind !== '-') {
+        return false;
+    }
+
+    // Remove self-loops.
+    if (edge.node1 === edge.node2) {
+        return edge.node1.data;
+    }
+
+    let white = ['O', 'w', 'x', 'f'];
+    let black = ['@', 's', 'z', 'a'];
+    for (let color of [white, black]) {
+        let k1 = color.indexOf(edge.node1.data.kind);
+        let k2 = color.indexOf(edge.node2.data.kind);
+        if (k1 !== -1 && k2 !== -1) {
+            return {
+                source: [edge.data.source, edge.node1.data.source, edge.node2.data.source],
+                kind: color[(k1 + k2) % 4]
+            };
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @param {!Graph} graph
+ */
+function optimizeConvertedAdjGraph(graph) {
+    graph.contract(
+        _contractConvertedEdge,
+        _contractConvertedEdge,
+        _contractConvertedNode,
+        _contractConvertedNode);
+    return graph;
+}
+
 function rtrim(e) {
     return e.replace(/ +$/g, '');
 }
 
-export {ZxNode, ZxEdge, ZxPort, ZxGraph}
+export {ZxNode, ZxEdge, ZxPort, ZxGraph, optimizeConvertedAdjGraph}

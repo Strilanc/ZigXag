@@ -1,6 +1,7 @@
 import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
 import {ZxGraph, ZxNode, ZxEdge, ZxPort} from "src/sim/ZxGraph.js"
 import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js"
+import {Port} from "src/base/Graph.js"
 import {Matrix} from "src/base/Matrix.js"
 import {Complex} from "src/base/Complex.js"
 import {GeneralMap} from "src/base/GeneralMap.js"
@@ -81,27 +82,34 @@ suite.test('internalToExternalMapFromFixedPoints', () => {
         [new ZxNode(2, 1).leftPort(), 9],
     ];
 
-    function nodeIndex(zxNode) {
+    function nodeObj(zxNode) {
         for (let node of graph.nodes) {
             if (zxNode.isEqualTo(node.data.source)) {
-                return node.id;
+                return node;
             }
         }
         throw new Error('Not found');
     }
 
-    function edgeIndex(zxEdge) {
+    function edgeObj(zxEdge) {
         for (let edge of graph.edges) {
             if (zxEdge.isEqualTo(edge.data.source)) {
-                return edge.id;
+                return edge;
             }
         }
         throw new Error('Not found');
+    }
+
+    function portIndex(zxPort) {
+        let node = nodeObj(zxPort.node);
+        let edge = edgeObj(zxPort.edge);
+        let port = new Port(node === edge.node2, edge);
+        return port.id;
     }
 
     let expected = new Map();
     for (let [port, index] of expectedBeforeId) {
-        expected.set(nodeIndex(port.node) + ':' + edgeIndex(port.edge), index);
+        expected.set(portIndex(port), index);
     }
     assertThat(qubitMapping).isEqualTo(new PortQubitMapping(
         expected,

@@ -1,3 +1,5 @@
+import {CliffordRotation} from "src/sim/CliffordRotation.js";
+
 class ZxNodeKind {
     /**
      * @param {!{
@@ -14,12 +16,14 @@ class ZxNodeKind {
      *     edgeAction?: !{
      *         quirkGate: null|!string,
      *         qasmGates: null|!Array.<!string>,
+     *         clifford: null|!CliffordRotation,
      *         sim: !function(sim: !ChpSimulator, qubit: !int),
      *         matrix: null|!int|!Matrix,
      *     },
      *     nodeRootEdgeAction?: !{
      *         quirkGate: null|!string,
      *         qasmGates: null|!Array.<!string>,
+     *         clifford: null|!CliffordRotation,
      *         sim: !function(sim: !ChpSimulator, qubit: !int),
      *         matrix: null|!int|!Matrix,
      *     },
@@ -57,6 +61,7 @@ const NO_FIXED_POINTS = degree => [];
 const IDENTITY_EDGE_ACTION = {
     quirkGate: '…',
     qasmGates: [],
+    clifford: CliffordRotation.I,
     sim: (sim, qubit) => {},
     matrix: 1,
 };
@@ -64,6 +69,7 @@ const IDENTITY_EDGE_ACTION = {
 const INVALID_EDGE_ACTION = {
     quirkGate: null,
     qasmGates: null,
+    clifford: null,
     sim: () => { throw new Error("Node doesn't permit degree 2 and so has no valid edge action."); },
     matrix: null,
 };

@@ -22,9 +22,10 @@ const obsExportsIsShowing = exportsIsVisible.observable().whenDifferent();
 
 /**
  * @param {!Revision} revision
+ * @param {!ObservableValue.<!function(graph: !ZxGraph): !AnalyzedQuantumProgram>} obsEvalMethod
  * @param {!Observable.<!boolean>} obsIsAnyOverlayShowing
  */
-function initExports(revision, obsIsAnyOverlayShowing) {
+function initExports(revision, obsEvalMethod, obsIsAnyOverlayShowing) {
     // Show/hide exports overlay.
     (() => {
         const exportButton = /** @type {!HTMLButtonElement} */ document.getElementById('export-button');
@@ -99,7 +100,7 @@ function initExports(revision, obsIsAnyOverlayShowing) {
      * @returns {!AnalyzedQuantumProgram}
      */
     function currentEval() {
-        return evalZxGraph_ep(currentGraph().toAdjGraph());
+        return obsEvalMethod.get()(currentGraph());
     }
 
     setupTextExport('diagram', () => currentGraph().movedToOrigin().toString());

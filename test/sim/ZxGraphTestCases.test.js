@@ -1,5 +1,5 @@
 import {Suite, assertThat, assertThrows, assertTrue} from 'test/TestUtil.js'
-import {ZxGraph, ZxNode, ZxEdge, ZxPort} from 'src/sim/ZxGraph.js'
+import {ZxGraph, optimizeConvertedAdjGraph, ZxNode, ZxEdge, ZxPort} from 'src/sim/ZxGraph.js'
 import {evalZxGraph_ep} from 'src/sim/ZxGraphEval_EprEdge_ParityNode.js'
 import {evalZxGraphGroundTruth} from 'src/sim/ZxGraphGroundTruth.js'
 import {Matrix} from 'src/base/Matrix.js'
@@ -25,6 +25,10 @@ const ALLOWED_ATTRS = new Set([
     'tensor',
     'successProbability',
 ]);
+
+const OTHER_METHODS = {
+    'evalZxGraph_ep | optimizeConvertedAdjGraph': g => evalZxGraph_ep(optimizeConvertedAdjGraph(g.toAdjGraph()))
+};
 
 /**
  * @param {!{
@@ -54,7 +58,7 @@ function graphTestCase(attrs) {
     let gainSpecified = attrs.gain !== undefined && attrs.gain !== null;
     let gainVaries = attrs.gain === null;
 
-    suite.test(name, () => {
+    suite.test(name + '\n' + diagram, () => {
         // Fill in.
         if (attrs.wavefunction === undefined && gainSpecified) {
             attrs.wavefunction = attrs.tensor.times(Complex.ONE.dividedBy(attrs.gain));
@@ -146,6 +150,14 @@ function graphTestCase(attrs) {
             assertThat(altGround).withInfo(
                 {diagram, altDiagram, test: 'altGround ~= ground'}
             ).isApproximatelyEqualTo(ground);
+        }
+
+        for (let otherMethod of Object.keys(OTHER_METHODS)) {
+            let otherResult = OTHER_METHODS[otherMethod](graph);
+            assertThat(otherResult.satisfiable).withInfo({otherMethod}).isEqualTo(result.satisfiable);
+            assertThat(otherResult.successProbability).withInfo({otherMethod}).isApproximatelyEqualTo(
+                result.successProbability);
+            assertThat(otherResult.stabilizers).withInfo({otherMethod}).isEqualTo(result.stabilizers);
         }
     });
 }

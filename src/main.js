@@ -14,7 +14,7 @@ window.onerror = function(msg, url, line, col, error) {
 };
 
 import {Revision} from "src/base/Revision.js";
-import {ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js";
+import {ZxGraph, ZxEdge, ZxNode, optimizeConvertedAdjGraph} from "src/sim/ZxGraph.js";
 import {evalZxGraph_ep} from "src/sim/ZxGraphEval_EprEdge_ParityNode.js";
 import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js";
 import {MathPainter} from "src/MathPainter.js";
@@ -58,10 +58,11 @@ let menuNode = undefined;
 let currentlyDisplayedZxGraph = new DisplayedZxGraph();
 
 let revision = new Revision([new ZxGraph().serialize()], 0, false);
+let obsCurrentEval = new ObservableValue(graph => evalZxGraph_ep(optimizeConvertedAdjGraph(graph.toAdjGraph())));
 
 let obsIsAnyOverlayShowing = new ObservableValue(false);
 initUrlSync(revision);
-initExports(revision, obsIsAnyOverlayShowing.observable());
+initExports(revision, obsCurrentEval, obsIsAnyOverlayShowing.observable());
 initUndoRedo(revision, obsIsAnyOverlayShowing);
 initClear(revision, obsIsAnyOverlayShowing.observable());
 obsExportsIsShowing.
@@ -256,7 +257,7 @@ let prevResults = undefined;
 function drawResults(ctx, displayed, checkGroundTruth=false) {
     let graph = displayed.graph;
     if (!graph.isEqualTo(prevGraph)) {
-        prevResults = evalZxGraph_ep(graph.toAdjGraph());
+        prevResults = obsCurrentEval.get()(graph);
         prevGraph = graph;
     }
     let results = prevResults;
