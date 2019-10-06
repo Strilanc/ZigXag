@@ -75,6 +75,10 @@ module.exports = function(grunt) {
         var wrappedContent = sourceFiles.map(function(path) {
             var content = grunt.file.read(path);
 
+            if (path.endsWith('_wasm_gen.js')) {
+                content += '\nexport {Module};\n';
+            }
+
             content = content.replace(
                 new RegExp(/\bexport\s*({[^}]+})/, 'gm'),
                 function (match, vals) {

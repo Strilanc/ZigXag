@@ -2,141 +2,22 @@ import {DetailedError} from "src/base/DetailedError.js"
 import {SimulatorSpec} from "src/sim/SimulatorSpec.js";
 import {BitTable} from "src/sim/BitTable.js";
 import {Measurement} from "src/sim/Measurement.js";
-import {
-    QState,
-    init_state,
-    free_state,
-    cnot,
-    hadamard,
-    phase,
-    clone_state,
-    measure,
-    peek_state_x,
-    peek_state_z,
-    peek_state_r,
-} from "src/sim/chp_gen.js"
+import {Module} from "src/sim/chp_wasm_gen.js";
+
 /**
- How to produce chp_gen.js
-
- 0) Go to https://www.scottaaronson.com/chp/ and download "chp.c" as a starting point
-
- 1) Rename chp.c to chp.cpp
-
- 2) Delete unused functions and types that cause trouble.
-
-        delete error
-        delete main
-        delete readprog
-        delete runprog
-        delete QProg struct
-        delete unused gate macro defs
-        delete preparestate
-        delete printstate
-        delete printbasisstate
-        delete printket
-        drop s parameter of initstae_ and delete the line that was using it
-
- 3) Every line with a malloc needs a static_cast to the correct type.
-
- 4) Emscripten is confused by pointer args. Use references instead of pointers.
-        search-replace "struct QState *" with "struct QState &"
-        search-replace "q->" with "q."
-
- 5) Replace includes with:
-
-        #include <cstring>
-        #include <cstdlib>
-
- 6) Append this code to the end of the file:
-
-        void free_state(struct QState &q) {
-            for (long i = 0; i < 2 * q.n + 1; i++) {
-                free(q.x[i]);
-                free(q.z[i]);
-            }
-            free(q.x);
-            free(q.z);
-            free(q.r);
-        }
-
-        QState clone_state(const struct QState &src) {
-            QState q = {};
-            q.n = src.n;
-            q.over32 = src.over32;
-            memcpy(q.pw, src.pw, sizeof(q.pw));
-
-            int s = 2 * q.n + 1;
-            q.r = static_cast<int *>(malloc(s * sizeof(int)));
-            memcpy(q.r, src.r, s * sizeof(int));
-
-            q.x = static_cast<unsigned long **>(malloc(s * sizeof(unsigned long *)));
-            q.z = static_cast<unsigned long **>(malloc(s * sizeof(unsigned long *)));
-            for (int i = 0; i < s; i++) {
-                q.x[i] = static_cast<unsigned long *>(malloc(q.over32 * sizeof(unsigned long)));
-                q.z[i] = static_cast<unsigned long *>(malloc(q.over32 * sizeof(unsigned long)));
-                memcpy(q.x[i], src.x[i], q.over32 * sizeof(unsigned long));
-                memcpy(q.z[i], src.z[i], q.over32 * sizeof(unsigned long));
-            }
-            return q;
-        }
-
-         char peek_state_x(const struct QState &src, int row, int col) {
-            int c = col >> 5;
-            int m = 1 << (col & 31);
-            return src.x[row][c] & m ? 1 : 0;
-        }
-
-         char peek_state_z(const struct QState &src, int row, int col) {
-            int c = col >> 5;
-            int m = 1 << (col & 31);
-            return src.x[row][c] & m ? 1 : 0;
-        }
-
-         char peek_state_r(const struct QState &src, int row) {
-            return src.r[row] ? 1 : 0;
-        }
-
-        #include <emscripten/bind.h>
-        using namespace emscripten;
-        EMSCRIPTEN_BINDINGS(my_module) {
-            class_<QState>("QState").constructor<>();
-            function("init_state", &initstae_);
-            function("cnot", &cnot);
-            function("hadamard", &hadamard);
-            function("phase", &phase);
-            function("measure", &measure);
-            function("free_state", &free_state);
-            function("clone_state", &clone_state);
-            function("peek_state_x", &peek_state_x);
-            function("peek_state_z", &peek_state_z);
-            function("peek_state_r", &peek_state_r);
-        }
-
-    7) Add bool random_result parameter to measure
-
-        search-replace "rand()%2" with "random_result ? 1 : 0"
-
-    8) Compile with Emscripten
-
-        emcc -O1 --bind chp.cpp -std=c++11 -o chp_gen.js -s WASM=0
-
-        Note: using -O2 causes a "could not load memory initializer" error when running. Not sure why.
-
-    9) Append export lines to generated code
-
-         let QState = Module.QState;
-         let init_state = Module.init_state;
-         let free_state = Module.free_state;
-         let cnot = Module.cnot;
-         let hadamard = Module.hadamard;
-         let phase = Module.phase;
-         let measure = Module.measure;
-         let clone_state = Module.clone_state;
-         let peek_state_x = Module.peek_state_x;
-         let peek_state_z = Module.peek_state_z;
-         let peek_state_r = Module.peek_state_r;
-         export {QState, init_state, free_state, cnot, hadamard, phase, clone_state, measure, peek_state_x, peek_state_z, peek_state_r}
-*/
+ * Activate Emscripten. E.g. on windows from emsdk cloned repo directory:
+ *
+ *     emsdk activate latest
+ *     emsdk_env.bst
+ *
+ * Compile with Emscripten:
+ *
+ *      emcc -O1 --bind chp.cpp -std=c++11 -o chp_gen.js -s WASM=0
+ *
+ *      Note: using -O2 causes a "could not load memory initializer" error when running. Not sure why.
+ *
+ *  The build system automatically adds the `export {Module}` line.
+ */
 
 
 class ChpSimulator extends SimulatorSpec {
@@ -146,8 +27,8 @@ class ChpSimulator extends SimulatorSpec {
      */
     constructor(maxQubitCount=10, defaultBias=0.5) {
         super();
-        this._state = new QState();
-        init_state(this._state, maxQubitCount);
+        this._state = new Module.QState();
+        Module.init_state(this._state, maxQubitCount);
         this._maxQubitCount = maxQubitCount;
         this._nextQubitId = 0;
         this._qubitToSlotMap = new Map();
@@ -160,8 +41,7 @@ class ChpSimulator extends SimulatorSpec {
      */
     clone() {
         let result = new ChpSimulator(this._maxQubitCount);
-        result.destruct();
-        result._state = clone_state(this._state);
+        Module.copy_state(result._state, this._state);
         result._nextQubitId = this._nextQubitId;
         for (let [k, v] of this._qubitToSlotMap.entries()) {
             result._qubitToSlotMap.set(k, v);
@@ -193,7 +73,7 @@ class ChpSimulator extends SimulatorSpec {
         }
         let randomResult = Math.random() < bias;
         let a = this._slotFor(q);
-        let m = measure(this._state, a, 0, randomResult);
+        let m = Module.measure(this._state, a, 0, randomResult);
         return new Measurement((m & 1) !== 0, (m & 2) !== 0);
     }
 
@@ -219,17 +99,17 @@ class ChpSimulator extends SimulatorSpec {
         if (a === b) {
             throw new DetailedError('target and control are the same.', {target, control})
         }
-        cnot(this._state, a, b);
+        Module.cnot(this._state, a, b);
     }
 
     hadamard(target) {
         let a = this._slotFor(target);
-        hadamard(this._state, a);
+        Module.hadamard(this._state, a);
     }
 
     phase(target) {
         let a = this._slotFor(target);
-        phase(this._state, a);
+        Module.phase(this._state, a);
     }
 
     /**
@@ -245,19 +125,24 @@ class ChpSimulator extends SimulatorSpec {
     }
 
     probability(target) {
-        let q = clone_state(this._state);
-        let a = this._slotFor(target);
-        let m = measure(q, a, 0, false);
-        free_state(q);
-        if ((m & 2) !== 0) {
-            return 0.5;
+        let tmp = new Module.QState();
+        Module.copy_state(tmp, this._state);
+        try {
+            let a = this._slotFor(target);
+            let m = Module.measure(tmp, a, 0, false);
+            if ((m & 2) !== 0) {
+                return 0.5;
+            }
+            return m;
+        } finally {
+            Module.free_state(tmp);
+            tmp.delete();
         }
-        return m;
     }
 
     collapse(target, outcome) {
         let a = this._slotFor(target);
-        let m = measure(this._state, a, 0, outcome);
+        let m = Module.measure(this._state, a, 0, outcome);
         let result = (m & 1) !== 0;
         if (result !== outcome) {
             throw new DetailedError("Failed to post-select; result impossible.", {target, m, result, outcome});
@@ -272,18 +157,19 @@ class ChpSimulator extends SimulatorSpec {
         let out = BitTable.zeros(2*n+1, 2*n);
         for (let row = 0; row < 2*n; row++) {
             for (let col = 0; col < n; col++) {
-                out.set(row, col, peek_state_x(this._state, row, col));
+                out.set(row, col, Module.peek_state_x(this._state, row, col));
             }
             for (let col = 0; col < n; col++) {
-                out.set(row, col + n, peek_state_z(this._state, row, col));
+                out.set(row, col + n, Module.peek_state_z(this._state, row, col));
             }
-            out.set(row, 2 * n, peek_state_r(this._state, row));
+            out.set(row, 2 * n, Module.peek_state_r(this._state, row));
         }
         return out;
     }
 
     destruct() {
-        free_state(this._state);
+        Module.free_state(this._state);
+        this._state.delete();
         this._state = undefined;
     }
 
@@ -294,12 +180,12 @@ class ChpSimulator extends SimulatorSpec {
         let n = this._maxQubitCount;
 
         let _cell = (row, col) => {
-            let k = peek_state_x(this._state, row, col) + 2 * peek_state_z(this._state, row, col);
+            let k = Module.peek_state_x(this._state, row, col) + 2 * Module.peek_state_z(this._state, row, col);
             return ['.', 'X', 'Z', 'Y'][k]
         };
 
         let _row = row => {
-            let result = peek_state_r(this._state, row) ? '-' : '+';
+            let result = Module.peek_state_r(this._state, row) ? '-' : '+';
             for (let col = 0; col < n; col++) {
                 result += _cell(row, col)
             }

@@ -22,7 +22,6 @@ struct QState
     unsigned long **x; // (2n+1)*n matrix for stabilizer/destabilizer x bits (there's one "scratch row" at
     unsigned long **z; // (2n+1)*n matrix for z bits                                                 the bottom)
     int *r;         // Phase bits: 0 for +1, 1 for i, 2 for -1, 3 for -i.  Normally either 0 or 2.
-    unsigned long pw[32]; // pw[i] = 2^i
     long over32; // floor(n/8)+1
 
 };
@@ -44,8 +43,8 @@ void cnot(struct QState &q, long b, long c)
 
     b5 = b>>5;
     c5 = c>>5;
-    pwb = q.pw[b&31];
-    pwc = q.pw[c&31];
+    pwb = 1 << (b&31);
+    pwc = 1 << (c&31);
     for (i = 0; i < 2*q.n; i++)
     {
         if (q.x[i][b5]&pwb) q.x[i][c5] ^= pwc;
@@ -76,7 +75,7 @@ void hadamard(struct QState &q, long b)
     unsigned long pw;
 
     b5 = b>>5;
-    pw = q.pw[b&31];
+    pw = 1 << (b&31);
     for (i = 0; i < 2*q.n; i++)
     {
         tmp = q.x[i][b5];
@@ -102,7 +101,7 @@ void phase(struct QState &q, long b)
     unsigned long pw;
 
     b5 = b>>5;
-    pw = q.pw[b&31];
+    pw = 1 << (b&31);
     for (i = 0; i < 2*q.n; i++)
     {
         if ((q.x[i][b5]&pw) && (q.z[i][b5]&pw)) q.r[i] = (q.r[i]+2)%4;
@@ -172,13 +171,13 @@ void rowset(struct QState &q, long i, long b)
     {
         b5 = b>>5;
         b31 = b&31;
-        q.x[i][b5] = q.pw[b31];
+        q.x[i][b5] = 1 << b31;
     }
     else
     {
         b5 = (b - q.n)>>5;
         b31 = (b - q.n)&31;
-        q.z[i][b5] = q.pw[b31];
+        q.z[i][b5] = 1 << b31;
     }
 
     return;
@@ -201,7 +200,7 @@ int clifford(struct QState &q, long i, long k)
     for (j = 0; j < q.over32; j++)
         for (l = 0; l < 32; l++)
         {
-            pw = q.pw[l];
+            pw = 1 << l;
             if ((q.x[k][j]&pw) && (!(q.z[k][j]&pw))) // X
             {
                 if ((q.x[i][j]&pw) && (q.z[i][j]&pw)) e++;         // XY=iZ
@@ -267,7 +266,7 @@ int measure(struct QState &q, long b, int sup, bool random_result)
     unsigned long pw;
 
     b5 = b>>5;
-    pw = q.pw[b&31];
+    pw = 1 << (b&31);
     for (p = 0; p < q.n; p++)         // loop over stabilizer generators
     {
         if (q.x[p+q.n][b5]&pw) ran = 1;         // if a Zbar does NOT commute with Z_b (the
@@ -333,7 +332,7 @@ long gaussian(struct QState &q)
     for (j = 0; j < q.n; j++)
     {
         j5 = j>>5;
-        pw = q.pw[j&31];
+        pw = 1 << (j&31);
         for (k = i; k < 2*q.n; k++) // Find a generator containing X in jth column
             if (q.x[k][j5]&pw) break;
         if (k < 2*q.n)
@@ -354,7 +353,7 @@ long gaussian(struct QState &q)
     for (j = 0; j < q.n; j++)
     {
         j5 = j>>5;
-        pw = q.pw[j&31];
+        pw = 1 << (j&31);
         for (k = i; k < 2*q.n; k++) // Find a generator containing Z in jth column
             if (q.z[k][j5]&pw) break;
         if (k < 2*q.n)
@@ -417,7 +416,7 @@ void seed(struct QState &q, long g)
         for (j = q.n - 1; j >= 0; j--)
         {
             j5 = j>>5;
-            pw = q.pw[j&31];
+            pw = 1 << (j&31);
             if (q.z[i][j5]&pw)
             {
                 min = j;
@@ -427,7 +426,7 @@ void seed(struct QState &q, long g)
         if (f==2)
         {
             j5 = min>>5;
-            pw = q.pw[min&31];
+            pw = 1 << (min&31);
             q.x[2*q.n][j5] ^= pw;         // Make the seed consistent with the ith equation
         }
     }
@@ -452,9 +451,6 @@ void initstae_(struct QState &q, long n)
     q.z = static_cast<unsigned long **>(malloc((2 * q.n + 1) * sizeof(unsigned long*)));
     q.r = static_cast<int *>(malloc((2 * q.n + 1) * sizeof(int)));
     q.over32 = (q.n>>5) + 1;
-    q.pw[0] = 1;
-    for (i = 1; i < 32; i++)
-        q.pw[i] = 2*q.pw[i-1];
     for (i = 0; i < 2*q.n + 1; i++)
     {
         q.x[i] = static_cast<unsigned long *>(malloc(q.over32 * sizeof(unsigned long)));
@@ -465,11 +461,11 @@ void initstae_(struct QState &q, long n)
             q.z[i][j] = 0;
         }
         if (i < q.n)
-            q.x[i][i>>5] = q.pw[i&31];
+            q.x[i][i>>5] = 1 << (i&31);
         else if (i < 2*q.n)
         {
             j = i-q.n;
-            q.z[i][j>>5] = q.pw[j&31];
+            q.z[i][j>>5] = 1 << (j&31);
         }
         q.r[i] = 0;
     }
@@ -489,11 +485,9 @@ void free_state(struct QState &q) {
     free(q.r);
 }
 
-QState clone_state(const struct QState &src) {
-    QState q = {};
+void copy_state(struct QState &q, const struct QState &src) {
     q.n = src.n;
     q.over32 = src.over32;
-    memcpy(q.pw, src.pw, sizeof(q.pw));
 
     int s = 2 * q.n + 1;
     q.r = static_cast<int *>(malloc(s * sizeof(int)));
@@ -507,7 +501,6 @@ QState clone_state(const struct QState &src) {
         memcpy(q.x[i], src.x[i], q.over32 * sizeof(unsigned long));
         memcpy(q.z[i], src.z[i], q.over32 * sizeof(unsigned long));
     }
-    return q;
 }
 
 char peek_state_x(const struct QState &src, int row, int col) {
@@ -536,7 +529,7 @@ EMSCRIPTEN_BINDINGS(my_module) {
         function("phase", &phase);
         function("measure", &measure);
         function("free_state", &free_state);
-        function("clone_state", &clone_state);
+        function("copy_state", &copy_state);
         function("peek_state_x", &peek_state_x);
         function("peek_state_z", &peek_state_z);
         function("peek_state_r", &peek_state_r);
