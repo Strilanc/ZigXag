@@ -4075,7 +4075,7 @@ function __Z7measureR6QStatelib($q,$b,$sup,$random_result) {
  $retval$0 = $$63;
  return ($retval$0|0);
 }
-function __Z9initstae_R6QStatel($q,$n) {
+function __Z10init_stateR6QStatel($q,$n) {
  $q = $q|0;
  $n = $n|0;
  var $0 = 0, $1 = 0, $10 = 0, $11 = 0, $12 = 0, $13 = 0, $14 = 0, $15 = 0, $16 = 0, $17 = 0, $2 = 0, $3 = 0, $4 = 0, $5 = 0, $6 = 0, $7 = 0, $8 = 0, $9 = 0, $add = 0, $add15 = 0;
@@ -4152,7 +4152,7 @@ function __Z9initstae_R6QStatel($q,$n) {
    $13 = $i$048 >>> 5;
    $arrayidx43 = (($12) + ($13<<2)|0);
    $and49$pn$in = $i$048;$arrayidx54$sink = $arrayidx43;
-   label = 10;
+   label = 11;
   } else {
    $mul45 = $10 << 1;
    $cmp46 = ($i$048|0)<($mul45|0);
@@ -4164,10 +4164,10 @@ function __Z9initstae_R6QStatel($q,$n) {
     $shr53 = $sub >> 5;
     $arrayidx54 = (($15) + ($shr53<<2)|0);
     $and49$pn$in = $sub;$arrayidx54$sink = $arrayidx54;
-    label = 10;
+    label = 11;
    }
   }
-  if ((label|0) == 10) {
+  if ((label|0) == 11) {
    label = 0;
    $and49$pn = $and49$pn$in & 31;
    $shl50$sink = 1 << $and49$pn;
@@ -10178,7 +10178,7 @@ var FUNCTION_TABLE_iiiii = [b4,__Z7measureR6QStatelib,__ZN10emscripten8internal7
 var FUNCTION_TABLE_iiiiii = [b5,__ZN10emscripten8internal7InvokerIiJR6QStatelibEE6invokeEPFiS3_libEPS2_lib];
 var FUNCTION_TABLE_v = [b6];
 var FUNCTION_TABLE_vi = [b7,__ZN10__cxxabiv116__shim_type_infoD2Ev,__ZN10__cxxabiv117__class_type_infoD0Ev,__ZNK10__cxxabiv116__shim_type_info5noop1Ev,__ZNK10__cxxabiv116__shim_type_info5noop2Ev,__ZN10__cxxabiv120__si_class_type_infoD0Ev,__ZN10__cxxabiv123__fundamental_type_infoD0Ev,__ZN10__cxxabiv119__pointer_type_infoD0Ev,__ZN10__cxxabiv121__vmi_class_type_infoD0Ev,__ZN10emscripten8internal14raw_destructorI6QStateEEvPT_,__Z10free_stateR6QState,b7,b7,b7,b7,b7];
-var FUNCTION_TABLE_vii = [b8,__Z9initstae_R6QStatel,__Z8hadamardR6QStatel,__Z5phaseR6QStatel,__Z10copy_stateR6QStateRKS_,__ZN10emscripten8internal7InvokerIvJR6QStateEE6invokeEPFvS3_EPS2_,b8,b8];
+var FUNCTION_TABLE_vii = [b8,__Z10init_stateR6QStatel,__Z8hadamardR6QStatel,__Z5phaseR6QStatel,__Z10copy_stateR6QStateRKS_,__ZN10emscripten8internal7InvokerIvJR6QStateEE6invokeEPFvS3_EPS2_,b8,b8];
 var FUNCTION_TABLE_viii = [b9,__Z4cnotR6QStatell,__ZN10emscripten8internal7InvokerIvJR6QStatelEE6invokeEPFvS3_lEPS2_l,__ZN10emscripten8internal7InvokerIvJR6QStateRKS2_EE6invokeEPFvS3_S5_EPS2_S9_];
 var FUNCTION_TABLE_viiii = [b10,__ZNK10__cxxabiv117__class_type_info27has_unambiguous_public_baseEPNS_19__dynamic_cast_infoEPvi,__ZNK10__cxxabiv120__si_class_type_info27has_unambiguous_public_baseEPNS_19__dynamic_cast_infoEPvi,__ZNK10__cxxabiv121__vmi_class_type_info27has_unambiguous_public_baseEPNS_19__dynamic_cast_infoEPvi,__ZN10emscripten8internal7InvokerIvJR6QStatellEE6invokeEPFvS3_llEPS2_ll,b10,b10,b10];
 var FUNCTION_TABLE_viiiii = [b11,__ZNK10__cxxabiv117__class_type_info16search_below_dstEPNS_19__dynamic_cast_infoEPKvib,__ZNK10__cxxabiv120__si_class_type_info16search_below_dstEPNS_19__dynamic_cast_infoEPKvib,__ZNK10__cxxabiv121__vmi_class_type_info16search_below_dstEPNS_19__dynamic_cast_infoEPKvib];
