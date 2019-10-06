@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import {Suite, assertThat, assertThrows, assertTrue} from "test/TestUtil.js"
-import {ZxGraph, ZxNode, ZxEdge, ZxPort} from "src/sim/ZxGraph.js"
+import {ZxGraph, ZxNode, ZxEdge, ZxPort, edgeActionsToNodesAdjGraph} from "src/sim/ZxGraph.js"
 import {GeneralMap} from "src/base/GeneralMap.js"
 import {GeneralSet} from "src/base/GeneralSet.js"
 import {seq, Seq} from "src/base/Seq.js"
@@ -457,15 +457,15 @@ O---O---@---@
     assertThat(json.nodes).isEqualTo([
         {source: n00, kind: '@'},
         {source: n10, kind: '@'},
-        {source: n20, kind: '+'},
+        {source: n20, kind: '@'},
 
         {source: n01, kind: 'O'},
-        {source: n11, kind: '+'},
-        {source: h21, kind: '+'},
-        {source: v21, kind: '+'},
+        {source: n11, kind: '@'},
+        {source: h21, kind: '@'},
+        {source: v21, kind: '@'},
         {source: n31, kind: 'O'},
 
-        {source: n22, kind: '+'},
+        {source: n22, kind: '@'},
 
         {source: n03, kind: 'O'},
         {source: n13, kind: 'O'},
@@ -485,4 +485,25 @@ O---O---@---@
         {n1: 10, n2: 11, data: {source: new ZxEdge(n13, n23), kind: '-'}},
         {n1: 11, n2: 12, data: {source: new ZxEdge(n23, n33), kind: '-'}},
     ]);
+});
+
+suite.test('edgeActionsToNodesAdjGraph', () => {
+    let graph = ZxGraph.fromDiagram(`
+        !-H-?
+    `);
+    let r = edgeActionsToNodesAdjGraph(graph.toAdjGraph());
+    let a = new ZxNode(0, 0);
+    let b = new ZxNode(1, 0);
+    let ab = a.rightUnitEdge();
+    assertThat(r.toJson()).isEqualTo({
+        nodes: [
+            {source: a, kind: 'in'},
+            {source: b, kind: 'out'},
+            {source: ab, kind: 'h'},
+        ],
+        edges: [
+            {n1: 0, n2: 2, data: {source: ab, kind: '-'}},
+            {n1: 2, n2: 1, data: {source: ab, kind: '-'}},
+        ]
+    });
 });

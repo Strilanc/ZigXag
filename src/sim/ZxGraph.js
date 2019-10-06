@@ -470,7 +470,7 @@ class ZxGraph {
                 let pairs = this.activeCrossingPortPairs(node);
                 for (let [a, b] of pairs) {
                     let source = pairs.length === 1 ? node : a;
-                    let n = g.addNode({source, kind});
+                    let n = g.addNode({source, kind: '@'});
                     nodeMap.set(a, n);
                     nodeMap.set(b, n);
                 }
@@ -1194,16 +1194,24 @@ class ZxGraph {
  * @private
  */
 function _contractConvertedNode(node) {
-    if (['O', '@', '+'].indexOf(node.data.kind) === -1) {
-        return false;
+    let [e1, e2] = node.edges;
+
+    // Cancel adjacent hadamards.
+    let hadamardIdentities = ['O', '@', 'h', '-'];
+    let kinds = [node.data.kind, e1.data.kind, e2.data.kind];
+    if (kinds.every(kind => hadamardIdentities.indexOf(kind) !== -1)) {
+        let parity = kinds.filter(e => e === 'h').length % 2;
+        return {source: [node.data.source, e1.data.source, e2.data.source], kind: parity ? 'h' : '@'};
     }
 
-    let [e1, e2] = node.edges;
-    if (e1.data.kind === '-') {
-        return {source: [node.data.source, e1.data.source, e2.data.source], kind: e2.data.kind};
-    }
-    if (e2.data.kind === '-') {
-        return {source: [node.data.source, e2.data.source, e1.data.source], kind: e1.data.kind};
+    // Remove binary spider nodes with no phase and an empty edge.
+    if (['O', '@'].indexOf(node.data.kind) !== -1) {
+        if (e1.data.kind === '-') {
+            return {source: [node.data.source, e1.data.source, e2.data.source], kind: e2.data.kind};
+        }
+        if (e2.data.kind === '-') {
+            return {source: [node.data.source, e2.data.source, e1.data.source], kind: e1.data.kind};
+        }
     }
 
     return false;
@@ -1244,6 +1252,7 @@ function _contractConvertedEdge(edge) {
  * @param {!Graph} graph
  */
 function optimizeConvertedAdjGraph(graph) {
+    graph = graph.copy();
     graph.contract(
         _contractConvertedEdge,
         _contractConvertedEdge,
@@ -1252,8 +1261,25 @@ function optimizeConvertedAdjGraph(graph) {
     return graph;
 }
 
+/**
+ * @param {!Graph} graph
+ * @returns {!Graph}
+ */
+function edgeActionsToNodesAdjGraph(graph) {
+    graph = graph.copy();
+    for (let edge of graph.edges) {
+        if (edge.data.kind !== '-') {
+            let c = graph.addNode({source: edge.data.source, kind: edge.data.kind});
+            edge.del();
+            edge.node1.addEdgeTo(c, {source: edge.data.source, kind: '-'});
+            c.addEdgeTo(edge.node2, {source: edge.data.source, kind: '-'});
+        }
+    }
+    return graph;
+}
+
 function rtrim(e) {
     return e.replace(/ +$/g, '');
 }
 
-export {ZxNode, ZxEdge, ZxPort, ZxGraph, optimizeConvertedAdjGraph}
+export {ZxNode, ZxEdge, ZxPort, ZxGraph, optimizeConvertedAdjGraph, edgeActionsToNodesAdjGraph}

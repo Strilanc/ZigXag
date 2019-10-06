@@ -124,6 +124,41 @@ function internalToExternalMapFromFixedPoints(fixedPoints, numInternalDegreesOfF
     return fixupMap;
 }
 
+class QubitInventory {
+    /**
+     * @param {!int} numQubits
+     * @param {!int} numIn
+     * @param {!int} numOut
+     * @param {!int} numPost
+     */
+    constructor(numQubits, numIn, numOut, numPost) {
+        this.numQubits = numQubits;
+        this.numIn = numIn;
+        this.numOut = numOut;
+        this.numPost = numPost;
+    }
+
+    get numExternal() {
+        return this.numIn + this.numOut + this.numPost;
+    }
+
+    get numInternal() {
+        return this.numQubits - this.numExternal;
+    }
+
+    /**
+     * @param {*} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return (other instanceof QubitInventory &&
+            this.numQubits === other.numQubits &&
+            this.numIn === other.numIn &&
+            this.numOut === other.numOut &&
+            this.numPost === other.numPost);
+    }
+}
+
 class PortQubitMapping {
     /**
      * @param {!Map.<!string, !int>} map
@@ -133,9 +168,21 @@ class PortQubitMapping {
      */
     constructor(map, numIn, numOut, numPost) {
         this.map = map;
+        this.numQubits = new Set(map.values()).size;
         this.numIn = numIn;
         this.numOut = numOut;
         this.numPost = numPost;
+    }
+
+    /**
+     * @returns {!QubitInventory}
+     */
+    inventory() {
+        return new QubitInventory(
+            this.numQubits,
+            this.numIn,
+            this.numOut,
+            this.numPost);
     }
 
     /**
@@ -148,10 +195,6 @@ class PortQubitMapping {
             this.numIn === other.numIn &&
             this.numOut === other.numOut &&
             this.numPost === other.numPost);
-    }
-
-    get numQubits() {
-        return this.map.size;
     }
 
     get numExternal() {
@@ -263,4 +306,5 @@ export {
     PortQubitMapping,
     analyzeQuantumProgram,
     AnalyzedQuantumProgram,
+    QubitInventory,
 }
