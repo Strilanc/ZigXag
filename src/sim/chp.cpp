@@ -24,12 +24,6 @@ struct QState {
     void col_xor(long dst, long src);
 };
 
-struct Col {
-    unsigned long** data;
-    long height;
-    long index;
-};
-
 // Apply a CNOT gate with control b and target c
 void col_xor(unsigned long** dst, unsigned long** src, long b, long c, long n) {
     long b5 = b >> 5;
@@ -140,13 +134,11 @@ void rowset(struct QState &q, long i, long b) {
 
 // Return the phase (0,1,2,3) when row i is LEFT-multiplied by row k
 int clifford(struct QState &q, long i, long k) {
-    long j;
-    long l;
     unsigned long pw;
     long e=0; // Power to which i is raised
 
-    for (j = 0; j < q.over32; j++) {
-        for (l = 0; l < 32; l++) {
+    for (long j = 0; j < q.over32; j++) {
+        for (long l = 0; l < 32; l++) {
             pw = 1 << l;
             // X
             if ((q.x[k][j]&pw) && (!(q.z[k][j]&pw))) {
@@ -167,8 +159,10 @@ int clifford(struct QState &q, long i, long k) {
     }
 
     e = (e+q.r[i]+q.r[k])%4;
-    if (e>=0) return e;
-    else return e+4;
+    if (e>=0) {
+        return e;
+    }
+    return e+4;
 }
 
 
@@ -191,14 +185,11 @@ void rowmult(struct QState &q, long i, long k) {
 // sup: 1 if determinate measurement results should be suppressed, 0 otherwise
 int measure(struct QState &q, long b, int sup, bool random_result) {
     int ran = 0;
-    long i;
     long p; // pivot row in stabilizer
     long m; // pivot row in destabilizer
-    long b5;
-    unsigned long pw;
 
-    b5 = b>>5;
-    pw = 1 << (b&31);
+    long b5 = b>>5;
+    unsigned long pw = 1 << (b&31);
     // loop over stabilizer generators
     for (p = 0; p < q.n; p++) {
         if (q.x[p+q.n][b5]&pw) ran = 1;         // if a Zbar does NOT commute with Z_b (the
@@ -207,12 +198,19 @@ int measure(struct QState &q, long b, int sup, bool random_result) {
 
     // If outcome is indeterminate
     if (ran) {
-        rowcopy(q, p, p + q.n);                         // Set Xbar_p := Zbar_p
-        rowset(q, p + q.n, b + q.n);                 // Set Zbar_p := Z_b
-        q.r[p + q.n] = 2*(random_result ? 1 : 0);                 // moment of quantum randomness
-        for (i = 0; i < 2*q.n; i++)                 // Now update the Xbar's and Zbar's that don't commute with
-            if ((i!=p) && (q.x[i][b5]&pw))         // Z_b
+        // Set Xbar_p := Zbar_p
+        rowcopy(q, p, p + q.n);
+        // Set Zbar_p := Z_b
+        rowset(q, p + q.n, b + q.n);
+        // moment of quantum randomness
+        q.r[p + q.n] = 2*(random_result ? 1 : 0);
+        // Now update the Xbar's and Zbar's that don't commute with
+        for (long i = 0; i < 2*q.n; i++) {
+            // Z_b
+            if ((i!=p) && (q.x[i][b5]&pw)) {
                 rowmult(q, i, p);
+            }
+        }
         if (q.r[p + q.n]) return 3;
         else return 2;
     }
@@ -222,7 +220,7 @@ int measure(struct QState &q, long b, int sup, bool random_result) {
         for (m = 0; m < q.n; m++)                         // Before we were checking if stabilizer generators commute
             if (q.x[m][b5]&pw) break;                 // with Z_b; now we're checking destabilizer generators
         rowcopy(q, 2*q.n, m + q.n);
-        for (i = m+1; i < q.n; i++)
+        for (long i = m+1; i < q.n; i++)
             if (q.x[i][b5]&pw)
                 rowmult(q, 2*q.n, i + q.n);
         if (q.r[2*q.n]) return 1;
@@ -249,8 +247,7 @@ long gaussian(struct QState &q) {
     long g; // Return value
     unsigned long pw;
 
-    for (j = 0; j < q.n; j++)
-    {
+    for (long j = 0; j < q.n; j++) {
         j5 = j>>5;
         pw = 1 << (j&31);
         for (k = i; k < 2*q.n; k++) // Find a generator containing X in jth column
@@ -270,28 +267,25 @@ long gaussian(struct QState &q) {
     }
     g = i - q.n;
 
-    for (j = 0; j < q.n; j++)
-    {
+    for (long j = 0; j < q.n; j++) {
         j5 = j>>5;
         pw = 1 << (j&31);
         for (k = i; k < 2*q.n; k++) // Find a generator containing Z in jth column
             if (q.z[k][j5]&pw) break;
-        if (k < 2*q.n)
-        {
+        if (k < 2*q.n) {
             rowswap(q, i, k);
             rowswap(q, i-q.n, k-q.n);
-            for (k2 = i+1; k2 < 2*q.n; k2++)
-                if (q.z[k2][j5]&pw)
-                {
+            for (k2 = i+1; k2 < 2*q.n; k2++) {
+                if (q.z[k2][j5]&pw) {
                     rowmult(q, k2, i);
                     rowmult(q, i-q.n, k2-q.n);
                 }
+            }
             i++;
         }
     }
 
     return g;
-
 }
 
 
@@ -300,22 +294,19 @@ long gaussian(struct QState &q) {
 // writes P to the scratch space of q.  For this to work, Gaussian elimination must already have been
 // performed on q.  g is the return value from gaussian(q).
 void seed(struct QState &q, long g) {
-    long i;
-    long j;
     long j5;
     unsigned long pw;
-    int f;
     long min;
 
     q.r[2*q.n] = 0;
-    for (j = 0; j < q.over32; j++) {
+    for (long j = 0; j < q.over32; j++) {
         q.x[2*q.n][j] = 0;         // Wipe the scratch space clean
         q.z[2*q.n][j] = 0;
     }
 
-    for (i = 2*q.n - 1; i >= q.n + g; i--) {
-        f = q.r[i];
-        for (j = q.n - 1; j >= 0; j--) {
+    for (long i = 2*q.n - 1; i >= q.n + g; i--) {
+        int f = q.r[i];
+        for (long j = q.n - 1; j >= 0; j--) {
             j5 = j>>5;
             pw = 1 << (j&31);
             if (q.z[i][j5]&pw) {
@@ -335,13 +326,13 @@ void seed(struct QState &q, long g) {
 
 // Initialize state q to have n qubits, and input specified by s
 QState::QState(long n) : n(n) {
-    x = static_cast<unsigned long **>(malloc((2 * n + 1) * sizeof(unsigned long*)));
-    z = static_cast<unsigned long **>(malloc((2 * n + 1) * sizeof(unsigned long*)));
-    r = static_cast<int *>(malloc((2 * n + 1) * sizeof(int)));
+    x = new unsigned long *[2 * n + 1];
+    z = new unsigned long *[2 * n + 1];
+    r = new int[2 * n + 1];
     over32 = (n>>5) + 1;
     for (long i = 0; i < 2*n + 1; i++) {
-        x[i] = static_cast<unsigned long *>(malloc(over32 * sizeof(unsigned long)));
-        z[i] = static_cast<unsigned long *>(malloc(over32 * sizeof(unsigned long)));
+        x[i] = new unsigned long[over32];
+        z[i] = new unsigned long[over32];
         long j;
         for (j = 0; j < over32; j++) {
             x[i][j] = 0;
@@ -359,12 +350,12 @@ QState::QState(long n) : n(n) {
 
 QState::~QState() {
     for (long i = 0; i < 2 * n + 1; i++) {
-        free(x[i]);
-        free(z[i]);
+        delete[] x[i];
+        delete[] z[i];
     }
-    free(x);
-    free(z);
-    free(r);
+    delete[] x;
+    delete[] z;
+    delete[] r;
 }
 
 QState::QState(const struct QState &src, int nothing) {
@@ -372,14 +363,14 @@ QState::QState(const struct QState &src, int nothing) {
     over32 = src.over32;
 
     int s = 2 * n + 1;
-    r = static_cast<int *>(malloc(s * sizeof(int)));
+    r = new int[s];
     memcpy(r, src.r, s * sizeof(int));
 
-    x = static_cast<unsigned long **>(malloc(s * sizeof(unsigned long *)));
-    z = static_cast<unsigned long **>(malloc(s * sizeof(unsigned long *)));
+    x = new unsigned long *[s];
+    z = new unsigned long *[s];
     for (int i = 0; i < s; i++) {
-        x[i] = static_cast<unsigned long *>(malloc(over32 * sizeof(unsigned long)));
-        z[i] = static_cast<unsigned long *>(malloc(over32 * sizeof(unsigned long)));
+        x[i] = new unsigned long[over32];
+        z[i] = new unsigned long[over32];
         memcpy(x[i], src.x[i], over32 * sizeof(unsigned long));
         memcpy(z[i], src.z[i], over32 * sizeof(unsigned long));
     }
