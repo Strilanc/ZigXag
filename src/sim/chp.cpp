@@ -18,7 +18,7 @@ struct QState {
     long n;         // # of qubits
     unsigned long **x; // (2n+1)*n matrix for stabilizer/destabilizer x bits (there's one "scratch row" at
     unsigned long **z; // (2n+1)*n matrix for z bits                                                 the bottom)
-    int *r;         // Phase bits: 0 for +1, 1 for i, 2 for -1, 3 for -i.  Normally either 0 or 2.
+    bool *r;         // Phase bits: 0 for +1, 1 for -1
     long over32; // floor(n/8)+1
 
     void col_xor(long dst, long src);
@@ -51,9 +51,7 @@ void cnot(struct QState &q, long b, long c) {
         bool zib = q.z[i][b5] & pwb;
         bool xic = q.x[i][c5] & pwc;
         bool zic = q.z[i][c5] & pwc;
-        if (xib && zic && (xic == zib)) {
-            q.r[i] = (q.r[i]+2)%4;
-        }
+        q.r[i] ^= xib && zic && (xic == zib);
     }
 }
 
@@ -65,9 +63,7 @@ void hadamard(struct QState &q, long b) {
         unsigned long tmp = q.x[i][b5];
         q.x[i][b5] ^= (q.x[i][b5] ^ q.z[i][b5]) & pw;
         q.z[i][b5] ^= (q.z[i][b5] ^ tmp) & pw;
-        if ((q.x[i][b5]&pw) && (q.z[i][b5]&pw)) {
-            q.r[i] = (q.r[i]+2)%4;
-        }
+        q.r[i] ^= (q.x[i][b5]&pw) && (q.z[i][b5]&pw);
     }
 }
 
@@ -77,9 +73,7 @@ void phase(struct QState &q, long b) {
     long b5 = b >> 5;
     unsigned long pw = 1 << (b&31);
     for (long i = 0; i < 2*q.n; i++) {
-        if ((q.x[i][b5]&pw) && (q.z[i][b5]&pw)) {
-            q.r[i] = (q.r[i]+2)%4;
-        }
+        q.r[i] ^= (q.x[i][b5]&pw) && (q.z[i][b5]&pw);
         q.z[i][b5] ^= q.x[i][b5] & pw;
     }
 }
@@ -158,7 +152,7 @@ int clifford(struct QState &q, long i, long k) {
         }
     }
 
-    e = (e+q.r[i]+q.r[k])%4;
+    e = (e+q.r[i]*2+q.r[k]*2)%4;
     if (e>=0) {
         return e;
     }
@@ -169,7 +163,7 @@ int clifford(struct QState &q, long i, long k) {
 
 // Left-multiply row i by row k
 void rowmult(struct QState &q, long i, long k) {
-    q.r[i] = clifford(q,i,k);
+    q.r[i] = clifford(q,i,k) >> 1;
     for (long j = 0; j < q.over32; j++) {
         q.x[i][j] ^= q.x[k][j];
         q.z[i][j] ^= q.z[k][j];
@@ -203,7 +197,7 @@ int measure(struct QState &q, long b, int sup, bool random_result) {
         // Set Zbar_p := Z_b
         rowset(q, p + q.n, b + q.n);
         // moment of quantum randomness
-        q.r[p + q.n] = 2*(random_result ? 1 : 0);
+        q.r[p + q.n] = random_result ? 1 : 0;
         // Now update the Xbar's and Zbar's that don't commute with
         for (long i = 0; i < 2*q.n; i++) {
             // Z_b
@@ -305,7 +299,7 @@ void seed(struct QState &q, long g) {
     }
 
     for (long i = 2*q.n - 1; i >= q.n + g; i--) {
-        int f = q.r[i];
+        int f = q.r[i] * 2;
         for (long j = q.n - 1; j >= 0; j--) {
             j5 = j>>5;
             pw = 1 << (j&31);
@@ -328,7 +322,7 @@ void seed(struct QState &q, long g) {
 QState::QState(long n) : n(n) {
     x = new unsigned long *[2 * n + 1];
     z = new unsigned long *[2 * n + 1];
-    r = new int[2 * n + 1];
+    r = new bool[2 * n + 1];
     over32 = (n>>5) + 1;
     for (long i = 0; i < 2*n + 1; i++) {
         x[i] = new unsigned long[over32];
@@ -363,7 +357,7 @@ QState::QState(const struct QState &src, int nothing) {
     over32 = src.over32;
 
     int s = 2 * n + 1;
-    r = new int[s];
+    r = new bool[s];
     memcpy(r, src.r, s * sizeof(int));
 
     x = new unsigned long *[s];
