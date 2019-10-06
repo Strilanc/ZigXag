@@ -20,66 +20,73 @@ struct QState {
     unsigned long **z; // (2n+1)*n matrix for z bits                                                 the bottom)
     int *r;         // Phase bits: 0 for +1, 1 for i, 2 for -1, 3 for -i.  Normally either 0 or 2.
     long over32; // floor(n/8)+1
+
+    void col_xor(long dst, long src);
 };
 
+struct Col {
+    unsigned long** data;
+    long height;
+    long index;
+};
 
-
+// Apply a CNOT gate with control b and target c
+void col_xor(unsigned long** dst, unsigned long** src, long b, long c, long n) {
+    long b5 = b >> 5;
+    long c5 = c >> 5;
+    unsigned long pwb = 1 << (b & 31);
+    unsigned long pwc = 1 << (c & 31);
+    for (long i = 0; i < 2*n; i++) {
+        if (dst[i][b5] & pwb) {
+            src[i][c5] ^= pwc;
+        }
+    }
+}
 
 // Apply a CNOT gate with control b and target c
 void cnot(struct QState &q, long b, long c) {
-    long b5;
-    long c5;
-    unsigned long pwb;
-    unsigned long pwc;
+    col_xor(q.x, q.x, b, c, q.n);
+    col_xor(q.z, q.z, c, b, q.n);
 
-    b5 = b>>5;
-    c5 = c>>5;
-    pwb = 1 << (b&31);
-    pwc = 1 << (c&31);
+    long b5 = b>>5;
+    long c5 = c>>5;
+    unsigned long pwb = 1 << (b&31);
+    unsigned long pwc = 1 << (c&31);
     for (long i = 0; i < 2*q.n; i++) {
-        if (q.x[i][b5]&pwb) q.x[i][c5] ^= pwc;
-        if (q.z[i][c5]&pwc) q.z[i][b5] ^= pwb;
-        if ((q.x[i][b5]&pwb) && (q.z[i][c5]&pwc) &&
-            (q.x[i][c5]&pwc) && (q.z[i][b5]&pwb))
+        bool xib = q.x[i][b5] & pwb;
+        bool zib = q.z[i][b5] & pwb;
+        bool xic = q.x[i][c5] & pwc;
+        bool zic = q.z[i][c5] & pwc;
+        if (xib && zic && (xic == zib)) {
             q.r[i] = (q.r[i]+2)%4;
-        if ((q.x[i][b5]&pwb) && (q.z[i][c5]&pwc) &&
-            !(q.x[i][c5]&pwc) && !(q.z[i][b5]&pwb))
-            q.r[i] = (q.r[i]+2)%4;
+        }
     }
-
-    return;
-
 }
-
-
 
 // Apply a Hadamard gate to qubit b
 void hadamard(struct QState &q, long b) {
-    unsigned long tmp;
-    long b5;
-    unsigned long pw;
-
-    b5 = b>>5;
-    pw = 1 << (b&31);
+    long b5 = b>>5;
+    unsigned long pw = 1 << (b&31);
     for (long i = 0; i < 2*q.n; i++) {
-        tmp = q.x[i][b5];
+        unsigned long tmp = q.x[i][b5];
         q.x[i][b5] ^= (q.x[i][b5] ^ q.z[i][b5]) & pw;
         q.z[i][b5] ^= (q.z[i][b5] ^ tmp) & pw;
-        if ((q.x[i][b5]&pw) && (q.z[i][b5]&pw)) q.r[i] = (q.r[i]+2)%4;
+        if ((q.x[i][b5]&pw) && (q.z[i][b5]&pw)) {
+            q.r[i] = (q.r[i]+2)%4;
+        }
     }
 }
 
 
 // Apply a phase gate (|0>->|0>, |1>->i|1>) to qubit b
 void phase(struct QState &q, long b) {
-    long b5;
-    unsigned long pw;
-
-    b5 = b>>5;
-    pw = 1 << (b&31);
+    long b5 = b >> 5;
+    unsigned long pw = 1 << (b&31);
     for (long i = 0; i < 2*q.n; i++) {
-        if ((q.x[i][b5]&pw) && (q.z[i][b5]&pw)) q.r[i] = (q.r[i]+2)%4;
-        q.z[i][b5] ^= q.x[i][b5]&pw;
+        if ((q.x[i][b5]&pw) && (q.z[i][b5]&pw)) {
+            q.r[i] = (q.r[i]+2)%4;
+        }
+        q.z[i][b5] ^= q.x[i][b5] & pw;
     }
 }
 
@@ -87,43 +94,30 @@ void phase(struct QState &q, long b) {
 
 // Sets row i equal to row k
 void rowcopy(struct QState &q, long i, long k) {
-
-    long j;
-
-    for (j = 0; j < q.over32; j++)
-    {
+    for (long j = 0; j < q.over32; j++) {
         q.x[i][j] = q.x[k][j];
         q.z[i][j] = q.z[k][j];
     }
     q.r[i] = q.r[k];
-
-    return;
-
 }
 
 
 
 // Swaps row i and row k
 void rowswap(struct QState &q, long i, long k) {
-
     rowcopy(q, 2*q.n, k);
     rowcopy(q, k, i);
     rowcopy(q, i, 2*q.n);
-
-    return;
-
 }
 
 
 
 // Sets row i equal to the bth observable (X_1,...X_n,Z_1,...,Z_n)
 void rowset(struct QState &q, long i, long b) {
-    long j;
     long b5;
     unsigned long b31;
 
-    for (j = 0; j < q.over32; j++)
-    {
+    for (long j = 0; j < q.over32; j++) {
         q.x[i][j] = 0;
         q.z[i][j] = 0;
     }
@@ -151,26 +145,26 @@ int clifford(struct QState &q, long i, long k) {
     unsigned long pw;
     long e=0; // Power to which i is raised
 
-    for (j = 0; j < q.over32; j++)
-        for (l = 0; l < 32; l++)
-        {
+    for (j = 0; j < q.over32; j++) {
+        for (l = 0; l < 32; l++) {
             pw = 1 << l;
-            if ((q.x[k][j]&pw) && (!(q.z[k][j]&pw))) // X
-            {
+            // X
+            if ((q.x[k][j]&pw) && (!(q.z[k][j]&pw))) {
                 if ((q.x[i][j]&pw) && (q.z[i][j]&pw)) e++;         // XY=iZ
                 if ((!(q.x[i][j]&pw)) && (q.z[i][j]&pw)) e--;         // XZ=-iY
             }
-            if ((q.x[k][j]&pw) && (q.z[k][j]&pw))                                 // Y
-            {
+            // Y
+            if ((q.x[k][j]&pw) && (q.z[k][j]&pw)) {
                 if ((!(q.x[i][j]&pw)) && (q.z[i][j]&pw)) e++;         // YZ=iX
                 if ((q.x[i][j]&pw) && (!(q.z[i][j]&pw))) e--;         // YX=-iZ
             }
-            if ((!(q.x[k][j]&pw)) && (q.z[k][j]&pw))                         // Z
-            {
+            // Z
+            if ((!(q.x[k][j]&pw)) && (q.z[k][j]&pw)) {
                 if ((q.x[i][j]&pw) && (!(q.z[i][j]&pw))) e++;         // ZX=iY
                 if ((q.x[i][j]&pw) && (q.z[i][j]&pw)) e--;         // ZY=-iX
             }
         }
+    }
 
     e = (e+q.r[i]+q.r[k])%4;
     if (e>=0) return e;
@@ -181,9 +175,8 @@ int clifford(struct QState &q, long i, long k) {
 
 // Left-multiply row i by row k
 void rowmult(struct QState &q, long i, long k) {
-    long j;
     q.r[i] = clifford(q,i,k);
-    for (j = 0; j < q.over32; j++) {
+    for (long j = 0; j < q.over32; j++) {
         q.x[i][j] ^= q.x[k][j];
         q.z[i][j] ^= q.z[k][j];
     }

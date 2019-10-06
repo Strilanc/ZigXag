@@ -3306,14 +3306,14 @@ function establishStackSpace(stackBase, stackMax) {
   STACK_MAX = stackMax;
 }
 
-function __Z4cnotR6QStatell($q,$b,$c) {
- $q = $q|0;
+function __Z7col_xorPPmS0_lll($dst,$src,$b,$c,$n) {
+ $dst = $dst|0;
+ $src = $src|0;
  $b = $b|0;
  $c = $c|0;
- var $0 = 0, $1 = 0, $10 = 0, $11 = 0, $12 = 0, $13 = 0, $14 = 0, $15 = 0, $16 = 0, $17 = 0, $18 = 0, $19 = 0, $2 = 0, $3 = 0, $4 = 0, $5 = 0, $6 = 0, $7 = 0, $8 = 0, $9 = 0;
- var $add = 0, $add72 = 0, $and = 0, $and11 = 0, $and2 = 0, $and22 = 0, $and27 = 0, $and33 = 0, $and39 = 0, $and5 = 0, $and55 = 0, $and61 = 0, $and67 = 0, $arrayidx = 0, $arrayidx10 = 0, $arrayidx16 = 0, $arrayidx32 = 0, $arrayidx38 = 0, $arrayidx4 = 0, $arrayidx42 = 0;
- var $arrayidx60 = 0, $arrayidx66 = 0, $arrayidx71 = 0, $arrayidx8 = 0, $arrayidx9 = 0, $cmp = 0, $cmp62 = 0, $i$063 = 0, $inc = 0, $mul = 0, $r = 0, $rem = 0, $rem73 = 0, $shl = 0, $shl3 = 0, $shr = 0, $shr1 = 0, $tobool = 0, $tobool12 = 0, $tobool23 = 0;
- var $tobool28 = 0, $tobool34 = 0, $tobool40 = 0, $tobool56 = 0, $tobool62 = 0, $tobool68 = 0, $x = 0, $xor = 0, $xor17 = 0, $z = 0, label = 0, sp = 0;
+ $n = $n|0;
+ var $0 = 0, $1 = 0, $2 = 0, $3 = 0, $and = 0, $and2 = 0, $and5 = 0, $arrayidx = 0, $arrayidx4 = 0, $arrayidx6 = 0, $arrayidx7 = 0, $cmp = 0, $cmp11 = 0, $i$012 = 0, $inc = 0, $mul = 0, $shl = 0, $shl3 = 0, $shr = 0, $shr1 = 0;
+ var $tobool = 0, $xor = 0, label = 0, sp = 0;
  sp = STACKTOP;
  $shr = $b >> 5;
  $shr1 = $c >> 5;
@@ -3321,98 +3321,107 @@ function __Z4cnotR6QStatell($q,$b,$c) {
  $shl = 1 << $and;
  $and2 = $c & 31;
  $shl3 = 1 << $and2;
- $0 = HEAP32[$q>>2]|0;
- $cmp62 = ($0|0)>(0);
- if (!($cmp62)) {
+ $mul = $n << 1;
+ $cmp11 = ($n|0)>(0);
+ if (!($cmp11)) {
   return;
  }
- $x = ((($q)) + 4|0);
- $1 = HEAP32[$x>>2]|0;
- $z = ((($q)) + 8|0);
- $2 = HEAP32[$z>>2]|0;
- $r = ((($q)) + 12|0);
- $3 = HEAP32[$r>>2]|0;
- $i$063 = 0;
+ $i$012 = 0;
  while(1) {
-  $arrayidx = (($1) + ($i$063<<2)|0);
-  $4 = HEAP32[$arrayidx>>2]|0;
-  $arrayidx4 = (($4) + ($shr<<2)|0);
-  $5 = HEAP32[$arrayidx4>>2]|0;
-  $and5 = $5 & $shl;
+  $arrayidx = (($dst) + ($i$012<<2)|0);
+  $0 = HEAP32[$arrayidx>>2]|0;
+  $arrayidx4 = (($0) + ($shr<<2)|0);
+  $1 = HEAP32[$arrayidx4>>2]|0;
+  $and5 = $1 & $shl;
   $tobool = ($and5|0)==(0);
-  $arrayidx8 = (($4) + ($shr1<<2)|0);
   if (!($tobool)) {
-   $6 = HEAP32[$arrayidx8>>2]|0;
-   $xor = $6 ^ $shl3;
-   HEAP32[$arrayidx8>>2] = $xor;
+   $arrayidx6 = (($src) + ($i$012<<2)|0);
+   $2 = HEAP32[$arrayidx6>>2]|0;
+   $arrayidx7 = (($2) + ($shr1<<2)|0);
+   $3 = HEAP32[$arrayidx7>>2]|0;
+   $xor = $3 ^ $shl3;
+   HEAP32[$arrayidx7>>2] = $xor;
   }
-  $arrayidx9 = (($2) + ($i$063<<2)|0);
-  $7 = HEAP32[$arrayidx9>>2]|0;
-  $arrayidx10 = (($7) + ($shr1<<2)|0);
-  $8 = HEAP32[$arrayidx10>>2]|0;
-  $and11 = $8 & $shl3;
-  $tobool12 = ($and11|0)==(0);
-  $arrayidx16 = (($7) + ($shr<<2)|0);
-  if (!($tobool12)) {
-   $9 = HEAP32[$arrayidx16>>2]|0;
-   $xor17 = $9 ^ $shl;
-   HEAP32[$arrayidx16>>2] = $xor17;
-  }
-  $10 = HEAP32[$arrayidx4>>2]|0;
-  $and22 = $10 & $shl;
-  $tobool23 = ($and22|0)==(0);
-  if (!($tobool23)) {
-   $11 = HEAP32[$arrayidx10>>2]|0;
-   $and27 = $11 & $shl3;
-   $tobool28 = ($and27|0)==(0);
-   if (!($tobool28)) {
-    $arrayidx32 = (($4) + ($shr1<<2)|0);
-    $12 = HEAP32[$arrayidx32>>2]|0;
-    $and33 = $12 & $shl3;
-    $tobool34 = ($and33|0)==(0);
-    if (!($tobool34)) {
-     $arrayidx38 = (($7) + ($shr<<2)|0);
-     $13 = HEAP32[$arrayidx38>>2]|0;
-     $and39 = $13 & $shl;
-     $tobool40 = ($and39|0)==(0);
-     if (!($tobool40)) {
-      $arrayidx42 = (($3) + ($i$063<<2)|0);
-      $14 = HEAP32[$arrayidx42>>2]|0;
-      $add = (($14) + 2)|0;
-      $rem = (($add|0) % 4)&-1;
-      HEAP32[$arrayidx42>>2] = $rem;
-     }
-    }
-   }
-   $15 = HEAP32[$arrayidx10>>2]|0;
-   $and55 = $15 & $shl3;
-   $tobool56 = ($and55|0)==(0);
-   if (!($tobool56)) {
-    $arrayidx60 = (($4) + ($shr1<<2)|0);
-    $16 = HEAP32[$arrayidx60>>2]|0;
-    $and61 = $16 & $shl3;
-    $tobool62 = ($and61|0)==(0);
-    if ($tobool62) {
-     $arrayidx66 = (($7) + ($shr<<2)|0);
-     $17 = HEAP32[$arrayidx66>>2]|0;
-     $and67 = $17 & $shl;
-     $tobool68 = ($and67|0)==(0);
-     if ($tobool68) {
-      $arrayidx71 = (($3) + ($i$063<<2)|0);
-      $18 = HEAP32[$arrayidx71>>2]|0;
-      $add72 = (($18) + 2)|0;
-      $rem73 = (($add72|0) % 4)&-1;
-      HEAP32[$arrayidx71>>2] = $rem73;
-     }
-    }
-   }
-  }
-  $inc = (($i$063) + 1)|0;
-  $19 = HEAP32[$q>>2]|0;
-  $mul = $19 << 1;
+  $inc = (($i$012) + 1)|0;
   $cmp = ($inc|0)<($mul|0);
   if ($cmp) {
-   $i$063 = $inc;
+   $i$012 = $inc;
+  } else {
+   break;
+  }
+ }
+ return;
+}
+function __Z4cnotR6QStatell($q,$b,$c) {
+ $q = $q|0;
+ $b = $b|0;
+ $c = $c|0;
+ var $0 = 0, $1 = 0, $10 = 0, $11 = 0, $12 = 0, $13 = 0, $14 = 0, $15 = 0, $16 = 0, $2 = 0, $3 = 0, $4 = 0, $5 = 0, $6 = 0, $7 = 0, $8 = 0, $9 = 0, $add = 0, $and = 0, $and10 = 0;
+ var $and14 = 0, $and20 = 0, $and26 = 0, $and5 = 0, $arrayidx = 0, $arrayidx12 = 0, $arrayidx13 = 0, $arrayidx19 = 0, $arrayidx25 = 0, $arrayidx36 = 0, $arrayidx9 = 0, $cmp = 0, $cmp36 = 0, $i$037 = 0, $inc = 0, $mul = 0, $or$cond = 0, $r = 0, $rem = 0, $shl = 0;
+ var $shl6 = 0, $shr = 0, $shr4 = 0, $tobool = 0, $tobool15 = 0, $tobool21 = 0, $tobool27 = 0, $x = 0, $z = 0, label = 0, sp = 0;
+ sp = STACKTOP;
+ $x = ((($q)) + 4|0);
+ $0 = HEAP32[$x>>2]|0;
+ $1 = HEAP32[$q>>2]|0;
+ __Z7col_xorPPmS0_lll($0,$0,$b,$c,$1);
+ $z = ((($q)) + 8|0);
+ $2 = HEAP32[$z>>2]|0;
+ $3 = HEAP32[$q>>2]|0;
+ __Z7col_xorPPmS0_lll($2,$2,$c,$b,$3);
+ $shr = $b >> 5;
+ $shr4 = $c >> 5;
+ $and = $b & 31;
+ $shl = 1 << $and;
+ $and5 = $c & 31;
+ $shl6 = 1 << $and5;
+ $4 = HEAP32[$q>>2]|0;
+ $cmp36 = ($4|0)>(0);
+ if (!($cmp36)) {
+  return;
+ }
+ $5 = HEAP32[$x>>2]|0;
+ $6 = HEAP32[$z>>2]|0;
+ $7 = HEAP32[$q>>2]|0;
+ $mul = $7 << 1;
+ $r = ((($q)) + 12|0);
+ $8 = HEAP32[$r>>2]|0;
+ $i$037 = 0;
+ while(1) {
+  $arrayidx = (($5) + ($i$037<<2)|0);
+  $9 = HEAP32[$arrayidx>>2]|0;
+  $arrayidx9 = (($9) + ($shr<<2)|0);
+  $10 = HEAP32[$arrayidx9>>2]|0;
+  $and10 = $10 & $shl;
+  $tobool = ($and10|0)==(0);
+  $arrayidx12 = (($6) + ($i$037<<2)|0);
+  $11 = HEAP32[$arrayidx12>>2]|0;
+  if (!($tobool)) {
+   $arrayidx19 = (($9) + ($shr4<<2)|0);
+   $12 = HEAP32[$arrayidx19>>2]|0;
+   $and20 = $12 & $shl6;
+   $tobool21 = ($and20|0)!=(0);
+   $arrayidx13 = (($11) + ($shr<<2)|0);
+   $13 = HEAP32[$arrayidx13>>2]|0;
+   $and14 = $13 & $shl;
+   $tobool15 = ($and14|0)!=(0);
+   $arrayidx25 = (($11) + ($shr4<<2)|0);
+   $14 = HEAP32[$arrayidx25>>2]|0;
+   $and26 = $14 & $shl6;
+   $tobool27 = ($and26|0)==(0);
+   $15 = $tobool21 ^ $tobool15;
+   $or$cond = $tobool27 | $15;
+   if (!($or$cond)) {
+    $arrayidx36 = (($8) + ($i$037<<2)|0);
+    $16 = HEAP32[$arrayidx36>>2]|0;
+    $add = (($16) + 2)|0;
+    $rem = (($add|0) % 4)&-1;
+    HEAP32[$arrayidx36>>2] = $rem;
+   }
+  }
+  $inc = (($i$037) + 1)|0;
+  $cmp = ($inc|0)<($mul|0);
+  if ($cmp) {
+   $i$037 = $inc;
   } else {
    break;
   }
@@ -3550,18 +3559,18 @@ function __Z7rowcopyR6QStatell($q,$i,$k) {
  $i = $i|0;
  $k = $k|0;
  var $0 = 0, $1 = 0, $10 = 0, $11 = 0, $2 = 0, $3 = 0, $4 = 0, $5 = 0, $6 = 0, $7 = 0, $8 = 0, $9 = 0, $arrayidx = 0, $arrayidx1 = 0, $arrayidx10 = 0, $arrayidx12 = 0, $arrayidx3 = 0, $arrayidx4 = 0, $arrayidx5 = 0, $arrayidx6 = 0;
- var $arrayidx8 = 0, $arrayidx9 = 0, $cmp = 0, $cmp16 = 0, $inc = 0, $j$017 = 0, $over32 = 0, $r = 0, $x = 0, $z = 0, label = 0, sp = 0;
+ var $arrayidx8 = 0, $arrayidx9 = 0, $cmp = 0, $cmp17 = 0, $inc = 0, $j$018 = 0, $over32 = 0, $r = 0, $x = 0, $z = 0, label = 0, sp = 0;
  sp = STACKTOP;
  $over32 = ((($q)) + 16|0);
  $0 = HEAP32[$over32>>2]|0;
- $cmp16 = ($0|0)>(0);
- if (!($cmp16)) {
+ $cmp17 = ($0|0)>(0);
+ if (!($cmp17)) {
   $r = ((($q)) + 12|0);
-  $10 = HEAP32[$r>>2]|0;
-  $arrayidx10 = (($10) + ($k<<2)|0);
-  $11 = HEAP32[$arrayidx10>>2]|0;
-  $arrayidx12 = (($10) + ($i<<2)|0);
-  HEAP32[$arrayidx12>>2] = $11;
+  $7 = HEAP32[$r>>2]|0;
+  $arrayidx10 = (($7) + ($k<<2)|0);
+  $8 = HEAP32[$arrayidx10>>2]|0;
+  $arrayidx12 = (($7) + ($i<<2)|0);
+  HEAP32[$arrayidx12>>2] = $8;
   return;
  }
  $x = ((($q)) + 4|0);
@@ -3576,44 +3585,44 @@ function __Z7rowcopyR6QStatell($q,$i,$k) {
  $5 = HEAP32[$arrayidx5>>2]|0;
  $arrayidx8 = (($4) + ($i<<2)|0);
  $6 = HEAP32[$arrayidx8>>2]|0;
- $j$017 = 0;
+ $j$018 = 0;
  while(1) {
-  $arrayidx1 = (($2) + ($j$017<<2)|0);
-  $7 = HEAP32[$arrayidx1>>2]|0;
-  $arrayidx4 = (($3) + ($j$017<<2)|0);
-  HEAP32[$arrayidx4>>2] = $7;
-  $arrayidx6 = (($5) + ($j$017<<2)|0);
-  $8 = HEAP32[$arrayidx6>>2]|0;
-  $arrayidx9 = (($6) + ($j$017<<2)|0);
-  HEAP32[$arrayidx9>>2] = $8;
-  $inc = (($j$017) + 1)|0;
-  $9 = HEAP32[$over32>>2]|0;
-  $cmp = ($inc|0)<($9|0);
+  $arrayidx1 = (($2) + ($j$018<<2)|0);
+  $9 = HEAP32[$arrayidx1>>2]|0;
+  $arrayidx4 = (($3) + ($j$018<<2)|0);
+  HEAP32[$arrayidx4>>2] = $9;
+  $arrayidx6 = (($5) + ($j$018<<2)|0);
+  $10 = HEAP32[$arrayidx6>>2]|0;
+  $arrayidx9 = (($6) + ($j$018<<2)|0);
+  HEAP32[$arrayidx9>>2] = $10;
+  $inc = (($j$018) + 1)|0;
+  $11 = HEAP32[$over32>>2]|0;
+  $cmp = ($inc|0)<($11|0);
   if ($cmp) {
-   $j$017 = $inc;
+   $j$018 = $inc;
   } else {
    break;
   }
  }
  $r = ((($q)) + 12|0);
- $10 = HEAP32[$r>>2]|0;
- $arrayidx10 = (($10) + ($k<<2)|0);
- $11 = HEAP32[$arrayidx10>>2]|0;
- $arrayidx12 = (($10) + ($i<<2)|0);
- HEAP32[$arrayidx12>>2] = $11;
+ $7 = HEAP32[$r>>2]|0;
+ $arrayidx10 = (($7) + ($k<<2)|0);
+ $8 = HEAP32[$arrayidx10>>2]|0;
+ $arrayidx12 = (($7) + ($i<<2)|0);
+ HEAP32[$arrayidx12>>2] = $8;
  return;
 }
 function __Z6rowsetR6QStatell($q,$i,$b) {
  $q = $q|0;
  $i = $i|0;
  $b = $b|0;
- var $0 = 0, $1 = 0, $2 = 0, $3 = 0, $4 = 0, $5 = 0, $6 = 0, $7 = 0, $8 = 0, $9 = 0, $and13$pn = 0, $arrayidx = 0, $arrayidx1 = 0, $arrayidx16 = 0, $arrayidx17 = 0, $arrayidx2 = 0, $arrayidx3 = 0, $arrayidx4 = 0, $cmp = 0, $cmp23 = 0;
- var $cmp5 = 0, $inc = 0, $j$024 = 0, $over32 = 0, $r = 0, $shl14$sink = 0, $shr10$sink = 0, $shr10$sink$in = 0, $sub = 0, $x = 0, $x6 = 0, $z = 0, $z15 = 0, $z15$sink = 0, label = 0, sp = 0;
+ var $0 = 0, $1 = 0, $2 = 0, $3 = 0, $4 = 0, $5 = 0, $6 = 0, $7 = 0, $8 = 0, $9 = 0, $and13$pn = 0, $arrayidx = 0, $arrayidx1 = 0, $arrayidx16 = 0, $arrayidx17 = 0, $arrayidx2 = 0, $arrayidx3 = 0, $arrayidx4 = 0, $cmp = 0, $cmp24 = 0;
+ var $cmp5 = 0, $inc = 0, $j$025 = 0, $over32 = 0, $r = 0, $shl14$sink = 0, $shr10$sink = 0, $shr10$sink$in = 0, $sub = 0, $x = 0, $x6 = 0, $z = 0, $z15 = 0, $z15$sink = 0, label = 0, sp = 0;
  sp = STACKTOP;
  $over32 = ((($q)) + 16|0);
  $0 = HEAP32[$over32>>2]|0;
- $cmp23 = ($0|0)>(0);
- if ($cmp23) {
+ $cmp24 = ($0|0)>(0);
+ if ($cmp24) {
   $x = ((($q)) + 4|0);
   $1 = HEAP32[$x>>2]|0;
   $arrayidx = (($1) + ($i<<2)|0);
@@ -3622,29 +3631,29 @@ function __Z6rowsetR6QStatell($q,$i,$b) {
   $3 = HEAP32[$z>>2]|0;
   $arrayidx2 = (($3) + ($i<<2)|0);
   $4 = HEAP32[$arrayidx2>>2]|0;
-  $j$024 = 0;
+  $j$025 = 0;
   while(1) {
-   $arrayidx1 = (($2) + ($j$024<<2)|0);
+   $arrayidx1 = (($2) + ($j$025<<2)|0);
    HEAP32[$arrayidx1>>2] = 0;
-   $arrayidx3 = (($4) + ($j$024<<2)|0);
+   $arrayidx3 = (($4) + ($j$025<<2)|0);
    HEAP32[$arrayidx3>>2] = 0;
-   $inc = (($j$024) + 1)|0;
-   $5 = HEAP32[$over32>>2]|0;
-   $cmp = ($inc|0)<($5|0);
+   $inc = (($j$025) + 1)|0;
+   $9 = HEAP32[$over32>>2]|0;
+   $cmp = ($inc|0)<($9|0);
    if ($cmp) {
-    $j$024 = $inc;
+    $j$025 = $inc;
    } else {
     break;
    }
   }
  }
  $r = ((($q)) + 12|0);
- $6 = HEAP32[$r>>2]|0;
- $arrayidx4 = (($6) + ($i<<2)|0);
+ $5 = HEAP32[$r>>2]|0;
+ $arrayidx4 = (($5) + ($i<<2)|0);
  HEAP32[$arrayidx4>>2] = 0;
- $7 = HEAP32[$q>>2]|0;
- $cmp5 = ($7|0)>($b|0);
- $sub = (($b) - ($7))|0;
+ $6 = HEAP32[$q>>2]|0;
+ $cmp5 = ($6|0)>($b|0);
+ $sub = (($b) - ($6))|0;
  $z15 = ((($q)) + 8|0);
  $x6 = ((($q)) + 4|0);
  $z15$sink = $cmp5 ? $x6 : $z15;
@@ -3652,10 +3661,10 @@ function __Z6rowsetR6QStatell($q,$i,$b) {
  $and13$pn = $shr10$sink$in & 31;
  $shl14$sink = 1 << $and13$pn;
  $shr10$sink = $shr10$sink$in >> 5;
- $8 = HEAP32[$z15$sink>>2]|0;
- $arrayidx16 = (($8) + ($i<<2)|0);
- $9 = HEAP32[$arrayidx16>>2]|0;
- $arrayidx17 = (($9) + ($shr10$sink<<2)|0);
+ $7 = HEAP32[$z15$sink>>2]|0;
+ $arrayidx16 = (($7) + ($i<<2)|0);
+ $8 = HEAP32[$arrayidx16>>2]|0;
+ $arrayidx17 = (($8) + ($shr10$sink<<2)|0);
  HEAP32[$arrayidx17>>2] = $shl14$sink;
  return;
 }
