@@ -12,6 +12,9 @@
 // Quantum state
 struct QState {
     // To save memory and increase speed, the bits are packed 32 to an unsigned long
+    QState(long n);
+    QState(const struct QState& src, int nothing);
+    ~QState();
     long n;         // # of qubits
     unsigned long **x; // (2n+1)*n matrix for stabilizer/destabilizer x bits (there's one "scratch row" at
     unsigned long **z; // (2n+1)*n matrix for z bits                                                 the bottom)
@@ -338,55 +341,54 @@ void seed(struct QState &q, long g) {
 
 
 // Initialize state q to have n qubits, and input specified by s
-void init_state(struct QState &q, long n) {
-    q.n = n;
-    q.x = static_cast<unsigned long **>(malloc((2 * q.n + 1) * sizeof(unsigned long*)));
-    q.z = static_cast<unsigned long **>(malloc((2 * q.n + 1) * sizeof(unsigned long*)));
-    q.r = static_cast<int *>(malloc((2 * q.n + 1) * sizeof(int)));
-    q.over32 = (q.n>>5) + 1;
-    for (long i = 0; i < 2*q.n + 1; i++) {
-        q.x[i] = static_cast<unsigned long *>(malloc(q.over32 * sizeof(unsigned long)));
-        q.z[i] = static_cast<unsigned long *>(malloc(q.over32 * sizeof(unsigned long)));
+QState::QState(long n) : n(n) {
+    x = static_cast<unsigned long **>(malloc((2 * n + 1) * sizeof(unsigned long*)));
+    z = static_cast<unsigned long **>(malloc((2 * n + 1) * sizeof(unsigned long*)));
+    r = static_cast<int *>(malloc((2 * n + 1) * sizeof(int)));
+    over32 = (n>>5) + 1;
+    for (long i = 0; i < 2*n + 1; i++) {
+        x[i] = static_cast<unsigned long *>(malloc(over32 * sizeof(unsigned long)));
+        z[i] = static_cast<unsigned long *>(malloc(over32 * sizeof(unsigned long)));
         long j;
-        for (j = 0; j < q.over32; j++) {
-            q.x[i][j] = 0;
-            q.z[i][j] = 0;
+        for (j = 0; j < over32; j++) {
+            x[i][j] = 0;
+            z[i][j] = 0;
         }
-        if (i < q.n) {
-            q.x[i][i>>5] = 1 << (i&31);
-        } else if (i < 2*q.n) {
-            j = i-q.n;
-            q.z[i][j>>5] = 1 << (j&31);
+        if (i < n) {
+            x[i][i>>5] = 1 << (i&31);
+        } else if (i < 2*n) {
+            j = i-n;
+            z[i][j>>5] = 1 << (j&31);
         }
-        q.r[i] = 0;
+        r[i] = 0;
     }
 }
 
-void free_state(struct QState &q) {
-    for (long i = 0; i < 2 * q.n + 1; i++) {
-        free(q.x[i]);
-        free(q.z[i]);
+QState::~QState() {
+    for (long i = 0; i < 2 * n + 1; i++) {
+        free(x[i]);
+        free(z[i]);
     }
-    free(q.x);
-    free(q.z);
-    free(q.r);
+    free(x);
+    free(z);
+    free(r);
 }
 
-void copy_state(struct QState &q, const struct QState &src) {
-    q.n = src.n;
-    q.over32 = src.over32;
+QState::QState(const struct QState &src, int nothing) {
+    n = src.n;
+    over32 = src.over32;
 
-    int s = 2 * q.n + 1;
-    q.r = static_cast<int *>(malloc(s * sizeof(int)));
-    memcpy(q.r, src.r, s * sizeof(int));
+    int s = 2 * n + 1;
+    r = static_cast<int *>(malloc(s * sizeof(int)));
+    memcpy(r, src.r, s * sizeof(int));
 
-    q.x = static_cast<unsigned long **>(malloc(s * sizeof(unsigned long *)));
-    q.z = static_cast<unsigned long **>(malloc(s * sizeof(unsigned long *)));
+    x = static_cast<unsigned long **>(malloc(s * sizeof(unsigned long *)));
+    z = static_cast<unsigned long **>(malloc(s * sizeof(unsigned long *)));
     for (int i = 0; i < s; i++) {
-        q.x[i] = static_cast<unsigned long *>(malloc(q.over32 * sizeof(unsigned long)));
-        q.z[i] = static_cast<unsigned long *>(malloc(q.over32 * sizeof(unsigned long)));
-        memcpy(q.x[i], src.x[i], q.over32 * sizeof(unsigned long));
-        memcpy(q.z[i], src.z[i], q.over32 * sizeof(unsigned long));
+        x[i] = static_cast<unsigned long *>(malloc(over32 * sizeof(unsigned long)));
+        z[i] = static_cast<unsigned long *>(malloc(over32 * sizeof(unsigned long)));
+        memcpy(x[i], src.x[i], over32 * sizeof(unsigned long));
+        memcpy(z[i], src.z[i], over32 * sizeof(unsigned long));
     }
 }
 
@@ -409,14 +411,11 @@ char peek_state_r(const struct QState &src, int row) {
 #include <emscripten/bind.h>
 using namespace emscripten;
 EMSCRIPTEN_BINDINGS(my_module) {
-        class_<QState>("QState").constructor<>();
-        function("init_state", &init_state);
+        class_<QState>("QState").constructor<long>().constructor<const struct QState&, int>();
         function("cnot", &cnot);
         function("hadamard", &hadamard);
         function("phase", &phase);
         function("measure", &measure);
-        function("free_state", &free_state);
-        function("copy_state", &copy_state);
         function("peek_state_x", &peek_state_x);
         function("peek_state_z", &peek_state_z);
         function("peek_state_r", &peek_state_r);

@@ -24,11 +24,11 @@ class ChpSimulator extends SimulatorSpec {
     /**
      * @param {!int} maxQubitCount
      * @param {!number} defaultBias
+     * @param {!Module.QState} _state
      */
-    constructor(maxQubitCount=10, defaultBias=0.5) {
+    constructor(maxQubitCount=10, defaultBias=0.5, _state=undefined) {
         super();
-        this._state = new Module.QState();
-        Module.init_state(this._state, maxQubitCount);
+        this._state = _state !== undefined ? _state : new Module.QState(maxQubitCount);
         this._maxQubitCount = maxQubitCount;
         this._nextQubitId = 0;
         this._qubitToSlotMap = new Map();
@@ -40,8 +40,7 @@ class ChpSimulator extends SimulatorSpec {
      * @returns {!ChpSimulator}
      */
     clone() {
-        let result = new ChpSimulator(this._maxQubitCount);
-        Module.copy_state(result._state, this._state);
+        let result = new ChpSimulator(this._maxQubitCount, this._defaultBias, new Module.QState(this._state, 0));
         result._nextQubitId = this._nextQubitId;
         for (let [k, v] of this._qubitToSlotMap.entries()) {
             result._qubitToSlotMap.set(k, v);
@@ -125,8 +124,7 @@ class ChpSimulator extends SimulatorSpec {
     }
 
     probability(target) {
-        let tmp = new Module.QState();
-        Module.copy_state(tmp, this._state);
+        let tmp = new Module.QState(this._state, 0);
         try {
             let a = this._slotFor(target);
             let m = Module.measure(tmp, a, 0, false);
@@ -135,7 +133,6 @@ class ChpSimulator extends SimulatorSpec {
             }
             return m;
         } finally {
-            Module.free_state(tmp);
             tmp.delete();
         }
     }
@@ -168,7 +165,6 @@ class ChpSimulator extends SimulatorSpec {
     }
 
     destruct() {
-        Module.free_state(this._state);
         this._state.delete();
         this._state = undefined;
     }
