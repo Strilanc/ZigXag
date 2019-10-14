@@ -28,6 +28,26 @@ class ZxNode {
     }
 
     /**
+     * @param {!ZxEdge} unitEdge
+     * @returns {!ZxEdge}
+     */
+    oppositeUnitEdge(unitEdge) {
+        if (unitEdge.isEqualTo(this.leftUnitEdge())) {
+            return this.rightUnitEdge();
+        }
+        if (unitEdge.isEqualTo(this.rightUnitEdge())) {
+            return this.leftUnitEdge();
+        }
+        if (unitEdge.isEqualTo(this.upUnitEdge())) {
+            return this.downUnitEdge();
+        }
+        if (unitEdge.isEqualTo(this.downUnitEdge())) {
+            return this.upUnitEdge();
+        }
+        throw new Error('Not an adjacent unit edge.');
+    }
+
+    /**
      * Returns the result of rotating this node 180 degrees around the given node.
      * @param {!ZxNode} node
      * @returns {!ZxNode}
@@ -339,6 +359,13 @@ class ZxPort {
     }
 
     /**
+     * @returns {!ZxPort}
+     */
+    oppositeSideOfNode() {
+        return new ZxPort(this.node.oppositeUnitEdge(this.edge), this.node);
+    }
+
+    /**
      * @param {object|!ZxPort} other
      * @returns {!boolean}
      */
@@ -591,6 +618,74 @@ class ZxGraph {
         }
         return this;
     }
+
+    /**
+     * @param {!int} xFactor
+     * @param {!int} yFactor
+     * @returns {!ZxGraph}
+     */
+    scaled(xFactor, yFactor) {
+        let f = n => new ZxNode(n.x * xFactor, n.y * yFactor);
+        let newNodes = new GeneralMap();
+        let newEdges = new GeneralMap();
+        for (let [n, kind] of this.nodes.entries()) {
+            newNodes.set(f(n), kind);
+        }
+        for (let [e, kind] of this.edges.entries()) {
+            let n = f(e.n1);
+            if (e.n2.x !== e.n1.x) {
+                for (let i = 0; i < xFactor; i++) {
+                    let n1 = n.translate(i, 0);
+                    newEdges.set(new ZxEdge(n1, n.translate(i + 1, 0)), kind);
+                    if (i !== 0) {
+                        newNodes.set(n1, '+')
+                    }
+                }
+            } else {
+                for (let i = 0; i < yFactor; i++) {
+                    let n1 = n.translate(0, i);
+                    newEdges.set(new ZxEdge(n1, n.translate(0, i + 1)), kind);
+                    if (i !== 0) {
+                        newNodes.set(n1, '+')
+                    }
+                }
+            }
+        }
+        return new ZxGraph(newNodes, newEdges);
+    }
+
+    /**
+     * @returns {{graph: !ZxGraph, xMap: !Map.<!int, !int>, yMap: !Map.<!int, !int>}}
+     */
+    autoCompressed() {
+        let importantNodes = seq(this.nodes.keys()).filter(n => !this.isStraightEdgeNode(n)).toArray();
+        let xs = seq(importantNodes).map(n => n.x).distinct().sorted().toArray();
+        let ys = seq(importantNodes).map(n => n.y).distinct().sorted().toArray();
+        let xMap = Seq.range(xs.length).toMap(i => xs[i], i => i);
+        let yMap = Seq.range(ys.length).toMap(i => ys[i], i => i);
+        let newNodes = new GeneralMap();
+        let f = n => new ZxNode(xMap.get(n.x), yMap.get(n.y));
+        for (let [n, kind] of this.nodes.entries()) {
+            if (xMap.has(n.x) && yMap.has(n.y)) {
+                newNodes.set(f(n), kind);
+            }
+        }
+        let newEdges = new GeneralMap();
+        for (let [e, kind] of this.edges.entries()) {
+            if (xMap.has(e.n1.x) && yMap.has(e.n1.y)) {
+                let n = f(e.n1);
+                let dx = e.n2.x - e.n1.x;
+                let dy = e.n2.y - e.n1.y;
+                newEdges.set(new ZxEdge(n, n.translate(dx, dy)), kind);
+            }
+        }
+        return {
+            graph: new ZxGraph(newNodes, newEdges),
+            xMap,
+            yMap,
+        };
+    }
+
 
     /**
      * @param {!string} text
@@ -851,6 +946,27 @@ class ZxGraph {
 
     /**
      * @param {!ZxNode} node
+     * @returns {!boolean}
+     */
+    isStraightEdgeNode(node) {
+        if (this.kind(node) !== '+') {
+            return false;
+        }
+        let ports = this.activePortsOf(node);
+        if (ports.length !== 2) {
+            return false;
+        }
+        if (this.kind(ports[0].edge) !== '-') {
+            return false;
+        }
+        if (this.kind(ports[1].edge) !== '-') {
+            return false;
+        }
+        return ports[0].oppositeSideOfNode().isEqualTo(ports[1]);
+    }
+
+    /**
+     * @param {!ZxNode} node
      * @returns {!Array.<![!ZxPort, !ZxPort]>}
      */
     activeCrossingPortPairs(node) {
@@ -870,6 +986,7 @@ class ZxGraph {
         }
         return pairs;
     }
+
     /**
      * @param {!ZxNode} n
      * @returns {!Array.<!ZxEdge>}

@@ -20,7 +20,7 @@ import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js";
 import {MathPainter} from "src/MathPainter.js";
 import {Painter} from "src/Painter.js";
 import {Rect} from "src/base/Rect.js";
-import {seq} from "src/base/Seq.js";
+import {Seq, seq} from "src/base/Seq.js";
 import {
     Edit,
     removeEdgeEdit,
@@ -35,7 +35,7 @@ import {NODES} from "src/nodes/All.js";
 import {makeNodeRingMenu} from "src/ui/RingMenu.js"
 import {ZxNodeDrawArgs} from "src/nodes/ZxNodeKind.js";
 import {Point} from "src/base/Point.js";
-import {floodFillNodeAndUnitEdgeSpace, DisplayedZxGraph} from "src/ui/DisplayedZxGraph.js";
+import {floodFillNodeAndUnitEdgeSpace, DisplayedZxGraph, Metric} from "src/ui/DisplayedZxGraph.js";
 import {ObservableValue} from "src/base/Obs.js";
 import {initUndoRedo} from "src/ui/UndoRedo.js";
 import {initUrlSync} from "src/ui/Url.js";
@@ -753,7 +753,7 @@ canvasDiv.addEventListener('mouseup', ev => {
     if (edit !== undefined) {
         let g = displayed.graph.copy();
         edit.action(g);
-        revision.commit(g.serialize());
+        cleanAndCommitNewGraph(g);
     }
     menuNode = undefined;
     curMouseButton = undefined;
@@ -761,6 +761,26 @@ canvasDiv.addEventListener('mouseup', ev => {
     mouseDownY = undefined;
     draw();
 });
+
+/**
+ * @param {!ZxGraph} g
+ */
+function cleanAndCommitNewGraph(g) {
+    let {graph, xMap, yMap} = g.autoCompressed();
+    let xTicks = Seq.repeat(0, xMap.size).toArray();
+    let yTicks = Seq.repeat(0, yMap.size).toArray();
+    for (let [oldVal, newVal] of xMap.entries()) {
+        xTicks[newVal] = currentlyDisplayedZxGraph.metricX.coord(oldVal);
+    }
+    for (let [oldVal, newVal] of yMap.entries()) {
+        yTicks[newVal] = currentlyDisplayedZxGraph.metricY.coord(oldVal);
+    }
+    revision.commit(graph.serialize());
+    currentlyDisplayedZxGraph.interpolateFrom(
+        new Metric(xTicks, 50),
+        new Metric(yTicks, 50),
+        0.25)
+}
 
 canvasDiv.addEventListener('mousemove', ev => {
     [mouseX, mouseY] = eventPosRelativeTo(ev, canvasDiv);
@@ -811,7 +831,7 @@ document.addEventListener('keydown', ev => {
         if (entry !== undefined && targetNode instanceof ZxNode) {
             let copy = displayed.graph.copy();
             copy.nodes.set(targetNode, entry.id);
-            revision.commit(copy.serialize());
+            cleanAndCommitNewGraph(copy);
             menuNode = undefined;
             draw();
         }
@@ -845,7 +865,7 @@ document.addEventListener('keyup', ev => {
 revision.latestActiveCommit().subscribe(text => {
     let graph = ZxGraph.deserialize(text);
     currentlyDisplayedZxGraph.graph = graph;
-    currentlyDisplayedZxGraph.startCenteringInterpolation();
+    currentlyDisplayedZxGraph.resetMetric();
 
     //noinspection EmptyCatchBlockJS,UnusedCatchParameterJS
     try {
