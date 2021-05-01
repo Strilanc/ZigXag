@@ -368,7 +368,9 @@ function draw() {
     canvas.height = Math.max(400, drawBox.y + drawBox.h);
 
     let ctx = /** @type {!CanvasRenderingContext2D} */ canvas.getContext('2d');
-    ctx.clearRect(0, 0, 10000, 10000);
+    ctx.clearRect(0, 0, 100000, 100000);
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, 10000, 10000);
 
     ctx.save();
     try {
@@ -764,22 +766,27 @@ canvasDiv.addEventListener('mouseup', ev => {
 
 /**
  * @param {!ZxGraph} g
+ * @param {!boolean} compress
  */
-function cleanAndCommitNewGraph(g) {
-    let {graph, xMap, yMap} = g.autoCompressed();
-    let xTicks = Seq.repeat(0, xMap.size).toArray();
-    let yTicks = Seq.repeat(0, yMap.size).toArray();
-    for (let [oldVal, newVal] of xMap.entries()) {
-        xTicks[newVal] = currentlyDisplayedZxGraph.metricX.coord(oldVal);
+function cleanAndCommitNewGraph(g, compress=false) {
+    if (compress) {
+        let {graph, xMap, yMap} = g.autoCompressed();
+        let xTicks = Seq.repeat(0, xMap.size).toArray();
+        let yTicks = Seq.repeat(0, yMap.size).toArray();
+        for (let [oldVal, newVal] of xMap.entries()) {
+            xTicks[newVal] = currentlyDisplayedZxGraph.metricX.coord(oldVal);
+        }
+        for (let [oldVal, newVal] of yMap.entries()) {
+            yTicks[newVal] = currentlyDisplayedZxGraph.metricY.coord(oldVal);
+        }
+        revision.commit(graph.serialize());
+        currentlyDisplayedZxGraph.interpolateFrom(
+            new Metric(xTicks, 50),
+            new Metric(yTicks, 50),
+            0.25)
+    } else {
+        revision.commit(g.serialize());
     }
-    for (let [oldVal, newVal] of yMap.entries()) {
-        yTicks[newVal] = currentlyDisplayedZxGraph.metricY.coord(oldVal);
-    }
-    revision.commit(graph.serialize());
-    currentlyDisplayedZxGraph.interpolateFrom(
-        new Metric(xTicks, 50),
-        new Metric(yTicks, 50),
-        0.25)
 }
 
 canvasDiv.addEventListener('mousemove', ev => {

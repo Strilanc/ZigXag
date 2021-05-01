@@ -655,6 +655,8 @@ class ZxGraph {
     }
 
     /**
+     * Removes columns and rows that are only being used as pass throughs.
+     *
      * @returns {{graph: !ZxGraph, xMap: !Map.<!int, !int>, yMap: !Map.<!int, !int>}}
      */
     autoCompressed() {
