@@ -8,8 +8,8 @@
 <pre id="output">
         </pre>
 <script>
-    var __total_done = 0;
-    var __total_tests = 0;
+    let __total_done = 0;
+    let __total_tests = 0;
     __karma__ = {
         start: undefined,
         result: function(arg) {
@@ -19,8 +19,8 @@
                 document.getElementById('output').innerText += "\nFAILED: " +
                     arg.suite[0] + " " + arg.description;
             }
-            for (var i = 0; i < arg.log.length; i++) {
-                document.getElementById('output').innerText += "\n     " + arg.log[i];
+            for (let e of arg.log) {
+                document.getElementById('output').innerText += "\n     " + e;
             }
         },
         info: function(arg) {
@@ -33,10 +33,12 @@
         }
     };
     <!-- INCLUDE SOURCE PART -->
-    document.getElementById('output').innerText = "Starting...";
-    setTimeout(function() {
-        __karma__.start();
-    }, 0);
+    async function run_tests() {
+        await _gen_completed;
+        document.getElementById('output').innerText = "Starting...";
+        setTimeout(() => __karma__.start(), 0);
+    }
+    run_tests();
 </script>
 </body>
 </html>

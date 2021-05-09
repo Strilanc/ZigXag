@@ -4,6 +4,8 @@
 
 import {DetailedError} from 'src/base/DetailedError.js'
 import {describe} from "src/base/Describe.js";
+import {stim} from "src/ext/stim.js"
+
 window.onerror = function(msg, url, line, col, error) {
     document.getElementById('err_msg').innerText = `${describe(msg)}\n${error.stack}`;
     document.getElementById('err_line').innerText = describe(line);
@@ -274,28 +276,6 @@ function drawResults(ctx, displayed, checkGroundTruth=false) {
 
     let waveRect = new Rect(canvas.clientWidth - 300, 0, 300, 300);
     let painter = new Painter(ctx);
-    MathPainter.paintMatrix(painter, results.wavefunction, waveRect);
-
-    if (checkGroundTruth) {
-        let groundTruth = evalZxGraphGroundTruth(graph);
-        let groundSatisfiable = !groundTruth.isZero(1e-8);
-        let detectedBadSimulationResult = false;
-        if (groundSatisfiable && results.satisfiable) {
-            let matchedGround = groundTruth.phaseMatchedTo(results.wavefunction, true);
-            if (!matchedGround.isApproximatelyEqualTo(results.wavefunction, 1e-8)) {
-                // Disagreed about satisfiable result.
-                detectedBadSimulationResult = true;
-            }
-        } else if (groundSatisfiable !== results.satisfiable) {
-            // Disagreed about satisfiability.
-            detectedBadSimulationResult = true;
-        }
-        if (detectedBadSimulationResult) {
-            ctx.globalAlpha *= 0.5;
-            MathPainter.paintMatrix(painter, groundTruth, waveRect, 'red', 'black', '#00000000', '#FFFF00A0');
-            ctx.globalAlpha *= 2;
-        }
-    }
 
     if (results.successProbability !== 1) {
         let loss = Math.log2(results.successProbability);

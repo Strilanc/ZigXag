@@ -42,81 +42,78 @@ module.exports = function(grunt) {
     });
 
     grunt.registerTask('wrap-packages', function(src, root, dst) {
-        var sourceFiles = grunt.file.glob.sync(src);
-        var rootFiles = grunt.file.glob.sync(root);
-        for (var i = 0; i < rootFiles.length; i++) {
+        let sourceFiles = grunt.file.glob.sync(src);
+        let rootFiles = grunt.file.glob.sync(root);
+        for (let i = 0; i < rootFiles.length; i++) {
             if (sourceFiles.indexOf(rootFiles[i]) === -1) {
                 sourceFiles.push(rootFiles[i]);
             }
         }
 
-        var header = [
-            '"use strict";',
-            'let _gen_packages_vals = new Map();',
-            'let _gen_packages_inits = new Map();',
-            'function _gen_package_export(key, vals) {',
-            '    let dict = _gen_packages_vals.get(key);',
-            '    for (let valKey of Object.keys(vals)) {',
-            '        dict[valKey] = vals[valKey];',
-            '    }',
-            '}',
-            'function _gen_package_get(key) {',
-            '    if (!_gen_packages_vals.has(key)) {',
-            '        _gen_packages_vals.set(key, new Map());',
-            '        if (!_gen_packages_inits.has(key)) {',
-            '            throw new Error(`Unknown import: "${key}"`);',
-            '        }',
-            '        _gen_packages_inits.get(key)();',
-            '    }',
-            '    return _gen_packages_vals.get(key);',
-            '}'
-        ].join('\n');
+        let header = `
+            "use strict";
+            let _gen_packages_vals = new Map();
+            let _gen_packages_inits = new Map();
+            let _gen_packages_promises = new Map();
+            function _gen_package_export(key, vals) {
+                let dict = _gen_packages_vals.get(key);
+                for (let valKey of Object.keys(vals)) {
+                    dict[valKey] = vals[valKey];
+                }
+            }
+            async function _gen_package_get(key) {
+                if (!_gen_packages_promises.has(key)) {
+                    _gen_packages_vals.set(key, new Map());
+                    if (!_gen_packages_inits.has(key)) {
+                        throw new Error("Unknown import: " + key);
+                    }
+                    _gen_packages_promises.set(key, _gen_packages_inits.get(key)());
+                }
+                await _gen_packages_promises.get(key);
+                return _gen_packages_vals.get(key);
+            }
+        `;
 
-        var wrappedContent = sourceFiles.map(function(path) {
-            var content = grunt.file.read(path);
+        let wrappedContent = sourceFiles.map(path => {
+            let content = grunt.file.read(path);
 
             if (path.endsWith('_wasm_gen.js')) {
                 content += '\nexport {Module};\n';
             }
+            if (path.endsWith('ext/stim.js')) {
+                content += `
+                    let stim = await load_stim_module();
+                    export {stim};
+                `;
+            }
 
             content = content.replace(
                 new RegExp(/\bexport\s*({[^}]+})/, 'gm'),
-                function (match, vals) {
-                    return '_gen_package_export(' + JSON.stringify(path) + ', ' + vals + ');'
-                });
+                (match, vals) => `_gen_package_export(${JSON.stringify(path)}, ${vals});`);
 
-            content = content.replace(new RegExp(/\bimport\s*({[^}]+})\s*from (['"].+['"])/, 'gm'),
-                function(match, vals, key) {
-                    return 'const ' + vals + ' = _gen_package_get(' + key + ');'
-                });
+            content = content.replace(
+                new RegExp(/\bimport\s*({[^}]+})\s*from (['"].+['"])/, 'gm'),
+                (match, vals, key) => `const ${vals} = await _gen_package_get(${key});`);
 
-            return '///////////////////////////////////////////////////////////////////////////////////////////////\n' +
-                   '_gen_packages_inits.set(' + JSON.stringify(path) + ', function() {\n\n' + content + '\n\n});';
+            return `///////////////////////////////////////////////////////////////////////////////////////////////
+_gen_packages_inits.set(${JSON.stringify(path)}, async function() {
+    ${content}
+});`;
         }).join('\n\n');
 
-        var triggers = rootFiles.map(function(path) {
-            return '_gen_package_get(' + JSON.stringify(path) + ');';
-        }).join('\n');
-        var mainFirst = rootFiles.indexOf('src/main.js') !== -1 ? '_gen_package_get("src/main.js");' : '';
+        let triggers = rootFiles.map(path => `await _gen_package_get(${JSON.stringify(path)});`).join('\n');
+        let mainFirst = rootFiles.indexOf('src/main.js') !== -1 ? 'await _gen_package_get("src/main.js");' : '';
 
-        var all = [header, wrappedContent, mainFirst, triggers].join('\n\n\n') + '\n';
+        let all = 'let _gen_completed = (async function() {' + [header, wrappedContent, mainFirst, triggers].join('\n\n\n') + '})()\n';
 
         grunt.file.write(dst, all);
     });
 
-    grunt.registerTask('bootstrap-get-packages', function(src, dst) {
-        var packagedFiles = grunt.file.glob.sync(src);
-        var getters = packagedFiles.map(function(e) {
-            return '$traceurRuntime.getModule("' + e + '");';
-        }).join('\n');
-        grunt.file.write(dst, getters);
-    });
-
     grunt.registerTask('inject-js-into-html', function(htmlSrc, jsSrc, dst) {
-        var html = grunt.file.read(htmlSrc);
-        var js = grunt.file.read(jsSrc);
-        var exportPart = grunt.file.read('html/export.partial.html');
-        var output = html;
+        let html = grunt.file.read(htmlSrc);
+        let js = grunt.file.read(jsSrc);
+        let exportPart = grunt.file.read('html/export.partial.html');
+        let output = html;
         output = output.split("<!-- INCLUDE SOURCE PART -->").join(js);
         output = output.split("<!-- INCLUDE EXPORT PART -->").join(exportPart);
         grunt.file.write(dst, output);

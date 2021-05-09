@@ -30,6 +30,14 @@ If you want to modify ZigXag, this is how you get the code and turn your changes
 
     `npm run test-firefox`
 
+4. (*Optional*, **HARD**) If you made changes to stim, rebuild stim's web assembly using emscripten
+
+    In my experience, by far the hardest part of getting this to work is getting emscripten to work.
+    Nothing I have done has worked consistently across machines.
+    Good luck, and I'm sorry, because I'm just going to assume you can run `emcc`.
+    
+    /mnt/c/Users/Craig/w/emsdk/node/12.9.1_64bit/bin/node
+   
 5. Build the output.
 
     `npm run build`

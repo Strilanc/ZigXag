@@ -195,6 +195,15 @@ class AssertionSubject {
     }
 
     /**
+     * @param {!string} text
+     */
+    hasToStringContaining(text) {
+        if (this.subject.toString().indexOf(text) === -1) {
+            this._failExpected('to have a toString containing', text);
+        }
+    }
+
+    /**
      * @param {*} other
      */
     isEqualTo(other) {
