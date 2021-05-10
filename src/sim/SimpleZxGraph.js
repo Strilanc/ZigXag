@@ -51,7 +51,7 @@ class SimpleZxGraph {
     }
 
     /**
-     * @returns {Map<!int, !Array.<!int>>>}
+     * @returns {Map<!int, !Array.<!int>>}
      */
     neighborMap() {
         let result = new Map();
@@ -95,7 +95,7 @@ class SimpleZxGraph {
     }
 
     /**
-     * @returns {!Array.<!stim.PauliString>}
+     * @returns {!Array.<!stim_PauliString>}
      */
     stabilizers() {
         let sim = new stim.TableauSimulator().deleteLater();
@@ -209,7 +209,7 @@ class SimpleZxGraph {
 
 /**
  * Pretend to postselect by using classical feedback to consistently get into the measurement-was-false state.
- * @param {!stim.TableauSimulator} sim
+ * @param {!stim_TableauSimulator} sim
  * @param {!int} target
  */
 function pseudo_postselect(sim, target) {
