@@ -1,5 +1,5 @@
 import {Suite, assertThat, assertThrows, assertTrue, assertFalse} from "test/TestUtil.js"
-import {SimpleZxGraph, SimpleZxNode, _find_all_edges, _find_end_of_edge, _find_nodes, _text_to_char_map} from "src/sim/SimpleZxGraph.js"
+import {ZxGraphEdgeList, ZxNodeAnnotation, _find_all_edges, _find_end_of_edge, _find_nodes, _text_to_char_map} from "sim/ZxGraphEdgeList.js"
 import {stim} from "src/ext/stim.js";
 
 let suite = new Suite("SimpleZxGraph");
@@ -34,12 +34,12 @@ suite.test('_find_nodes', () => {
         node_ids: new Map([
             ['0,0', 0]
         ]),
-        nodes: [new SimpleZxNode('X')]});
+        nodes: [new ZxNodeAnnotation('X')]});
     assertThat(_find_nodes(_text_to_char_map('\n   X'))).isEqualTo({
         node_ids: new Map([
             ['3,1', 0]
         ]),
-        nodes: [new SimpleZxNode('X')]});
+        nodes: [new ZxNodeAnnotation('X')]});
     assertThat(_find_nodes(_text_to_char_map('X(pi)'))).isEqualTo({
         node_ids: new Map([
             ['0,0', 0],
@@ -48,15 +48,15 @@ suite.test('_find_nodes', () => {
             ['3,0', 0],
             ['4,0', 0],
         ]),
-        nodes: [new SimpleZxNode('X', 2)]});
+        nodes: [new ZxNodeAnnotation('X', 2)]});
     assertThat(_find_nodes(_text_to_char_map('X--Z'))).isEqualTo({
         node_ids: new Map([
             ['0,0', 0],
             ['3,0', 1],
         ]),
         nodes: [
-            new SimpleZxNode('X'),
-            new SimpleZxNode('Z'),
+            new ZxNodeAnnotation('X'),
+            new ZxNodeAnnotation('Z'),
         ]});
     assertThat(_find_nodes(_text_to_char_map(`
 X--*
@@ -68,8 +68,8 @@ X--*
             ['1,3', 1],
         ]),
         nodes: [
-            new SimpleZxNode('X'),
-            new SimpleZxNode('Z'),
+            new ZxNodeAnnotation('X'),
+            new ZxNodeAnnotation('Z'),
         ]});
     assertThat(_find_nodes(_text_to_char_map(`
 X(pi)--Z
@@ -83,8 +83,8 @@ X(pi)--Z
             ['7,1', 1],
         ]),
         nodes: [
-            new SimpleZxNode('X', 2),
-            new SimpleZxNode('Z'),
+            new ZxNodeAnnotation('X', 2),
+            new ZxNodeAnnotation('Z'),
         ]});
 });
 
@@ -119,20 +119,20 @@ X---Z      H----X(pi/2)
 });
 
 suite.test('from_text_diagram', () => {
-    assertThat(SimpleZxGraph.from_text_diagram(`
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
 in---Z---H---------out
      |
 in---X---Z(-pi/2)---out
-    `)).isEqualTo(new SimpleZxGraph(
+    `)).isEqualTo(new ZxGraphEdgeList(
         [
-            new SimpleZxNode('in'),
-            new SimpleZxNode('Z'),
-            new SimpleZxNode('H'),
-            new SimpleZxNode('out'),
-            new SimpleZxNode('in'),
-            new SimpleZxNode('X'),
-            new SimpleZxNode('Z', 3),
-            new SimpleZxNode('out'),
+            new ZxNodeAnnotation('in'),
+            new ZxNodeAnnotation('Z'),
+            new ZxNodeAnnotation('H'),
+            new ZxNodeAnnotation('out'),
+            new ZxNodeAnnotation('in'),
+            new ZxNodeAnnotation('X'),
+            new ZxNodeAnnotation('Z', 3),
+            new ZxNodeAnnotation('out'),
         ],
         [
             [0, 1],
@@ -145,14 +145,14 @@ in---X---Z(-pi/2)---out
         ]
     ));
 
-    assertThat(SimpleZxGraph.from_text_diagram(`
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
        Z-*
        | |
        X-*
-    `)).isEqualTo(new SimpleZxGraph(
+    `)).isEqualTo(new ZxGraphEdgeList(
         [
-            new SimpleZxNode('Z'),
-            new SimpleZxNode('X'),
+            new ZxNodeAnnotation('Z'),
+            new ZxNodeAnnotation('X'),
         ],
         [
             [0, 1],
@@ -162,7 +162,7 @@ in---X---Z(-pi/2)---out
 });
 
 suite.test('stabilizers', () => {
-    assertThat(SimpleZxGraph.from_text_diagram(`
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
 in---Z---out
      |
 in---X---out
@@ -173,28 +173,28 @@ in---X---out
         new stim.PauliString("+_ZZZ").deleteLater(),
     ]);
 
-    assertThat(SimpleZxGraph.from_text_diagram(`
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
 in---Z(pi/2)---out
     `).stabilizers()).isEqualTo([
         new stim.PauliString("+XY").deleteLater(),
         new stim.PauliString("+ZZ").deleteLater(),
     ]);
 
-    assertThat(SimpleZxGraph.from_text_diagram(`
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
 in---Z(-pi/2)---out
     `).stabilizers()).isEqualTo([
         new stim.PauliString("-XY").deleteLater(),
         new stim.PauliString("+ZZ").deleteLater(),
     ]);
 
-    assertThat(SimpleZxGraph.from_text_diagram(`
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
 in---H---out
     `).stabilizers()).isEqualTo([
         new stim.PauliString("+XZ").deleteLater(),
         new stim.PauliString("+ZX").deleteLater(),
     ]);
 
-    assertThat(SimpleZxGraph.from_text_diagram(`
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
 in-H-X---out
      |
      *---out
@@ -204,7 +204,7 @@ in-H-X---out
         new stim.PauliString("+_XX").deleteLater(),
     ]);
 
-    assertThat(SimpleZxGraph.from_text_diagram(`
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
 out--X-H-in
      |
      *---out

@@ -4,10 +4,18 @@ import {describe} from "src/base/Describe.js";
 import {stim} from "src/ext/stim.js";
 
 
-class SimpleZxNode {
+/**
+ * Each node in a ZX graph is annotated with metadata. This class stores that metadata.
+ */
+class ZxNodeAnnotation {
     /**
-     * @param {!string} type
-     * @param {!int} quarter_turns
+     * @param {!string} type A string identifying the type of node.
+     *     - "Z": Z spider.
+     *     - "X": X spider.
+     *     - "H": Hadamard. Must have degree 2. Must have angle 0.
+     *     - "in": Input into graph. Must have degree 1. Must have angle 0.
+     *     - "out": Output from graph. Must have degree 1. Must have angle 0.
+     * @param {!int} quarter_turns The angle of the node in units of pi/2. Automatically canonicalized into [0, 4).
      */
     constructor(type, quarter_turns = 0) {
         this.type = type;
@@ -18,7 +26,7 @@ class SimpleZxNode {
      * @returns {!string}
      */
     toString() {
-        return `SimpleZxNode("${this.type}", ${this.quarter_turns})`;
+        return `ZxNodeAnnotation(type="${this.type}", quarter_turns=${this.quarter_turns})`;
     }
 
     /**
@@ -26,24 +34,27 @@ class SimpleZxNode {
      * @returns {!boolean}
      */
     isEqualTo(other) {
-        return other instanceof SimpleZxNode && this.type === other.type && this.quarter_turns === other.quarter_turns;
+        return other instanceof ZxNodeAnnotation && this.type === other.type && this.quarter_turns === other.quarter_turns;
     }
 }
 
-class SimpleZxGraph {
+/**
+ * A ZX graph represented as an edge list between node indices.
+ */
+class ZxGraphEdgeList {
     /**
-     * @param {!Array.<!SimpleZxNode>} nodes
-     * @param {!Array.<[!int, !int]>} edges
+     * @param {!Array.<!ZxNodeAnnotation>} nodes Annotations for each node.
+     * @param {!Array.<[!int, !int]>} edges Unsorted list of node index pairs.
      */
     constructor(nodes, edges) {
         for (let n of nodes) {
-            if (!(n instanceof SimpleZxNode)) {
-                throw new Error("!(n instanceof SimpleZxNode)");
+            if (!(n instanceof ZxNodeAnnotation)) {
+                throw new Error("!(n instanceof ZxNodeAnnotation)");
             }
         }
         for (let [a, b] of edges) {
             if (a < 0 || a >= nodes.length || b < 0 || b >= nodes.length) {
-                throw new Error("Edge out of range.");
+                throw new Error(`Edge [${a}, ${b}] has a node index outside [0, nodes.length=${nodes.length}).`);
             }
         }
         this.nodes = nodes;
@@ -70,7 +81,7 @@ class SimpleZxGraph {
      * @returns {!boolean}
      */
     isEqualTo(other) {
-        if (!(other instanceof SimpleZxGraph)) {
+        if (!(other instanceof ZxGraphEdgeList)) {
             return false;
         }
         return equate_Iterables(this.nodes, other.nodes) && equate_Iterables(this.edges, other.edges);
@@ -85,13 +96,13 @@ class SimpleZxGraph {
 
     /**
      * @param {!string} text
-     * @returns {!SimpleZxGraph}
+     * @returns {!ZxGraphEdgeList}
      */
     static from_text_diagram(text) {
         let char_map = _text_to_char_map(text);
         let {node_ids, nodes} = _find_nodes(char_map);
         let edges = _find_all_edges(char_map, node_ids);
-        return new SimpleZxGraph(nodes, edges);
+        return new ZxGraphEdgeList(nodes, edges);
     }
 
     /**
@@ -146,7 +157,7 @@ class SimpleZxGraph {
                 }
                 continue  // Don't measure qubits leaving the system.
             } else {
-                throw new Error(`Unknown node type "${type}"`);
+                throw new Error(`Unsupported node type "${type}".`);
             }
 
             // Handle Z type node.
@@ -215,6 +226,7 @@ class SimpleZxGraph {
 function pseudo_postselect(sim, target) {
     let {result, kickback} = sim.measure_kickback(target);
     if (kickback !== undefined) {
+        kickback.deleteLater();
         let m = stim.target_rec(-1);
         for (let q = 0; q < kickback.length; q++) {
             let p = kickback.pauli(q);
@@ -271,17 +283,17 @@ const CHAR_TO_DIR = new Map([
     ['/', [-1, 1]],
 ]);
 const NAMED_NODES = new Map([
-    ['X', new SimpleZxNode('X')],
-    ['X(pi)', new SimpleZxNode('X', 2)],
-    ['X(pi/2)', new SimpleZxNode('X', 1)],
-    ['X(-pi/2)', new SimpleZxNode('X', -1)],
-    ['Z', new SimpleZxNode('Z')],
-    ['Z(pi)', new SimpleZxNode('Z', 2)],
-    ['Z(pi/2)', new SimpleZxNode('Z', 1)],
-    ['Z(-pi/2)', new SimpleZxNode('Z', -1)],
-    ['H', new SimpleZxNode('H')],
-    ['in', new SimpleZxNode('in')],
-    ['out', new SimpleZxNode('out')],
+    ['X', new ZxNodeAnnotation('X')],
+    ['X(pi)', new ZxNodeAnnotation('X', 2)],
+    ['X(pi/2)', new ZxNodeAnnotation('X', 1)],
+    ['X(-pi/2)', new ZxNodeAnnotation('X', -1)],
+    ['Z', new ZxNodeAnnotation('Z')],
+    ['Z(pi)', new ZxNodeAnnotation('Z', 2)],
+    ['Z(pi/2)', new ZxNodeAnnotation('Z', 1)],
+    ['Z(-pi/2)', new ZxNodeAnnotation('Z', -1)],
+    ['H', new ZxNodeAnnotation('H')],
+    ['in', new ZxNodeAnnotation('in')],
+    ['out', new ZxNodeAnnotation('out')],
 ])
 
 /**
@@ -372,7 +384,7 @@ function _find_end_of_edge(x, y, dx, dy, char_map, terminal_map, already_travell
 
 /**
  * @param {!Map.<!string, ![!int, !int, !string]>} char_map
- * @returns {!{node_ids: !Map.<!string, !int>, nodes: !Array.<!SimpleZxNode>}}
+ * @returns {!{node_ids: !Map.<!string, !int>, nodes: !Array.<!ZxNodeAnnotation>}}
  * @private
  */
 function _find_nodes(char_map) {
@@ -427,4 +439,4 @@ function _find_nodes(char_map) {
     return {node_ids, nodes};
 }
 
-export {SimpleZxNode, SimpleZxGraph, _find_nodes, _find_end_of_edge, _find_all_edges, _text_to_char_map}
+export {ZxNodeAnnotation, ZxGraphEdgeList, _find_nodes, _find_end_of_edge, _find_all_edges, _text_to_char_map}
