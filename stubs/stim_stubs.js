@@ -1,14 +1,35 @@
 class stim_Tableau {
     /**
+     * @param {!int} arg
+     */
+    constructor(arg) {
+    }
+    /**
      * @returns {!stim_Tableau}
      */
     deleteLater();
+    delete();
 }
 class stim_PauliString {
+    /**
+     * @param {!int|!string} arg
+     */
+    constructor(arg) {
+    }
     /**
      * @returns {!int}
      */
     get length();
+
+    /**
+     * @param {!stim_PauliString} other
+     * @returns {!stim_PauliString}
+     */
+    times(other);
+    /**
+     * @param {!stim_PauliString} other
+     */
+    times_inplace(other);
     /**
      * @param {!int} index
      * @returns {!int}
@@ -18,12 +39,16 @@ class stim_PauliString {
      * @returns {!stim_PauliString}
      */
     deleteLater();
+    delete();
 }
 class stim_TableauSimulator {
+    constructor() {
+    }
     /**
      * @returns {!stim_TableauSimulator}
      */
     deleteLater();
+    delete();
     /**
      * @param {!int} new_num_qubits
      */
@@ -62,6 +87,10 @@ class stim_TableauSimulator {
      * @returns {!Array.<!stim_PauliString>}
      */
     canonical_stabilizers();
+    /**
+     * @returns {!stim_Tableau}
+     */
+    current_inverse_tableau();
     /**
      * @param {!int} target
      */

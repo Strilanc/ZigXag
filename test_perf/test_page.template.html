@@ -16,6 +16,9 @@
             __total_done++;
             document.getElementById('progress').innerText = 'Progress: ' + __total_done + ' / ' + __total_tests;
             if (!arg.success) {
+                if (arg.error !== undefined) {
+                    console.error(arg.error);
+                }
                 document.getElementById('output').innerText += "\nFAILED: " +
                     arg.suite[0] + " " + arg.description;
             }

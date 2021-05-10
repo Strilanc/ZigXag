@@ -28,7 +28,8 @@ let promiseRunTest = (suite, name, method) => {
         suite: [suite.name],
         success: false,
         log: [],
-        time: undefined
+        time: undefined,
+        error: undefined
     };
     let status = {warn_only: false, log: result.log};
 
@@ -57,6 +58,7 @@ let promiseRunTest = (suite, name, method) => {
         return finish();
     }, ex => {
         let msg = String(ex);
+        result.error = ex;
         result.log.push(msg);
         if (ex.details !== undefined) {
             result.log.push(ex.details);

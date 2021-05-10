@@ -1,8 +1,8 @@
 import {Suite, assertThat, assertThrows, assertTrue, assertFalse} from "test/TestUtil.js"
-import {ZxGraphEdgeList, ZxNodeAnnotation, _find_all_edges, _find_end_of_edge, _find_nodes, _text_to_char_map} from "sim/ZxGraphEdgeList.js"
+import {ZxGraphEdgeList, ZxType, ExternalStabilizer, _find_all_edges, _find_end_of_edge, _find_nodes, _text_to_char_map} from "src/sim/ZxGraphEdgeList.js"
 import {stim} from "src/ext/stim.js";
 
-let suite = new Suite("SimpleZxGraph");
+let suite = new Suite("ZxGraphEdgeList");
 
 suite.test('_text_to_char_map', () => {
     assertThat(_text_to_char_map(`
@@ -34,12 +34,12 @@ suite.test('_find_nodes', () => {
         node_ids: new Map([
             ['0,0', 0]
         ]),
-        nodes: [new ZxNodeAnnotation('X')]});
+        nodes: [new ZxType('X')]});
     assertThat(_find_nodes(_text_to_char_map('\n   X'))).isEqualTo({
         node_ids: new Map([
             ['3,1', 0]
         ]),
-        nodes: [new ZxNodeAnnotation('X')]});
+        nodes: [new ZxType('X')]});
     assertThat(_find_nodes(_text_to_char_map('X(pi)'))).isEqualTo({
         node_ids: new Map([
             ['0,0', 0],
@@ -48,15 +48,15 @@ suite.test('_find_nodes', () => {
             ['3,0', 0],
             ['4,0', 0],
         ]),
-        nodes: [new ZxNodeAnnotation('X', 2)]});
+        nodes: [new ZxType('X', 2)]});
     assertThat(_find_nodes(_text_to_char_map('X--Z'))).isEqualTo({
         node_ids: new Map([
             ['0,0', 0],
             ['3,0', 1],
         ]),
         nodes: [
-            new ZxNodeAnnotation('X'),
-            new ZxNodeAnnotation('Z'),
+            new ZxType('X'),
+            new ZxType('Z'),
         ]});
     assertThat(_find_nodes(_text_to_char_map(`
 X--*
@@ -68,8 +68,8 @@ X--*
             ['1,3', 1],
         ]),
         nodes: [
-            new ZxNodeAnnotation('X'),
-            new ZxNodeAnnotation('Z'),
+            new ZxType('X'),
+            new ZxType('Z'),
         ]});
     assertThat(_find_nodes(_text_to_char_map(`
 X(pi)--Z
@@ -83,8 +83,8 @@ X(pi)--Z
             ['7,1', 1],
         ]),
         nodes: [
-            new ZxNodeAnnotation('X', 2),
-            new ZxNodeAnnotation('Z'),
+            new ZxType('X', 2),
+            new ZxType('Z'),
         ]});
 });
 
@@ -125,14 +125,14 @@ in---Z---H---------out
 in---X---Z(-pi/2)---out
     `)).isEqualTo(new ZxGraphEdgeList(
         [
-            new ZxNodeAnnotation('in'),
-            new ZxNodeAnnotation('Z'),
-            new ZxNodeAnnotation('H'),
-            new ZxNodeAnnotation('out'),
-            new ZxNodeAnnotation('in'),
-            new ZxNodeAnnotation('X'),
-            new ZxNodeAnnotation('Z', 3),
-            new ZxNodeAnnotation('out'),
+            new ZxType('in'),
+            new ZxType('Z'),
+            new ZxType('H'),
+            new ZxType('out'),
+            new ZxType('in'),
+            new ZxType('X'),
+            new ZxType('Z', 3),
+            new ZxType('out'),
         ],
         [
             [0, 1],
@@ -151,8 +151,8 @@ in---X---Z(-pi/2)---out
        X-*
     `)).isEqualTo(new ZxGraphEdgeList(
         [
-            new ZxNodeAnnotation('Z'),
-            new ZxNodeAnnotation('X'),
+            new ZxType('Z'),
+            new ZxType('X'),
         ],
         [
             [0, 1],
@@ -163,35 +163,57 @@ in---X---Z(-pi/2)---out
 
 suite.test('stabilizers', () => {
     assertThat(ZxGraphEdgeList.from_text_diagram(`
-in---Z---out
-     |
-in---X---out
+in---H---out
     `).stabilizers()).isEqualTo([
-        new stim.PauliString("+X_XX").deleteLater(),
-        new stim.PauliString("+Z_Z_").deleteLater(),
-        new stim.PauliString("+_X_X").deleteLater(),
-        new stim.PauliString("+_ZZZ").deleteLater(),
+        new ExternalStabilizer("X", "Z", +1),
+        new ExternalStabilizer("Z", "X", +1),
     ]);
 
     assertThat(ZxGraphEdgeList.from_text_diagram(`
 in---Z(pi/2)---out
     `).stabilizers()).isEqualTo([
-        new stim.PauliString("+XY").deleteLater(),
-        new stim.PauliString("+ZZ").deleteLater(),
+        new ExternalStabilizer("X", "Y", +1),
+        new ExternalStabilizer("Z", "Z", +1),
     ]);
 
     assertThat(ZxGraphEdgeList.from_text_diagram(`
 in---Z(-pi/2)---out
     `).stabilizers()).isEqualTo([
-        new stim.PauliString("-XY").deleteLater(),
-        new stim.PauliString("+ZZ").deleteLater(),
+        new ExternalStabilizer("X", "Y", -1),
+        new ExternalStabilizer("Z", "Z", +1),
     ]);
 
     assertThat(ZxGraphEdgeList.from_text_diagram(`
-in---H---out
+in---Z---out
+     |
+in---X---out
     `).stabilizers()).isEqualTo([
-        new stim.PauliString("+XZ").deleteLater(),
-        new stim.PauliString("+ZX").deleteLater(),
+        new ExternalStabilizer("X_", "XX", +1),
+        new ExternalStabilizer("Z_", "Z_", +1),
+        new ExternalStabilizer("_X", "_X", +1),
+        new ExternalStabilizer("_Z", "ZZ", +1),
+    ]);
+
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
+in---Z---out
+     |
+in---Z---out
+    `).stabilizers()).isEqualTo([
+        new ExternalStabilizer("ZZ", "__", +1),
+        new ExternalStabilizer("XX", "XX", +1),
+        new ExternalStabilizer("_Z", "_Z", +1),
+        new ExternalStabilizer("__", "ZZ", +1),
+    ]);
+
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
+in---Z---Z---out
+     |   |
+in---X---X---out
+    `).stabilizers()).isEqualTo([
+        new ExternalStabilizer("X_", "X_", +1),
+        new ExternalStabilizer("Z_", "Z_", +1),
+        new ExternalStabilizer("_X", "_X", +1),
+        new ExternalStabilizer("_Z", "_Z", +1),
     ]);
 
     assertThat(ZxGraphEdgeList.from_text_diagram(`
@@ -199,9 +221,9 @@ in-H-X---out
      |
      *---out
     `).stabilizers()).isEqualTo([
-        new stim.PauliString("+XZZ").deleteLater(),
-        new stim.PauliString("+Z_X").deleteLater(),
-        new stim.PauliString("+_XX").deleteLater(),
+        new ExternalStabilizer("X", "ZZ", +1),
+        new ExternalStabilizer("Z", "_X", +1),
+        new ExternalStabilizer("_", "XX", +1),
     ]);
 
     assertThat(ZxGraphEdgeList.from_text_diagram(`
@@ -209,8 +231,8 @@ out--X-H-in
      |
      *---out
     `).stabilizers()).isEqualTo([
-        new stim.PauliString("+XZZ").deleteLater(),
-        new stim.PauliString("+Z_X").deleteLater(),
-        new stim.PauliString("+_XX").deleteLater(),
+        new ExternalStabilizer("X", "ZZ", +1),
+        new ExternalStabilizer("Z", "_X", +1),
+        new ExternalStabilizer("_", "XX", +1),
     ]);
 });

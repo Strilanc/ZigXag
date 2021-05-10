@@ -7,7 +7,7 @@ import {stim} from "src/ext/stim.js";
 /**
  * Each node in a ZX graph is annotated with metadata. This class stores that metadata.
  */
-class ZxNodeAnnotation {
+class ZxType {
     /**
      * @param {!string} type A string identifying the type of node.
      *     - "Z": Z spider.
@@ -26,7 +26,7 @@ class ZxNodeAnnotation {
      * @returns {!string}
      */
     toString() {
-        return `ZxNodeAnnotation(type="${this.type}", quarter_turns=${this.quarter_turns})`;
+        return `ZxType("${this.type}", quarter_turns=${this.quarter_turns})`;
     }
 
     /**
@@ -34,8 +34,135 @@ class ZxNodeAnnotation {
      * @returns {!boolean}
      */
     isEqualTo(other) {
-        return other instanceof ZxNodeAnnotation && this.type === other.type && this.quarter_turns === other.quarter_turns;
+        return other instanceof ZxType && this.type === other.type && this.quarter_turns === other.quarter_turns;
     }
+}
+
+class ExternalStabilizer {
+    /**
+     * @param {!string} input
+     * @param {!string} output
+     * @param {!int} sign
+     */
+    constructor(input, output, sign) {
+        this.input = input;
+        this.output = output;
+        this.sign = sign;
+    }
+
+    /**
+     * @param {!stim_PauliString} stabilizer
+     * @param {!int} num_inputs
+     * @returns {!ExternalStabilizer}
+     */
+    static from_dual(stabilizer, num_inputs) {
+        let s = stabilizer.toString();
+        let inp = s.substr(1, num_inputs);
+        let out = s.substr(num_inputs + 1);
+        let sign = +(s.substr(0, 1) + '1');
+        for (let c of inp) {
+            if (c === 'Y') {
+                sign *= -1;
+            }
+        }
+        return new ExternalStabilizer(inp, out, sign);
+    }
+
+    /**
+     * @param {!int} num_inputs
+     * @param {!Array.<stim_PauliString>} dual_stabilizers
+     * @returns {!Array.<ExternalStabilizer>}
+     */
+    static from_duals(num_inputs, dual_stabilizers) {
+        if (dual_stabilizers.length === 0) {
+            return [];
+        }
+
+        let num_qubits = dual_stabilizers[0].length;
+        let num_outputs = num_qubits - num_inputs;
+
+        // Pivot on output qubits, to potentially isolate input-only stabilizers.
+        let min_pivot = 0;
+        for (let q = num_inputs; q < num_qubits; q++) {
+            min_pivot = stabilizer_elimination_step(dual_stabilizers, min_pivot, q);
+        }
+
+        // Separate input-only stabilizers from the rest.
+        let input_only_stabilizers = [];
+        let output_using_stabilizers = [];
+        for (let dual of dual_stabilizers) {
+            if (dual.toString().endsWith('_'.repeat(num_outputs))) {
+                input_only_stabilizers.push(dual);
+            } else {
+                output_using_stabilizers.push(dual);
+            }
+        }
+
+        // Canonicalize the output-using stabilizers.
+        min_pivot = 0;
+        for (let q = 0; q < num_qubits; q++) {
+            min_pivot = stabilizer_elimination_step(output_using_stabilizers, min_pivot, q);
+        }
+        // Canonicalize the input-only stabilizers.
+        min_pivot = 0;
+        for (let q = 0; q < num_inputs; q++) {
+            min_pivot = stabilizer_elimination_step(input_only_stabilizers, min_pivot, q);
+        }
+
+        dual_stabilizers = [...input_only_stabilizers, ...output_using_stabilizers];
+
+        return dual_stabilizers.map(e => ExternalStabilizer.from_dual(e, num_inputs));
+    }
+
+    /**
+     * @param {any} other
+     * @returns {!boolean}
+     */
+    isEqualTo(other) {
+        return other instanceof ExternalStabilizer && this.output === other.output && this.input === other.input && this.sign === other.sign;
+    }
+
+    /**
+     * @returns {!string}
+     */
+    toString() {
+        let s = this.sign === +1 ? '+' : this.sign === -1 ? '-' : '?';
+        return `+${this.input} -> ${s}${this.output}`;
+    }
+}
+
+/**
+ * @param {!Array.<!stim_PauliString>} duals
+ * @param {!int} min_pivot
+ * @param {!int} qubit
+ * @returns {!int}
+ */
+function stabilizer_elimination_step(duals, min_pivot, qubit) {
+    for (let b = 1; b < 4; b += 2) {
+        let pivot;
+        for (pivot = min_pivot; pivot < duals.length; pivot++) {
+            let p = duals[pivot].pauli(qubit);
+            if (p === 2 || p === b) {
+                break;
+            }
+        }
+        if (pivot === duals.length) {
+            continue;
+        }
+        for (let s = 0; s < duals.length; s++) {
+            let p = duals[s].pauli(qubit);
+            if (s !== pivot && (p === 2 || p === b)) {
+                duals[s].times_inplace(duals[pivot]);
+            }
+        }
+        if (min_pivot !== pivot) {
+            let t = duals[min_pivot];
+            duals[min_pivot] = duals[pivot];
+            duals[pivot] = t;
+        }
+        min_pivot += 1;
+    }
+    return min_pivot;
 }
 
 /**
@@ -43,12 +170,12 @@ class ZxNodeAnnotation {
  */
 class ZxGraphEdgeList {
     /**
-     * @param {!Array.<!ZxNodeAnnotation>} nodes Annotations for each node.
+     * @param {!Array.<!ZxType>} nodes Annotations for each node.
      * @param {!Array.<[!int, !int]>} edges Unsorted list of node index pairs.
      */
     constructor(nodes, edges) {
         for (let n of nodes) {
-            if (!(n instanceof ZxNodeAnnotation)) {
+            if (!(n instanceof ZxType)) {
                 throw new Error("!(n instanceof ZxNodeAnnotation)");
             }
         }
@@ -106,7 +233,7 @@ class ZxGraphEdgeList {
     }
 
     /**
-     * @returns {!Array.<!stim_PauliString>}
+     * @returns {!Array.<!ExternalStabilizer>}
      */
     stabilizers() {
         let sim = new stim.TableauSimulator().deleteLater();
@@ -186,35 +313,40 @@ class ZxGraphEdgeList {
             }
         }
 
-        // Find output qubits.
-        let ext = [];
+        // Find external qubits.
+        let inputs = [];
+        let outputs = [];
         for (let k = 0; k < this.nodes.length; k++) {
-            if (this.nodes[k].type === 'in') {
-                ext.push(k);
+            let t = this.nodes[k].type;
+            if (t === 'in' || t === 'out') {
+                let [neighbor] = neighbor_map.get(k);
+                let q = qubit_ids.get(`${neighbor},${k}`)
+                if (t === 'in') {
+                    inputs.push(q);
+                } else {
+                    outputs.push(q);
+                }
             }
         }
-        for (let k = 0; k < this.nodes.length; k++) {
-            if (this.nodes[k].type === 'out') {
-                ext.push(k);
-            }
-        }
-        let out_qubits = [];
-        for (let n_out of ext) {
-            let [neighbor] = neighbor_map.get(n_out);
-            out_qubits.push(qubit_ids.get(`${neighbor},${n_out}`));
-        }
+        let ext_qubits = [...inputs, ...outputs];
+        sim.set_num_qubits(qubit_ids.size + ext_qubits.length)
 
         // Remove qubits corresponding to non-external edges.
-        for (let i = 0; i < out_qubits.length; i++) {
-            sim.SWAP(out_qubits[i], qubit_ids.size + i);
+        for (let i = 0; i < ext_qubits.length; i++) {
+            sim.SWAP(ext_qubits[i], qubit_ids.size + i);
         }
-        for (let i = 0; i < out_qubits.length; i++) {
+        for (let i = 0; i < ext_qubits.length; i++) {
             sim.SWAP(i, qubit_ids.size + i);
         }
-        sim.set_num_qubits(out_qubits.length)
+        sim.set_num_qubits(ext_qubits.length)
 
         // Stabilizers of the simulator state are the external stabilizers of the graph.
-        return sim.canonical_stabilizers();
+        let dual_stabilizers = sim.canonical_stabilizers();
+        let result = ExternalStabilizer.from_duals(inputs.length, dual_stabilizers);
+        for (let e of dual_stabilizers) {
+            e.delete();
+        }
+        return result;
     }
 }
 
@@ -283,17 +415,17 @@ const CHAR_TO_DIR = new Map([
     ['/', [-1, 1]],
 ]);
 const NAMED_NODES = new Map([
-    ['X', new ZxNodeAnnotation('X')],
-    ['X(pi)', new ZxNodeAnnotation('X', 2)],
-    ['X(pi/2)', new ZxNodeAnnotation('X', 1)],
-    ['X(-pi/2)', new ZxNodeAnnotation('X', -1)],
-    ['Z', new ZxNodeAnnotation('Z')],
-    ['Z(pi)', new ZxNodeAnnotation('Z', 2)],
-    ['Z(pi/2)', new ZxNodeAnnotation('Z', 1)],
-    ['Z(-pi/2)', new ZxNodeAnnotation('Z', -1)],
-    ['H', new ZxNodeAnnotation('H')],
-    ['in', new ZxNodeAnnotation('in')],
-    ['out', new ZxNodeAnnotation('out')],
+    ['X', new ZxType('X')],
+    ['X(pi)', new ZxType('X', 2)],
+    ['X(pi/2)', new ZxType('X', 1)],
+    ['X(-pi/2)', new ZxType('X', -1)],
+    ['Z', new ZxType('Z')],
+    ['Z(pi)', new ZxType('Z', 2)],
+    ['Z(pi/2)', new ZxType('Z', 1)],
+    ['Z(-pi/2)', new ZxType('Z', -1)],
+    ['H', new ZxType('H')],
+    ['in', new ZxType('in')],
+    ['out', new ZxType('out')],
 ])
 
 /**
@@ -384,7 +516,7 @@ function _find_end_of_edge(x, y, dx, dy, char_map, terminal_map, already_travell
 
 /**
  * @param {!Map.<!string, ![!int, !int, !string]>} char_map
- * @returns {!{node_ids: !Map.<!string, !int>, nodes: !Array.<!ZxNodeAnnotation>}}
+ * @returns {!{node_ids: !Map.<!string, !int>, nodes: !Array.<!ZxType>}}
  * @private
  */
 function _find_nodes(char_map) {
@@ -439,4 +571,4 @@ function _find_nodes(char_map) {
     return {node_ids, nodes};
 }
 
-export {ZxNodeAnnotation, ZxGraphEdgeList, _find_nodes, _find_end_of_edge, _find_all_edges, _text_to_char_map}
+export {ZxType, ZxGraphEdgeList, ExternalStabilizer, _find_nodes, _find_end_of_edge, _find_all_edges, _text_to_char_map}
