@@ -161,24 +161,17 @@ in---X---Z(-pi/2)---out
     ));
 });
 
-suite.test('stabilizers', () => {
+suite.test('external_stabilizers', () => {
     assertThat(ZxGraphEdgeList.from_text_diagram(`
 in---H---out
-    `).stabilizers()).isEqualTo([
+    `).external_stabilizers()).isEqualTo([
         new ExternalStabilizer("X", "Z", +1),
         new ExternalStabilizer("Z", "X", +1),
     ]);
 
     assertThat(ZxGraphEdgeList.from_text_diagram(`
-in---Z(pi/2)---out
-    `).stabilizers()).isEqualTo([
-        new ExternalStabilizer("X", "Y", +1),
-        new ExternalStabilizer("Z", "Z", +1),
-    ]);
-
-    assertThat(ZxGraphEdgeList.from_text_diagram(`
 in---Z(-pi/2)---out
-    `).stabilizers()).isEqualTo([
+    `).external_stabilizers()).isEqualTo([
         new ExternalStabilizer("X", "Y", -1),
         new ExternalStabilizer("Z", "Z", +1),
     ]);
@@ -187,7 +180,7 @@ in---Z(-pi/2)---out
 in---Z---out
      |
 in---X---out
-    `).stabilizers()).isEqualTo([
+    `).external_stabilizers()).isEqualTo([
         new ExternalStabilizer("X_", "XX", +1),
         new ExternalStabilizer("Z_", "Z_", +1),
         new ExternalStabilizer("_X", "_X", +1),
@@ -198,7 +191,7 @@ in---X---out
 in---Z---out
      |
 in---Z---out
-    `).stabilizers()).isEqualTo([
+    `).external_stabilizers()).isEqualTo([
         new ExternalStabilizer("ZZ", "__", +1),
         new ExternalStabilizer("XX", "XX", +1),
         new ExternalStabilizer("_Z", "_Z", +1),
@@ -209,7 +202,7 @@ in---Z---out
 in---Z---Z---out
      |   |
 in---X---X---out
-    `).stabilizers()).isEqualTo([
+    `).external_stabilizers()).isEqualTo([
         new ExternalStabilizer("X_", "X_", +1),
         new ExternalStabilizer("Z_", "Z_", +1),
         new ExternalStabilizer("_X", "_X", +1),
@@ -220,7 +213,7 @@ in---X---X---out
 in-H-X---out
      |
      *---out
-    `).stabilizers()).isEqualTo([
+    `).external_stabilizers()).isEqualTo([
         new ExternalStabilizer("X", "ZZ", +1),
         new ExternalStabilizer("Z", "_X", +1),
         new ExternalStabilizer("_", "XX", +1),
@@ -230,9 +223,37 @@ in-H-X---out
 out--X-H-in
      |
      *---out
-    `).stabilizers()).isEqualTo([
+    `).external_stabilizers()).isEqualTo([
         new ExternalStabilizer("X", "ZZ", +1),
         new ExternalStabilizer("Z", "_X", +1),
         new ExternalStabilizer("_", "XX", +1),
     ]);
+
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
+
+        in---Z(pi/2)---out
+
+    `).external_stabilizers()).isEqualTo([
+        new ExternalStabilizer("X", "Y", +1),
+        new ExternalStabilizer("Z", "Z", +1),
+    ]);
+
+    assertThat(ZxGraphEdgeList.from_text_diagram(`
+
+                                  *-------------Z----------------Z-------Z(pi/2)
+                                  |             |                |
+            *-----------------Z---+-------------+---Z------------+-------Z(pi/2)
+            |                 |   |             |   |            |
+            X---X---Z(pi/2)   X---X---Z(pi/2)   X---X---Z(pi/2)  X---X---Z(pi/2)   *-----out
+            |   |             |                 |                |   |            /
+            *---+-------------Z-----------------+----------------+---Z---Z(pi/2) /
+                |                               |                |              /
+        in------Z-------------------------------Z---------------Z(pi)----------*
+
+    `).external_stabilizers()).isEqualTo([
+        new ExternalStabilizer("X", "Y", +1),
+        new ExternalStabilizer("Z", "Z", +1),
+    ]);
+
+
 });

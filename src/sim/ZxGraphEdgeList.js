@@ -235,7 +235,7 @@ class ZxGraphEdgeList {
     /**
      * @returns {!Array.<!ExternalStabilizer>}
      */
-    stabilizers() {
+    external_stabilizers() {
         let sim = new stim.TableauSimulator().deleteLater();
         let neighbor_map = this.neighborMap();
 
@@ -445,7 +445,7 @@ function _find_all_edges(char_map, terminal_map) {
         if (already_travelled.has(k)) {
             continue;
         }
-        if (c === '*') {
+        if (c === '*' || c === '+') {
             continue;
         }
         let dxy = CHAR_TO_DIR.get(c);
