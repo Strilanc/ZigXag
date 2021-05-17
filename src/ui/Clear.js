@@ -17,13 +17,13 @@
  * @param {!Observable.<boolean>} obsIsAnyOverlayShowing
  */
 function initClear(revision, obsIsAnyOverlayShowing) {
-    const EMPTY_STATES = ['', ':'];
+    const EMPTY_STATES = [''];
 
     const clearButton = /** @type {!HTMLButtonElement} */ document.getElementById('clear-button');
     revision.latestActiveCommit().zipLatest(obsIsAnyOverlayShowing, (r, v) => ({r, v})).subscribe(({r, v}) => {
         clearButton.disabled = EMPTY_STATES.indexOf(r) !== -1 || v;
     });
-    clearButton.addEventListener('click', () => revision.commit(EMPTY_STATES[1]));
+    clearButton.addEventListener('click', () => revision.commit(EMPTY_STATES[0]));
 }
 
 export {initClear}

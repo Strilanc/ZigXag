@@ -4,6 +4,8 @@
 
 import {DetailedError} from 'src/base/DetailedError.js'
 import {describe} from "src/base/Describe.js";
+import {Rect} from "src/base/Rect.js";
+import {Point} from "src/base/Point.js";
 import {stim} from "src/ext/stim.js"
 
 window.onerror = function(msg, url, line, col, error) {
@@ -16,12 +18,7 @@ window.onerror = function(msg, url, line, col, error) {
 };
 
 import {Revision} from "src/base/Revision.js";
-import {ZxGraph, ZxEdge, ZxNode, optimizeConvertedAdjGraph} from "src/sim/ZxGraph.js";
-import {evalZxGraph_ep} from "src/sim/ZxGraphEval_EprEdge_ParityNode.js";
-import {evalZxGraphGroundTruth} from "src/sim/ZxGraphGroundTruth.js";
-import {MathPainter} from "src/MathPainter.js";
 import {Painter} from "src/Painter.js";
-import {Rect} from "src/base/Rect.js";
 import {Seq, seq} from "src/base/Seq.js";
 import {
     Edit,
@@ -33,21 +30,18 @@ import {
     maybeDragNodeEdit,
     setElementKindEdit,
 } from "src/edit.js";
-import {NODES} from "src/nodes/All.js";
 import {makeNodeRingMenu} from "src/ui/RingMenu.js"
-import {ZxNodeDrawArgs} from "src/nodes/ZxNodeKind.js";
-import {Point} from "src/base/Point.js";
-import {floodFillNodeAndUnitEdgeSpace, DisplayedZxGraph, Metric} from "src/ui/DisplayedZxGraph.js";
 import {ObservableValue} from "src/base/Obs.js";
 import {initUndoRedo} from "src/ui/UndoRedo.js";
 import {initUrlSync} from "src/ui/Url.js";
 import {initClear} from "src/ui/Clear.js";
-import {initExports, obsExportsIsShowing} from "src/ui/Export.js";
+import {RasterGraph} from "src/sim/raster_graph.js";
 
 const canvas = /** @type {!HTMLCanvasElement} */ document.getElementById('main-canvas');
 const canvasDiv = /** @type {!HTMLDivElement} */ document.getElementById('main-canvas-div');
 const stabilizersDiv = /** @type {!HTMLDivElement} */ document.getElementById('stabilizers-div');
 
+let selection = new RasterGraph();
 let mouseX = undefined;
 let mouseY = undefined;
 let curCtrlKey = false;
@@ -57,333 +51,311 @@ let curMouseButton = undefined;
 let mouseDownX = undefined;
 let mouseDownY = undefined;
 let menuNode = undefined;
-let currentlyDisplayedZxGraph = new DisplayedZxGraph();
 
-let revision = new Revision([new ZxGraph().serialize()], 0, false);
-let obsCurrentEval = new ObservableValue(graph => evalZxGraph_ep(optimizeConvertedAdjGraph(graph.toAdjGraph())));
+const DEFAULT_SCALE = 10;
+
+let view = {
+    left: -1,
+    top: -1,
+    zoom: 30,
+}
+
+let revision = new Revision([''], 0, false);
+let emulatedClipboardContents = undefined;
 
 let obsIsAnyOverlayShowing = new ObservableValue(false);
 initUrlSync(revision);
-initExports(revision, obsCurrentEval, obsIsAnyOverlayShowing.observable());
+// initExports(revision, obsCurrentEval, obsIsAnyOverlayShowing.observable());
 initUndoRedo(revision, obsIsAnyOverlayShowing);
 initClear(revision, obsIsAnyOverlayShowing.observable());
-obsExportsIsShowing.
-    whenDifferent().
-    subscribe(e => {
-        obsIsAnyOverlayShowing.set(e);
-        canvasDiv.tabIndex = e ? -1 : 0;
-    });
+revision.commit(RasterGraph.fromString(`
+[in]-Z-[out]
+ ___ |    ________  _________/
+[in]-X-H-[X(pi/2)]-[X(-pi/2)]-[X(pi)]-[Z(pi/2)]-[Z(-pi/2)]-[Z(pi)]-[out]
+    `).toString(false));
+// obsExportsIsShowing.
+//     whenDifferent().
+//     subscribe(e => {
+//         obsIsAnyOverlayShowing.set(e);
+//         canvasDiv.tabIndex = e ? -1 : 0;
+//     });
 
-/**
- * @param {!CanvasRenderingContext2D} ctx
- * @param {!DisplayedZxGraph} displayed
- * @param {!ZxNode} node
- * @param {!number=} radius
- * @param {!string=} fill
- * @param {!string=} stroke
- */
-function drawNode(ctx, displayed, node, radius=8, fill=undefined, stroke=undefined) {
-    let kind = displayed.graph.nodes.get(node);
-    let nodeKind = NODES.map.get(kind);
-    if (nodeKind !== undefined) {
-        ctx.save();
-        ctx.translate(...displayed.nodeToXy(node));
-        nodeKind.contentDrawer(ctx, new ZxNodeDrawArgs(displayed.graph, node));
-        ctx.restore();
-        return;
-    }
+// /**
+//  * @param {!DisplayedZxGraph} displayed
+//  * @param {!ZxNode} node
+//  * @returns {![!number, !number]}
+//  */
+// function nodeToMenuXy(displayed, node) {
+//     let [x, y] = displayed.nodeToXy(node);
+//     x = Math.max(x, 170);
+//     y = Math.max(y, 140);
+//     return [x, y];
+// }
 
-    if (stroke !== undefined) {
-        ctx.strokeStyle = stroke;
-    }
-    if (fill !== undefined) {
-        ctx.fillStyle = fill;
+// /**
+//  * @param {!CanvasRenderingContext2D} ctx
+//  * @param {!DisplayedZxGraph} displayed
+//  */
+// function drawGraph(ctx, displayed) {
+//     let graph = displayed.graph;
+//     for (let edge of graph.edges.keys()) {
+//         drawEdge(ctx, displayed, edge);
+//     }
+//     for (let node of graph.nodes.keys()) {
+//         if (graph.kind(node) !== '+') {
+//             drawNode(ctx, displayed, node);
+//         }
+//     }
+// }
+
+
+function drawSpider(x, y, h, ctx, kind, quarter_turns) {
+    let fontColor;
+    if (kind === 'X') {
+        ctx.fillStyle = '#FFF';
+        fontColor = '#000';
+    } else if (kind === 'Z') {
+        ctx.fillStyle = '#000';
+        fontColor = '#FFF';
     } else {
-        ctx.fillStyle = 'red';
+        throw new Error("Unknown spider type.");
     }
-    ctx.beginPath();
-    ctx.arc(...displayed.nodeToXy(node), radius, 0, 2*Math.PI);
+    ctx.arc(x, y, h, 0, 2 * Math.PI);
     ctx.fill();
     ctx.stroke();
-    ctx.lineWidth = 1;
-}
-
-/**
- * @param {!CanvasRenderingContext2D} ctx
- * @param {!DisplayedZxGraph} displayed
- * @param {!ZxEdge} edge
- * @param {!number=} thickness
- * @param {!string=} color
- * @param {!boolean} showKind
- */
-function drawEdge(ctx, displayed, edge, thickness=1, color='black', showKind=true) {
-    let kind = displayed.graph.edges.get(edge);
-    let [n1, n2] = edge.nodes();
-    ctx.beginPath();
-    let [x1, y1] = displayed.nodeToXy(n1);
-    let [x2, y2] = displayed.nodeToXy(n2);
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = thickness;
-    ctx.stroke();
-
-    if (showKind) {
-        let nodeKind = NODES.map.get(kind);
-        let [cx, cy] = displayed.graphElementToCenterXy(edge);
-        if (nodeKind !== undefined) {
-            ctx.save();
-            ctx.translate(...displayed.graphElementToCenterXy(edge));
-            let fakeGraph = new ZxGraph();
-            let fakeNode = new ZxNode(cx*2, cy*2);
-            fakeGraph.nodes.set(new ZxNode(x1*2, y1*2), displayed.graph.kind(n1));
-            fakeGraph.nodes.set(fakeNode, kind);
-            fakeGraph.nodes.set(new ZxNode(x2*2, y2*2), displayed.graph.kind(n2));
-            nodeKind.contentDrawer(ctx, new ZxNodeDrawArgs(fakeGraph, fakeNode));
-            ctx.restore();
-            return;
-        }
-
-        let r = [cx - 4, cy - 4, 8, 8];
-        if (kind !== '-') {
-            ctx.fillStyle = 'red';
-            ctx.strokeStyle = 'black';
-            ctx.fillRect(...r);
-            ctx.strokeRect(...r)
+    if (quarter_turns !== 0) {
+        ctx.fillStyle = fontColor;
+        ctx.textAlign = 'center';
+        if (quarter_turns === 2) {
+            ctx.font = `${h*2}px monospace`;
+            ctx.textBaseline = 'middle';
+            ctx.fillText('π', x, y, h * 2);
+        } else {
+            ctx.font = `${h*1.1}px monospace`;
+            ctx.textBaseline = 'alphabetic';
+            ctx.fillText((quarter_turns === 3 ? '-' : '') + 'π', x, y - h / 10, h * 2);
+            ctx.font = `${h}px monospace`;
+            ctx.textBaseline = 'top';
+            ctx.fillText('2', x, y, h * 2);
+            ctx.beginPath();
+            ctx.moveTo(x - h*0.6, y);
+            ctx.lineTo(x + h*0.6, y);
+            ctx.lineWidth = 0.5;
+            ctx.strokeStyle = fontColor;
+            ctx.stroke();
         }
     }
 }
 
-/**
- * @param {!CanvasRenderingContext2D} ctx
- * @param {!DisplayedZxGraph} displayed
- */
-function drawFadedNearbyRegion(ctx, displayed) {
-    let element = displayed.xyToGraphElement(mouseX, mouseY);
-    if (element === undefined) {
-        return;
+function isSelectionRectHighlightingGraphLocation(x, y) {
+    if (selectionStart === undefined || selectionEnd === undefined) {
+        return false;
     }
-
-    ctx.globalAlpha *= 0.25;
-    let nearby = seq(floodFillNodeAndUnitEdgeSpace(element)).take(150);
-    let [cx, cy] = displayed.graphElementToCenterXy(element);
-    for (let e of nearby) {
-        if (displayed.graph.has(e) || !(e instanceof ZxEdge)) {
-            continue;
-        }
-
-        let [ex, ey] = displayed.graphElementToCenterXy(e);
-        if (Math.abs(ex - cx) >= 100 || Math.abs(ey - cy) >= 100) {
-            continue;
-        }
-
-        drawEdge(ctx, displayed, e, undefined, 'gray', false);
-    }
-    ctx.globalAlpha *= 4;
+    let selRect = new Rect(
+        Math.min(selectionStart.x, selectionEnd.x),
+        Math.min(selectionStart.y, selectionEnd.y),
+        Math.abs(selectionStart.x - selectionEnd.x),
+        Math.abs(selectionStart.y - selectionEnd.y));
+    return selRect.containsPoint(new Point(x, y));
 }
 
-/**
- * @param {!CanvasRenderingContext2D} ctx
- * @param {!DisplayedZxGraph} displayed
- */
-function drawFocus(ctx, displayed) {
-    ctx.globalAlpha *= 0.5;
-    let element = displayed.xyToGraphElement(mouseX, mouseY);
-    if (element !== undefined) {
-        // Draw connecting path.
-        let drewPath = false;
-        if (displayed.graph.has(element)) {
-            let path = displayed.graph.extendedUnblockedPath(element, false);
-            for (let e of path) {
-                drewPath = true;
-                drawEdge(ctx, displayed, e, 7, 'gray', false);
-            }
-        }
-
-        if (element instanceof ZxNode) {
-            drawNode(ctx, displayed, element, displayed.graph.has(element) ? 12 : 7, 'gray', '#00000000');
-        } else if (element instanceof ZxEdge) {
-            if (!drewPath) {
-                drawEdge(ctx, displayed, element, 7, 'gray', false);
-            }
-        }
-    }
-    ctx.globalAlpha *= 2;
-}
-
-/**
- * @param {!CanvasRenderingContext2D} ctx
- * @param{!DisplayedZxGraph} displayed
- */
-function drawPossibleEdit(ctx, displayed) {
-    let deletePref = curWantDeleteEdit();
-    let choices = deletePref === undefined ? [false, true] : [deletePref];
-
-    if (deletePref === undefined) {
-        ctx.globalAlpha *= 0.25;
-    }
-
-    let drewEdit = false;
-    for (let choice of choices) {
-        let edit = pickEdit(displayed, choice, mouseX, mouseY);
-        if (edit !== undefined) {
-            edit.drawPreview(displayed, ctx);
-            drewEdit = true;
-        }
-    }
-
-    if (deletePref === undefined) {
-        ctx.globalAlpha *= 4;
-    }
-}
-
-/**
- * @param {*} object
- * @param {!string} key
- * @param {*} value
- */
-function setIfDiffers(object, key, value) {
-    if (object[key] !== value) {
-        object[key] = value;
-    }
-}
-
-let prevGraph = undefined;
-let prevResults = undefined;
-
-/**
- * @param {!CanvasRenderingContext2D} ctx
- * @param {!DisplayedZxGraph} displayed
- * @param {!boolean=} checkGroundTruth
- */
-function drawResults(ctx, displayed, checkGroundTruth=false) {
-    let graph = displayed.graph;
-    if (!graph.isEqualTo(prevGraph)) {
-        prevResults = obsCurrentEval.get()(graph);
-        prevGraph = graph;
-    }
-    let results = prevResults;
-    let numIn = graph.inputNodes().length;
-    function descStabilizer(s) {
-        let r = s.toString();
-        return `${r.slice(0, 1)}${r.slice(1, numIn+1)}→${r.slice(numIn+1)}`;
-    }
-
-    setIfDiffers(
-        stabilizersDiv,
-        'innerText',
-        results.stabilizers.map(descStabilizer).join('\n'));
-
-    let waveRect = new Rect(canvas.clientWidth - 300, 0, 300, 300);
-    let painter = new Painter(ctx);
-
-    if (results.successProbability !== 1) {
-        let loss = Math.log2(results.successProbability);
-        painter.printParagraph(
-            [
-                `Chance of success: ${Math.round(results.successProbability*100)}%`,
-                `(${Math.round(-loss)} coin flips)`
-            ].join('\n'),
-            waveRect.takeBottom(50).proportionalShiftedBy(0, 1),
-            new Point(0.5, 0.5),
-            'black',
-            20);
-    }
-    if (!results.satisfiable) {
-        painter.printParagraph(
-            `Graph is not satisfiable. (Output may be path dependent.)`,
-            waveRect.takeBottom(50).proportionalShiftedBy(0, 2),
-            new Point(0.5, 0.5),
-            'red',
-            20);
-    }
-}
-
-/**
- * @param {!DisplayedZxGraph} displayed
- * @param {!ZxNode} node
- * @returns {![!number, !number]}
- */
-function nodeToMenuXy(displayed, node) {
-    let [x, y] = displayed.nodeToXy(node);
-    x = Math.max(x, 170);
-    y = Math.max(y, 140);
-    return [x, y];
-}
-
-/**
- * @param {!CanvasRenderingContext2D} ctx
- * @param {!DisplayedZxGraph} displayed
- */
-function drawGraph(ctx, displayed) {
-    let graph = displayed.graph;
-    for (let edge of graph.edges.keys()) {
-        drawEdge(ctx, displayed, edge);
-    }
-    for (let node of graph.nodes.keys()) {
-        if (graph.kind(node) !== '+') {
-            drawNode(ctx, displayed, node);
-        }
-    }
-}
-
-let _drawRequested = false;
 function draw() {
-    let displayed = currentlyDisplayedZxGraph;
+    const s = DEFAULT_SCALE;
+    const h = s * 0.5;
 
-    //noinspection JSUnresolvedVariable
-    let t = performance.now();
-    if (!_drawRequested && t < displayed.interpolateEndTime) {
-        _drawRequested = true;
-        requestAnimationFrame(() => {
-            _drawRequested = false;
-            draw();
-        });
-
-    }
-    displayed.interpolateTick(t);
-
-    let drawBox = displayed.boundingDrawBox(true);
-    canvas.width = Math.max(canvasDiv.clientWidth, drawBox.x + drawBox.w);
-    canvas.height = Math.max(400, drawBox.y + drawBox.h);
+    // let displayed = currentlyDisplayedZxGraph;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - canvasDiv.offsetTop - 5;
 
     let ctx = /** @type {!CanvasRenderingContext2D} */ canvas.getContext('2d');
     ctx.clearRect(0, 0, 100000, 100000);
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, 10000, 10000);
+    let state = RasterGraph.fromString(revision.peekActiveCommit());
 
     ctx.save();
+    ctx.scale(view.zoom / s, view.zoom / s);
+    ctx.translate(-view.left * DEFAULT_SCALE, -view.top * DEFAULT_SCALE);
+
+    let selRect = new Rect(0, 0, 0, 0);
+    if (selectionStart !== undefined && selectionEnd !== undefined) {
+        selRect = new Rect(
+            Math.min(selectionStart.x, selectionEnd.x),
+            Math.min(selectionStart.y, selectionEnd.y),
+            Math.abs(selectionStart.x - selectionEnd.x),
+            Math.abs(selectionStart.y - selectionEnd.y));
+    }
+
     try {
-        if (menuNode === undefined) {
-            drawFocus(ctx, displayed);
-        }
-        try {
-            drawResults(ctx, displayed);
-            drawFadedNearbyRegion(ctx, displayed);
-        } finally {
-            drawGraph(ctx, displayed);
-            if (menuNode === undefined) {
-                drawPossibleEdit(ctx, displayed);
-            }
-        }
-
-        if (menuNode !== undefined) {
+        for (let [gx, gy, v] of state.entries()) {
+            let x = gx * s;
+            let y = gy * s;
             ctx.save();
-            ctx.globalAlpha *= 0.85;
+            if (isSelectionRectHighlightingGraphLocation(gx, gy)) {
+                ctx.strokeStyle = 'blue';
+            }
             ctx.beginPath();
-            let [nx, ny] = displayed.nodeToXy(menuNode);
-            ctx.arc(nx, ny, 1000, 0, 2*Math.PI);
-            ctx.lineWidth = 1950;
-            ctx.strokeStyle = 'white';
-            ctx.stroke();
+            switch (v) {
+                case '-':
+                    ctx.moveTo(x - s, y);
+                    ctx.lineTo(x + s, y);
+                    ctx.stroke();
+                    break;
+                case '|':
+                    ctx.moveTo(x, y - s);
+                    ctx.lineTo(x, y + s);
+                    ctx.stroke();
+                    break;
+                case '\\':
+                    ctx.moveTo(x - s, y - s);
+                    ctx.lineTo(x + s, y + s);
+                    ctx.stroke();
+                    break;
+                case '/':
+                    ctx.moveTo(x + s, y - s);
+                    ctx.lineTo(x - s, y + s);
+                    ctx.stroke();
+                    break;
+            }
             ctx.restore();
-
-            let [x, y] = nodeToMenuXy(displayed, menuNode);
-            makeNodeRingMenu().draw(ctx, x, y, curShiftKey, mouseX, mouseY);
         }
+
+        for (let [gx, gy, v] of state.entries()) {
+            let x = gx * s;
+            let y = gy * s;
+            ctx.save();
+            ctx.beginPath();
+            switch (v) {
+                case '-':
+                    break;
+                case '|':
+                    break;
+                case '\\':
+                    break;
+                case '/':
+                    break;
+                case 'X':
+                    drawSpider(x, y, h, ctx, 'X', 0);
+                    break;
+                case 'X(pi/2)':
+                    drawSpider(x, y, h, ctx, 'X', 1);
+                    break;
+                case 'X(pi)':
+                    drawSpider(x, y, h, ctx, 'X', 2);
+                    break;
+                case 'X(-pi/2)':
+                    drawSpider(x, y, h, ctx, 'X', 3);
+                    break;
+                case 'Z':
+                    drawSpider(x, y, h, ctx, 'Z', 0);
+                    break;
+                case 'Z(pi/2)':
+                    drawSpider(x, y, h, ctx, 'Z', 1);
+                    break;
+                case 'Z(pi)':
+                    drawSpider(x, y, h, ctx, 'Z', 2);
+                    break;
+                case 'Z(-pi/2)':
+                    drawSpider(x, y, h, ctx, 'Z', 3);
+                    break;
+                case 'H':
+                    ctx.fillStyle = 'yellow';
+                    ctx.rect(x - h, y - h, s, s);
+                    ctx.fill();
+                    ctx.stroke();
+                    break;
+                case 'in':
+                    ctx.fillStyle = '#FFF';
+                    ctx.fillRect(x - h, y - h, s, s);
+                    ctx.fillStyle = '#000';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = `${s}px monospace`;
+                    ctx.fillText('in', x, y, s);
+                    break;
+                case 'out':
+                    ctx.fillStyle = '#FFF';
+                    ctx.fillRect(x - h, y - h, s, s);
+                    ctx.fillStyle = '#000';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = `${s}px monospace`;
+                    ctx.fillText('out', x, y, s);
+                    break;
+                default:
+                    ctx.fillStyle = 'red';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.font = `${s}px monospace`;
+                    ctx.fillText('?', x, y, s);
+                    break;
+            }
+            ctx.restore();
+        }
+
+        for (let [gx, gy, v] of state.entries()) {
+            let x = gx * s;
+            let y = gy * s;
+            ctx.save();
+            ctx.beginPath();
+            let b = isSelectionRectHighlightingGraphLocation(gx, gy);
+            let b2 = selection.get(gx, gy) === v;
+            if (b) {
+                ctx.globalAlpha *= 0.5;
+                ctx.fillStyle = 'blue';
+                ctx.fillRect(x - h, y - h, s, s);
+            } else if (b2) {
+                ctx.globalAlpha *= 0.2;
+                ctx.fillStyle = 'black';
+                ctx.fillRect(x - h, y - h, s, s);
+            }
+            ctx.restore();
+        }
+
+        // if (menuNode === undefined) {
+        //     drawFocus(ctx, displayed);
+        // }
+        // try {
+        //     drawResults(ctx, displayed);
+        //     drawFadedNearbyRegion(ctx, displayed);
+        // } finally {
+        //     drawGraph(ctx, displayed);
+        //     if (menuNode === undefined) {
+        //         drawPossibleEdit(ctx, displayed);
+        //     }
+        // }
+        //
+        // if (menuNode !== undefined) {
+        //     ctx.save();
+        //     ctx.globalAlpha *= 0.85;
+        //     ctx.beginPath();
+        //     let [nx, ny] = displayed.nodeToXy(menuNode);
+        //     ctx.arc(nx, ny, 1000, 0, 2*Math.PI);
+        //     ctx.lineWidth = 1950;
+        //     ctx.strokeStyle = 'white';
+        //     ctx.stroke();
+        //     ctx.restore();
+        //
+        //     let [x, y] = nodeToMenuXy(displayed, menuNode);
+        //     makeNodeRingMenu().draw(ctx, x, y, curShiftKey, mouseX, mouseY);
+        // }
     } finally {
         ctx.restore();
     }
+
+    ctx.save();
+    if (selectionEnd !== undefined && selectionStart !== undefined) {
+        ctx.beginPath();
+        let {x: x1, y: y1} = graph_to_screen_pos(selectionStart.x, selectionStart.y);
+        let {x: x2, y: y2} = graph_to_screen_pos(selectionEnd.x, selectionEnd.y);
+        ctx.rect(x1, y1, x2 - x1, y2 - y1);
+        ctx.strokeStyle = '#39E';
+        ctx.fillStyle = '#39E';
+        ctx.stroke();
+        ctx.globalAlpha *= 0.5;
+        ctx.fill();
+    }
+    ctx.restore();
 }
 
 let keyListeners = /** @type {!Map.<!int, !Array.<!function(!KeyboardEvent)>>} */ new Map();
@@ -709,155 +681,286 @@ canvasDiv.addEventListener('mousedown', ev => {
     draw();
 });
 
-canvasDiv.addEventListener('mouseup', ev => {
-    let displayed = currentlyDisplayedZxGraph;
-    if (ev.which !== 1 && ev.which !== 2) {
-        return;
-    }
-    ev.preventDefault();
-    let [x, y] = eventPosRelativeTo(ev, canvasDiv);
-    curCtrlKey = ev.ctrlKey;
-    curAltKey = ev.altKey;
-    curShiftKey = ev.shiftKey;
+// canvasDiv.addEventListener('mouseup', ev => {
+//     let displayed = currentlyDisplayedZxGraph;
+//     if (ev.which !== 1 && ev.which !== 2) {
+//         return;
+//     }
+//     ev.preventDefault();
+//     let [x, y] = eventPosRelativeTo(ev, canvasDiv);
+//     curCtrlKey = ev.ctrlKey;
+//     curAltKey = ev.altKey;
+//     curShiftKey = ev.shiftKey;
+//
+//     if (menuNode === undefined) {
+//         let startNode = displayed.xyToGraphElement(mouseDownX, mouseDownY);
+//         let endNode = displayed.xyToGraphElement(x, y);
+//         if (startNode instanceof ZxNode && startNode.isEqualTo(endNode) && ev.which === 1) {
+//             //noinspection JSUnusedAssignment
+//             menuNode = startNode;
+//             draw();
+//             return;
+//         }
+//     }
+//
+//     let edit = pickEdit(displayed, curWantDeleteEdit(), x, y);
+//     if (edit !== undefined) {
+//         let g = displayed.graph.copy();
+//         edit.action(g);
+//         cleanAndCommitNewGraph(g);
+//     }
+//     menuNode = undefined;
+//     curMouseButton = undefined;
+//     mouseDownX = undefined;
+//     mouseDownY = undefined;
+//     draw();
+// });
 
-    if (menuNode === undefined) {
-        let startNode = displayed.xyToGraphElement(mouseDownX, mouseDownY);
-        let endNode = displayed.xyToGraphElement(x, y);
-        if (startNode instanceof ZxNode && startNode.isEqualTo(endNode) && ev.which === 1) {
-            //noinspection JSUnusedAssignment
-            menuNode = startNode;
-            draw();
-            return;
-        }
-    }
+// /**
+//  * @param {!ZxGraph} g
+//  * @param {!boolean} compress
+//  */
+// function cleanAndCommitNewGraph(g, compress=false) {
+//     if (compress) {
+//         let {graph, xMap, yMap} = g.autoCompressed();
+//         let xTicks = Seq.repeat(0, xMap.size).toArray();
+//         let yTicks = Seq.repeat(0, yMap.size).toArray();
+//         for (let [oldVal, newVal] of xMap.entries()) {
+//             xTicks[newVal] = currentlyDisplayedZxGraph.metricX.coord(oldVal);
+//         }
+//         for (let [oldVal, newVal] of yMap.entries()) {
+//             yTicks[newVal] = currentlyDisplayedZxGraph.metricY.coord(oldVal);
+//         }
+//         revision.commit(graph.serialize());
+//         currentlyDisplayedZxGraph.interpolateFrom(
+//             new Metric(xTicks, 50),
+//             new Metric(yTicks, 50),
+//             0.25)
+//     } else {
+//         revision.commit(g.serialize());
+//     }
+// }
+//
+// canvasDiv.addEventListener('mousemove', ev => {
+//     [mouseX, mouseY] = eventPosRelativeTo(ev, canvasDiv);
+//     curCtrlKey = ev.ctrlKey;
+//     curAltKey = ev.altKey;
+//     curShiftKey = ev.shiftKey;
+//     curMouseButton = ev.which;
+//     draw();
+// });
+//
+// canvasDiv.addEventListener('mouseleave', ev => {
+//     curCtrlKey = ev.ctrlKey;
+//     curAltKey = ev.altKey;
+//     curShiftKey = ev.shiftKey;
+//     mouseX = undefined;
+//     mouseY = undefined;
+//     draw();
+// });
+//
+// /**
+//  * @param {!string|!int} keyOrCode
+//  * @param {!function(!KeyboardEvent)} func
+//  */
+// function addKeyListener(keyOrCode, func) {
+//     if (!Number.isInteger(keyOrCode)) {
+//         keyOrCode = keyOrCode.charCodeAt(0);
+//     }
+//
+//     if (!keyListeners.has(keyOrCode)) {
+//         keyListeners.set(keyOrCode, []);
+//     }
+//     keyListeners.get(keyOrCode).push(func);
+// }
+//
+// addKeyListener(27, () => {
+//     menuNode = undefined;
+// });
 
-    let edit = pickEdit(displayed, curWantDeleteEdit(), x, y);
-    if (edit !== undefined) {
-        let g = displayed.graph.copy();
-        edit.action(g);
-        cleanAndCommitNewGraph(g);
-    }
-    menuNode = undefined;
-    curMouseButton = undefined;
-    mouseDownX = undefined;
-    mouseDownY = undefined;
-    draw();
-});
+// document.addEventListener('keydown', ev => {
+//     let displayed = currentlyDisplayedZxGraph;
+//     curCtrlKey = ev.ctrlKey;
+//     curAltKey = ev.altKey;
+//     curShiftKey = ev.shiftKey;
+//
+//     if (!curAltKey && !curCtrlKey) {
+//         let entry = makeNodeRingMenu().entryForKey(ev.keyCode, curShiftKey);
+//         let targetNode = menuNode || displayed.xyToGraphElement(mouseX, mouseY);
+//         if (entry !== undefined && targetNode instanceof ZxNode) {
+//             let copy = displayed.graph.copy();
+//             copy.nodes.set(targetNode, entry.id);
+//             cleanAndCommitNewGraph(copy);
+//             menuNode = undefined;
+//             draw();
+//         }
+//     }
+//
+//     let handlers = keyListeners.get(ev.keyCode);
+//     if (handlers !== undefined) {
+//         ev.preventDefault();
+//         for (let handler of handlers) {
+//             handler(ev);
+//         }
+//     }
+//     draw();
+// });
+//
+// canvas.addEventListener('keydown', ev => {
+//     ev.preventDefault();
+// });
+//
+// canvas.addEventListener('keyup', ev => {
+//     ev.preventDefault();
+// });
+//
+// document.addEventListener('keyup', ev => {
+//     curCtrlKey = ev.ctrlKey;
+//     curAltKey = ev.altKey;
+//     curShiftKey = ev.shiftKey;
+//     draw();
+// });
 
-/**
- * @param {!ZxGraph} g
- * @param {!boolean} compress
- */
-function cleanAndCommitNewGraph(g, compress=false) {
-    if (compress) {
-        let {graph, xMap, yMap} = g.autoCompressed();
-        let xTicks = Seq.repeat(0, xMap.size).toArray();
-        let yTicks = Seq.repeat(0, yMap.size).toArray();
-        for (let [oldVal, newVal] of xMap.entries()) {
-            xTicks[newVal] = currentlyDisplayedZxGraph.metricX.coord(oldVal);
-        }
-        for (let [oldVal, newVal] of yMap.entries()) {
-            yTicks[newVal] = currentlyDisplayedZxGraph.metricY.coord(oldVal);
-        }
-        revision.commit(graph.serialize());
-        currentlyDisplayedZxGraph.interpolateFrom(
-            new Metric(xTicks, 50),
-            new Metric(yTicks, 50),
-            0.25)
-    } else {
-        revision.commit(g.serialize());
-    }
-}
-
-canvasDiv.addEventListener('mousemove', ev => {
-    [mouseX, mouseY] = eventPosRelativeTo(ev, canvasDiv);
-    curCtrlKey = ev.ctrlKey;
-    curAltKey = ev.altKey;
-    curShiftKey = ev.shiftKey;
-    curMouseButton = ev.which;
-    draw();
-});
-
-canvasDiv.addEventListener('mouseleave', ev => {
-    curCtrlKey = ev.ctrlKey;
-    curAltKey = ev.altKey;
-    curShiftKey = ev.shiftKey;
-    mouseX = undefined;
-    mouseY = undefined;
-    draw();
-});
-
-/**
- * @param {!string|!int} keyOrCode
- * @param {!function(!KeyboardEvent)} func
- */
-function addKeyListener(keyOrCode, func) {
-    if (!Number.isInteger(keyOrCode)) {
-        keyOrCode = keyOrCode.charCodeAt(0);
-    }
-
-    if (!keyListeners.has(keyOrCode)) {
-        keyListeners.set(keyOrCode, []);
-    }
-    keyListeners.get(keyOrCode).push(func);
-}
-
-addKeyListener(27, () => {
-    menuNode = undefined;
-});
-
-document.addEventListener('keydown', ev => {
-    let displayed = currentlyDisplayedZxGraph;
-    curCtrlKey = ev.ctrlKey;
-    curAltKey = ev.altKey;
-    curShiftKey = ev.shiftKey;
-
-    if (!curAltKey && !curCtrlKey) {
-        let entry = makeNodeRingMenu().entryForKey(ev.keyCode, curShiftKey);
-        let targetNode = menuNode || displayed.xyToGraphElement(mouseX, mouseY);
-        if (entry !== undefined && targetNode instanceof ZxNode) {
-            let copy = displayed.graph.copy();
-            copy.nodes.set(targetNode, entry.id);
-            cleanAndCommitNewGraph(copy);
-            menuNode = undefined;
-            draw();
-        }
-    }
-
-    let handlers = keyListeners.get(ev.keyCode);
-    if (handlers !== undefined) {
-        ev.preventDefault();
-        for (let handler of handlers) {
-            handler(ev);
-        }
-    }
-    draw();
-});
-
-canvas.addEventListener('keydown', ev => {
-    ev.preventDefault();
-});
-
-canvas.addEventListener('keyup', ev => {
-    ev.preventDefault();
-});
-
-document.addEventListener('keyup', ev => {
-    curCtrlKey = ev.ctrlKey;
-    curAltKey = ev.altKey;
-    curShiftKey = ev.shiftKey;
-    draw();
-});
-
-revision.latestActiveCommit().subscribe(text => {
-    let graph = ZxGraph.deserialize(text);
-    currentlyDisplayedZxGraph.graph = graph;
-    currentlyDisplayedZxGraph.resetMetric();
-
-    //noinspection EmptyCatchBlockJS,UnusedCatchParameterJS
+revision.latestActiveCommit().subscribe(_ => {
     try {
         draw();
-    } catch (_) {
+    } catch {
         // Ensure subscription starts. Will be rethrown on next draw anyways.
     }
 });
+
+canvasDiv.addEventListener('wheel', ev => {
+    let x = ev.clientX - canvasDiv.offsetLeft;
+    let y = ev.clientY - canvasDiv.offsetTop;
+    let f = Math.pow(1.001, -ev.deltaY);
+    view.left += x / view.zoom;
+    view.top += y / view.zoom;
+    view.zoom *= f;
+    view.left -= x / view.zoom;
+    view.top -= y / view.zoom;
+    draw();
+});
+
+let prevMouse = /** @type {undefined|!{x: !number, y: !number}} */ undefined;
+let selectionStart = /** @type {undefined|!{x: !number, y: !number}} */ undefined;
+let selectionEnd = /** @type {undefined|!{x: !number, y: !number}} */ undefined;
+
+/**
+ * @param {!number} screen_x
+ * @param {!number} screen_y
+ * @returns {!{x: !number, y: !number}}
+ */
+function screen_to_graph_pos(screen_x, screen_y) {
+    let x = screen_x;
+    let y = screen_y;
+    x /= view.zoom;
+    y /= view.zoom;
+    x += view.left;
+    y += view.top;
+    return {x, y};
+}
+
+/**
+ * @param {!number} graph_x
+ * @param {!number} graph_y
+ * @returns {!{x: !number, y: !number}}
+ */
+function graph_to_screen_pos(graph_x, graph_y) {
+    let x = graph_x;
+    let y = graph_y;
+    x -= view.left;
+    y -= view.top;
+    x *= view.zoom;
+    y *= view.zoom;
+    return {x, y};
+}
+
+canvasDiv.addEventListener('mousedown', ev => {
+    let x = ev.clientX - canvasDiv.offsetLeft;
+    let y = ev.clientY - canvasDiv.offsetTop;
+    prevMouse = {x, y};
+    if (ev.button === 1) {
+        ev.preventDefault();
+    }
+    if (ev.button === 0) {
+        selectionStart = screen_to_graph_pos(x, y);
+        selectionEnd = undefined;
+        ev.preventDefault();
+    }
+    draw();
+});
+
+canvasDiv.addEventListener('mouseup', ev => {
+    let x = ev.clientX - canvasDiv.offsetLeft;
+    let y = ev.clientY - canvasDiv.offsetTop;
+    if (ev.button === 0) {
+        selection.content.clear();
+        let state = RasterGraph.fromString(revision.peekActiveCommit());
+        for (let [gx, gy, v] of state.entries()) {
+            let b = isSelectionRectHighlightingGraphLocation(gx, gy);
+            if (b) {
+                selection.set(gx, gy, v);
+            }
+        }
+        selectionStart = undefined;
+        selectionEnd = undefined;
+        ev.preventDefault();
+    }
+    draw();
+});
+
+canvasDiv.addEventListener('mousemove', ev => {
+    let x = ev.clientX - canvasDiv.offsetLeft;
+    let y = ev.clientY - canvasDiv.offsetTop;
+    if (prevMouse !== undefined && (ev.buttons & 4) !== 0) {
+        view.left -= (x - prevMouse.x) / view.zoom;
+        view.top -= (y - prevMouse.y) / view.zoom;
+    }
+    if (selectionStart !== undefined && ev.buttons === 1) {
+        selectionEnd = screen_to_graph_pos(x, y);
+    }
+    prevMouse = {x, y};
+    ev.preventDefault();
+    draw();
+});
+
+document.addEventListener("keydown", e => {
+    // Don't capture keystrokes while menus are showing.
+    if (obsIsAnyOverlayShowing.get()) {
+        return;
+    }
+
+    let isCopy = e.key === 'c' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey;
+    let isCut = e.key === 'x' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey;
+    if (isCopy || isCut) {
+        emulatedClipboardContents = "zigxag::" + selection.toString();
+        navigator.clipboard.writeText(emulatedClipboardContents).then(() => {
+            emulatedClipboardContents = undefined;
+        }).catch(err => {
+            console.error('Clipboard permission blocked. Copied content can only be pasted in this tab.', err);
+        });
+        if (isCut) {
+            let state = RasterGraph.fromString(revision.peekActiveCommit());
+            for (let [x, y] of selection.keys()) {
+                state.delete(x, y);
+            }
+            revision.commit(state.toString(false));
+        }
+        e.preventDefault();
+    }
+});
+
+document.addEventListener('paste', ev => {
+    let pasteData;
+    if (emulatedClipboardContents !== undefined) {
+        pasteData = emulatedClipboardContents;
+    } else {
+        pasteData = (ev.clipboardData || window.clipboardData).getData('text');
+    }
+    if (pasteData !== undefined && pasteData.startsWith("zigxag::")) {
+        console.log(pasteData);
+        ev.preventDefault();
+    }
+});
+
+setTimeout(draw, 0);

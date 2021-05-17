@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import {Config} from "src/Config.js"
 import {HistoryPusher} from "src/browser/HistoryPusher.js"
-import {ZxGraph} from "src/sim/ZxGraph.js"
 
 function hashSafeForUrl(jsonText) {
     if (jsonText.indexOf('%') !== -1 || jsonText.indexOf('&') !== -1) {
@@ -32,9 +30,8 @@ function initUrlSync(revision) {
         historyPusher.currentStateIsMemorableButUnknown();
         let text = document.location.hash.substr(1);
         historyPusher.currentStateIsMemorableAndEqualTo(text);
-        let graph =  ZxGraph.deserialize(text);
         revision.clear(text);
-        if (graph.nodes.size === 0) {
+        if (text === '') {
             historyPusher.currentStateIsNotMemorable();
         } else {
             historyPusher.stateChange(text, hashSafeForUrl(text));
