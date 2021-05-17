@@ -135,7 +135,7 @@ class RasterGraph {
     /**
      * @returns {!string}
      */
-    toString(padColumnsToBeEven=true) {
+    toString(padColumnsToBeEven = true) {
         let {minX, maxX, minY, maxY} = this.boundingBox();
         let output = [];
         for (let y = minY; y <= maxY; y++) {

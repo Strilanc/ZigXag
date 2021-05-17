@@ -151,12 +151,13 @@ function isSelectionRectHighlightingGraphLocation(x, y) {
     if (selectionStart === undefined || selectionEnd === undefined) {
         return false;
     }
-    let selRect = new Rect(
-        Math.min(selectionStart.x, selectionEnd.x),
-        Math.min(selectionStart.y, selectionEnd.y),
-        Math.abs(selectionStart.x - selectionEnd.x),
-        Math.abs(selectionStart.y - selectionEnd.y));
-    return selRect.containsPoint(new Point(x, y));
+    let minX = Math.min(selectionStart.x, selectionEnd.x);
+    let minY = Math.min(selectionStart.y, selectionEnd.y);
+    let maxX = Math.max(selectionStart.x, selectionEnd.x);
+    let maxY = Math.max(selectionStart.y, selectionEnd.y);
+
+    let d = 0.3;
+    return x + d >= minX && x - d <= maxX && y + d >= minY && y - d <= maxY;
 }
 
 function draw() {
@@ -190,6 +191,8 @@ function draw() {
         for (let [gx, gy, v] of state.entries()) {
             let x = gx * s;
             let y = gy * s;
+            let ed = h * Math.sqrt(2);
+            let ep = h * 1.01;
             ctx.save();
             if (isSelectionRectHighlightingGraphLocation(gx, gy)) {
                 ctx.strokeStyle = 'blue';
@@ -197,23 +200,23 @@ function draw() {
             ctx.beginPath();
             switch (v) {
                 case '-':
-                    ctx.moveTo(x - s, y);
-                    ctx.lineTo(x + s, y);
+                    ctx.moveTo(x - ep, y);
+                    ctx.lineTo(x + ep, y);
                     ctx.stroke();
                     break;
                 case '|':
-                    ctx.moveTo(x, y - s);
-                    ctx.lineTo(x, y + s);
+                    ctx.moveTo(x, y - ep);
+                    ctx.lineTo(x, y + ep);
                     ctx.stroke();
                     break;
                 case '\\':
-                    ctx.moveTo(x - s, y - s);
-                    ctx.lineTo(x + s, y + s);
+                    ctx.moveTo(x - ed, y - ed);
+                    ctx.lineTo(x + ed, y + ed);
                     ctx.stroke();
                     break;
                 case '/':
-                    ctx.moveTo(x + s, y - s);
-                    ctx.lineTo(x - s, y + s);
+                    ctx.moveTo(x + ed, y - ed);
+                    ctx.lineTo(x - ed, y + ed);
                     ctx.stroke();
                     break;
             }
@@ -932,20 +935,22 @@ document.addEventListener("keydown", e => {
 
     let isCopy = e.key === 'c' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey;
     let isCut = e.key === 'x' && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey;
+    let isDelete = e.key === 'Delete';
     if (isCopy || isCut) {
-        emulatedClipboardContents = "zigxag::" + selection.toString();
+        emulatedClipboardContents = "zigxag::" + selection.toString(false);
         navigator.clipboard.writeText(emulatedClipboardContents).then(() => {
             emulatedClipboardContents = undefined;
         }).catch(err => {
             console.error('Clipboard permission blocked. Copied content can only be pasted in this tab.', err);
         });
-        if (isCut) {
-            let state = RasterGraph.fromString(revision.peekActiveCommit());
-            for (let [x, y] of selection.keys()) {
-                state.delete(x, y);
-            }
-            revision.commit(state.toString(false));
+        e.preventDefault();
+    }
+    if (isCut || isDelete) {
+        let state = RasterGraph.fromString(revision.peekActiveCommit());
+        for (let [x, y] of selection.keys()) {
+            state.delete(x, y);
         }
+        revision.commit(state.toString(false));
         e.preventDefault();
     }
 });
