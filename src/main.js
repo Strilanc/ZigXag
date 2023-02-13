@@ -8,10 +8,14 @@ window.onerror = function(msg, url, line, col, error) {
     document.getElementById('err_msg').innerText = `${describe(msg)}\n${error.stack}`;
     document.getElementById('err_line').innerText = describe(line);
     document.getElementById('err_time').innerText = '' + new Date().getMilliseconds();
+    document.getElementById('err_div').style.display = 'block';
     if (error instanceof DetailedError) {
         document.getElementById('err_gen').innerText = describe(error.details);
     }
 };
+document.getElementById('ack-error').addEventListener('click', () => {
+    document.getElementById('err_div').style.display = 'none';
+});
 
 import {Revision} from "src/base/Revision.js";
 import {ZxGraph, ZxEdge, ZxNode} from "src/sim/ZxGraph.js";
@@ -259,7 +263,12 @@ function drawResults(ctx, displayed, checkGroundTruth=false) {
         prevResults = evalZxGraph(graph);
         prevGraph = graph;
     }
+
     let results = prevResults;
+    if (!results.satisfiable) {
+        ctx.fillStyle = '#FDD';
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    }
     let numIn = graph.inputNodes().length;
     function descStabilizer(s) {
         let r = s.toString();
@@ -273,26 +282,31 @@ function drawResults(ctx, displayed, checkGroundTruth=false) {
 
     let waveRect = new Rect(canvas.clientWidth - 300, 0, 300, 300);
     let painter = new Painter(ctx);
-    MathPainter.paintMatrix(painter, results.wavefunction, waveRect);
+    if (results.satisfiable && results.wavefunction !== undefined) {
+        MathPainter.paintMatrix(painter, results.wavefunction, waveRect);
 
-    if (checkGroundTruth) {
-        let groundTruth = evalZxGraphGroundTruth(graph);
-        let groundSatisfiable = !groundTruth.isZero(1e-8);
-        let detectedBadSimulationResult = false;
-        if (groundSatisfiable && results.satisfiable) {
-            let matchedGround = groundTruth.phaseMatchedTo(results.wavefunction, true);
-            if (!matchedGround.isApproximatelyEqualTo(results.wavefunction, 1e-8)) {
-                // Disagreed about satisfiable result.
+        if (checkGroundTruth) {
+            let groundTruth = evalZxGraphGroundTruth(graph);
+            let groundSatisfiable = !groundTruth.isZero(1e-8);
+            let detectedBadSimulationResult = false;
+            if (groundSatisfiable && results.satisfiable) {
+                let matchedGround = groundTruth.phaseMatchedTo(
+                    results.wavefunction, true);
+                if (!matchedGround.isApproximatelyEqualTo(results.wavefunction,
+                    1e-8)) {
+                    // Disagreed about satisfiable result.
+                    detectedBadSimulationResult = true;
+                }
+            } else if (groundSatisfiable !== results.satisfiable) {
+                // Disagreed about satisfiability.
                 detectedBadSimulationResult = true;
             }
-        } else if (groundSatisfiable !== results.satisfiable) {
-            // Disagreed about satisfiability.
-            detectedBadSimulationResult = true;
-        }
-        if (detectedBadSimulationResult) {
-            ctx.globalAlpha *= 0.5;
-            MathPainter.paintMatrix(painter, groundTruth, waveRect, 'red', 'black', '#00000000', '#FFFF00A0');
-            ctx.globalAlpha *= 2;
+            if (detectedBadSimulationResult) {
+                ctx.globalAlpha *= 0.5;
+                MathPainter.paintMatrix(painter, groundTruth, waveRect, 'red',
+                    'black', '#00000000', '#FFFF00A0');
+                ctx.globalAlpha *= 2;
+            }
         }
     }
 
@@ -310,7 +324,7 @@ function drawResults(ctx, displayed, checkGroundTruth=false) {
     }
     if (!results.satisfiable) {
         painter.printParagraph(
-            `Graph is not satisfiable. (Output may be path dependent.)`,
+            `Graph isn't satisfiable. It evaluates to the zero tensor.`,
             waveRect.takeBottom(50).proportionalShiftedBy(0, 2),
             new Point(0.5, 0.5),
             'red',

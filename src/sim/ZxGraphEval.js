@@ -447,8 +447,12 @@ function _analyzeProgram(outProgram, portQubitMapping) {
         sim.destruct();
     }
 
-    let wavefunction = stabilizerStateToWavefunction(stabilizers);
-    wavefunction = new Matrix(1 << portQubitMapping.numIn, 1 << portQubitMapping.numOut, wavefunction.rawBuffer());
+    let wavefunction = undefined;
+    if (portQubitMapping.numIn + portQubitMapping.numOut < 8) {
+        wavefunction = stabilizerStateToWavefunction(stabilizers);
+        wavefunction = new Matrix(1 << portQubitMapping.numIn,
+            1 << portQubitMapping.numOut, wavefunction.rawBuffer());
+    }
 
     return {
         stabilizers,

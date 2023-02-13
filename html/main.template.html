@@ -23,11 +23,14 @@
             <span style="color:#BBB">Version 0.1.dev</span>
         </div>
 
-        <div style="color:red;" id="err_msg"></div>
-        <div id="err_line"></div>
-        <div id="err_gen"></div>
-        <div id="err_time"></div>
-        <div id="main-canvas-div" style="width: 100%; touch-action: manipulation; tab-index: 0; position: relative; background: #eee;">
+        <div id="err_div" style="display: none">
+            <div style="color:red;" id="err_msg"></div>
+            <div id="err_line"></div>
+            <div id="err_gen"></div>
+            <div id="err_time"></div>
+            <button id="ack-error">ack</button>
+        </div>
+        <div id="main-canvas-div" style="width: 100%; touch-action: manipulation; tab-index: 0; position: relative; background: #fff;">
             <canvas id="main-canvas"></canvas>
         </div>
 
